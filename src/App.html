@@ -112,7 +112,7 @@ const IDB = (() => {
 /* ───── Chamada ao servidor (google.script.run) ───── */
 const Api = {
   /** Tempo máximo de espera (ms): ações que geram PDF ou e-mail demoram mais. */
-  limite(acao) { return /finalizar|pdf|enviarCopia|relatorio/.test(acao) ? 330000 : /uploadFoto|uploadDoc|thumbs|galeria|painel|extrair|orcamento/.test(acao) ? 120000 : 60000; },
+  limite(acao) { return /finalizar|documentos|pdf|enviarCopia|relatorio/.test(acao) ? 330000 : /uploadFoto|uploadDoc|thumbs|galeria|painel|extrair|orcamento/.test(acao) ? 120000 : 60000; },
   run(acao, payload) {
     return new Promise((res, rej) => {
       let fim = false;
@@ -365,13 +365,36 @@ const Thumbs = {
   }
 };
 
+/* ───── Layout conforme o aparelho ─────
+   Celular: sempre uma coluna, mesmo deitado. Tablet (l-tab) e computador (l-pc) ganham grades.
+   Se o navegador ignorar a largura da tela (página desenhada com ~980 px num celular), corrige a escala. */
+const Layout = {
+  zoom: 1,
+  aplicar() {
+    // iOS informa sempre a largura "em pé"; por isso a largura da tela segue a orientação atual.
+    const sa = screen.width || innerWidth, sb = screen.height || innerHeight, menor = Math.min(sa, sb);
+    const sw = innerWidth > innerHeight ? Math.max(sa, sb) : menor;
+    const toque = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    this.zoom = toque && innerWidth > sw * 1.25 ? innerWidth / sw : 1;
+    document.documentElement.style.zoom = this.zoom === 1 ? '' : this.zoom;
+    const w = innerWidth / this.zoom, celular = toque && menor < 600;
+    const b = document.body.classList;
+    b.toggle('l-tab', w >= 700 && !celular);
+    b.toggle('l-pc', w >= 1024 && !celular);
+    b.toggle('l-mini', w < 380);
+    b.toggle('l-deitado', w >= 640 && w > (innerHeight / this.zoom) * 1.15);
+    b.toggle('escala-corrigida', this.zoom !== 1);
+  },
+  pc() { return document.body.classList.contains('l-pc'); }
+};
+
 /* ───── Preferências do aparelho ───── */
 const Prefs = {
   padrao: { fonte: 'M', tema: 'auto', qualidade: 'alta', soWifi: false, galeria: false, lembrete: true, avisoPend: true, avisoFalha: true, camera: 'app', biometria: false },
   get(k) { const p = LS.get('prefs', {}) || {}; return k in p ? p[k] : this.padrao[k]; },
   set(k, v) { const p = LS.get('prefs', {}) || {}; p[k] = v; LS.set('prefs', p); this.aplicar(); },
   aplicar() {
-    document.body.style.zoom = { P: 0.9, M: 1, G: 1.12 }[this.get('fonte')] || 1;
+    document.body.style.zoom = this.get('fonte') === 'G' ? 1.12 : '';
     const t = this.get('tema');
     const escuro = t === 'escuro' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
@@ -589,6 +612,9 @@ const App = {
   token: null, data: null, V: null, route: null, form: null, final: null,
 
   async start() {
+    Layout.aplicar();
+    let tLayout;
+    window.addEventListener('resize', () => { clearTimeout(tLayout); tLayout = setTimeout(() => { const a = document.body.className; Layout.aplicar(); if (a !== document.body.className && App.route) App.rerender(); }, 200); });
     Prefs.aplicar();
     try { if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => Prefs.aplicar()); } catch (e) { /* navegador antigo */ }
     this.token = LS.get('token');
@@ -716,7 +742,7 @@ const App = {
       out = { header: Views.hdrSimples('Ops'), body: '<div class="card"><b>Algo deu errado nesta tela.</b><p class="muted">' + esc(e.message) + '</p><button class="btn btn-navy" data-act="tab" data-to="home">Voltar ao início</button></div>' };
     }
     // No computador, as áreas do menu mantêm o menu lateral visível.
-    const pc = window.matchMedia && matchMedia('(min-width: 1024px)').matches;
+    const pc = Layout.pc();
     if (!out.nav && pc && typeof Secoes !== 'undefined' && App.data && r.name !== 'login' && r.name !== 'primeiro' &&
       Secoes.principais().concat(Secoes.extras()).some(x => x[0] === r.name)) out.nav = r.name;
     document.body.classList.toggle('com-lateral', !!out.nav && pc);
@@ -729,6 +755,7 @@ const App = {
       (out.nav ? Views.nav(out.nav) : '') + (out.fab || '');
     if (o.top) window.scrollTo(0, 0);
     if (out.after) { try { out.after(); } catch (e) { console.error(e); } }
+    if (typeof MapaReal !== "undefined") MapaReal.ligar();
     Thumbs.hydrate();
     Calc.refresh();
     Sync.render();

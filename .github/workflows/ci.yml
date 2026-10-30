@@ -22,8 +22,12 @@ jobs:
           git diff --exit-code -- dist || (echo "::error::dist/ desatualizado: rode 'npm run build' e faça commit" && exit 1)
       - name: Telas (Chromium)
         run: npm run test:telas
+      - name: Celular (320 a 430 px, texto, toque e escala)
+        run: npm run test:celular
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots
-          path: dev/shots
+          path: |
+            dev/shots
+            dev/shots-celular

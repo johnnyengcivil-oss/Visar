@@ -40,7 +40,66 @@ const Dados = {
   },
   limpar(prefixo) { Object.keys(this.mem).forEach(k => { if (k.indexOf(prefixo) === 0) delete this.mem[k]; }); }
 };
-function encher(sel, html) { const el = $(sel); if (el) { el.innerHTML = html; Thumbs.hydrate(); } return el; }
+function encher(sel, html) { const el = $(sel); if (el) { el.innerHTML = html; Thumbs.hydrate(); MapaReal.ligar(); } return el; }
+
+/* ───── Mapa real (Leaflet + OpenStreetMap, sem chave de API) ───── */
+const COR_ST = { concluida: '#1E9E55', andamento: '#2F7BD6', agendada: '#E08A00', retorno: '#D93C3C', nao_iniciada: '#94A3B8', em_campo: '#2F7BD6', em_transito: '#E08A00', disponivel: '#1E9E55', pausa: '#94A3B8' };
+const MapaReal = {
+  fila: {},
+  carregar() {
+    if (window.L) return Promise.resolve(window.L);
+    if (navigator.onLine === false) return Promise.reject(new Error('offline'));
+    return this._p = this._p || new Promise((res, rej) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      js.onload = () => window.L ? res(window.L) : rej(new Error('Leaflet'));
+      js.onerror = () => { this._p = null; rej(new Error('Leaflet')); };
+      document.head.appendChild(js);
+    });
+  },
+  /** Liga os mapas que acabaram de entrar na tela. */
+  ligar() {
+    const ids = Object.keys(this.fila);
+    if (!ids.length) return;
+    this.carregar().then(L => ids.forEach(id => {
+      const el = document.getElementById(id), cfg = this.fila[id];
+      delete this.fila[id];
+      if (!el || !cfg) return;
+      // Troca as classes do desenho ilustrativo (que estilizam svg e botões) pelas do mapa real.
+      el.innerHTML = ''; el.className = 'mapa-leaflet';
+      const m = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, tap: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+      const b = [];
+      (cfg.pontos || []).forEach(p => {
+        b.push([p.lat, p.lng]);
+        const mk = L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: COR_ST[p.st] || p.cor || '#94A3B8', fillOpacity: 1 }).addTo(m);
+        if (p.nome) mk.bindPopup('<b>' + esc(p.nome) + '</b>' + (p.id ? '<br><button class="link" data-act="' + (p.act || 'escolaAbrir') + '" data-id="' + esc(p.id) + '">Abrir</button>' : ''));
+      });
+      if (cfg.linha && cfg.linha.length) { L.polyline(cfg.linha, { color: '#1F8F86', weight: 5, opacity: .85 }).addTo(m); cfg.linha.forEach(x => b.push(x)); }
+      if (b.length === 1) m.setView(b[0], 15); else m.fitBounds(b, { padding: [24, 24], maxZoom: 16 });
+      setTimeout(() => m.invalidateSize(), 150);
+    })).catch(() => {
+      ids.forEach(id => { delete this.fila[id]; const el = document.getElementById(id); const l = el && el.querySelector('.lbl-m'); if (l) l.textContent = 'Mapa ilustrativo · sem internet'; });
+    });
+  },
+  /** Decodifica a linha da rota do Google (encoded polyline). */
+  decodificar(str) {
+    const out = []; let i = 0, lat = 0, lng = 0;
+    while (i < str.length) {
+      for (const k of [0, 1]) {
+        let b, sh = 0, r = 0;
+        do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32);
+        const d = r & 1 ? ~(r >> 1) : r >> 1;
+        if (k === 0) lat += d; else lng += d;
+      }
+      out.push([lat / 1e5, lng / 1e5]);
+    }
+    return out;
+  }
+};
 function erroBox(e) { return '<div class="empty">' + I('cloud', 36) + '<div><b>Sem dados por enquanto</b></div><div class="small">' + esc(e ? e.message : 'Conecte-se à internet para carregar.') + '</div><button class="btn btn-out btn-sm mt" data-act="rerender">' + I('refresh', 16) + ' Tentar de novo</button></div>'; }
 const SKEL = '<div class="skel" style="height:180px;margin-bottom:14px"></div><div class="skel" style="height:120px;margin-bottom:14px"></div><div class="skel" style="height:120px"></div>';
 
@@ -102,7 +161,7 @@ Views.login = () => {
       '<button type="button" class="link" data-act="esqueci">Esqueci a senha</button></div>' +
       '<button class="btn btn-teal btn-lg mt" type="submit">Entrar</button>' +
       '<button type="button" class="btn btn-out btn-lg mt" data-act="primeiroAcesso">Primeiro acesso</button></form>' +
-      '<p style="margin-top:auto;text-align:center;color:#9FB6D2;font-size:13px;padding-top:30px">VistAR · versão ' + esc(cfg.versao || '') + '<br>Precisa de ajuda? Fale com o administrador do sistema</p></div>',
+      '<p style="margin-top:auto;text-align:center;color:#9FB6D2;font-size:14.5px;padding-top:30px">VistAR · versão ' + esc(cfg.versao || '') + '<br>Precisa de ajuda? Fale com o administrador do sistema</p></div>',
     after() {
       const f = $('#fLogin');
       f.onsubmit = async ev => {
@@ -143,7 +202,8 @@ Views.primeiro = () => {
       '<div class="forca" id="paForca">' + [0, 1, 2, 3].map(i => '<i style="' + (i < forca ? 'background:' + (i === forca - 1 && forca < 3 ? cor : i < 2 ? 'var(--green)' : forca >= 3 ? (i < 3 ? 'var(--green)' : 'var(--green)') : 'var(--amber)') : '') + '"></i>').join('') + '</div>' +
       '<span class="lbl">Confirmar nova senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" type="password" id="paRep" value="' + esc(f.rep) + '" placeholder="Repita a senha" autocomplete="new-password"></div>' +
       '<div class="mt" id="paRegras">' + regras.map(r => '<div class="regra' + (r[0] ? ' ok' : '') + '"><i>' + (r[0] ? I('check', 14, 3) : '') + '</i>' + r[1] + '</div>').join('') + '</div>' +
-      '<button class="check' + (f.aceite ? ' on' : '') + ' mt" data-act="chk" data-k="@aceite" style="width:100%;text-align:left"><span class="box">' + (f.aceite ? I('check', 16, 3) : '') + '</span><span>Li e aceito os <a href="#" data-act="termos">Termos de uso</a> e a <a href="#" data-act="termos">Política de privacidade</a> (LGPD).</span></button></section>' +
+      '<button class="check' + (f.aceite ? ' on' : '') + ' mt" data-act="chk" data-k="@aceite" style="width:100%;text-align:left"><span class="box">' + (f.aceite ? I('check', 16, 3) : '') + '</span><span>Li e aceito os Termos de uso e a Política de privacidade (LGPD).</span></button>' +
+        '<button class="link" data-act="termos">Ler os termos e a política de privacidade</button></section>' +
       '<button class="btn btn-teal btn-lg" data-act="paSenha">Continuar</button>';
   } else {
     corpo = '<section class="card"><h2 style="margin:0 0 4px">Quase lá!</h2><p class="muted" style="margin:0 0 6px">O VistAR usa estes recursos do aparelho em campo. Toque para permitir.</p>' +
@@ -193,7 +253,7 @@ Views.configuracoes = () => {
     body: '<section class="card"><div class="row"><span class="avatar" style="width:64px;height:64px;font-size:22px">' + esc(u.iniciais || '') + '</span><span><b style="font-size:19px">' + esc(u.nome || '') + '</b><div class="muted">' + esc(u.email || u.matricula || '') + '</div><div class="muted">' + esc([eq.nome, String(u.cargo || '').toLowerCase()].filter(Boolean).join(' · ')) + '</div></span></div>' +
         '<p class="muted small" style="margin:10px 0 0">Dados de perfil e equipe são gerenciados pelo administrador.</p></section>' +
       '<section class="card"><div class="kh">Aplicativo</div>' +
-        '<div class="set-row"><span><b>Tamanho do texto</b></span>' + seg('fonte', [['P', 'P'], ['M', 'M'], ['G', 'G']]) + '</div>' +
+        '<div class="set-row"><span><b>Tamanho do texto</b></span>' + seg('fonte', [['M', 'Normal'], ['G', 'Grande']]) + '</div>' +
         '<div class="set-row"><span><b>Tema</b></span>' + seg('tema', [['claro', 'Claro'], ['escuro', 'Escuro'], ['auto', 'Auto']]) + '</div>' +
         '<div class="set-row"><span><b>Idioma</b></span><span class="muted" style="font-weight:600">Português (BR)</span></div></section>' +
       '<section class="card"><div class="kh">Fotos e dados</div>' +
@@ -237,7 +297,7 @@ Views.programacao = p => {
   const rotuloNav = modo === 'dia' ? (ref === hojeISO() ? 'Hoje · ' : '') + dataBR(ref) : modo === 'semana' ? dataBR(ini) + ' – ' + dataBR(fim) : titulo.replace(' de ', ' ');
   return {
     header: '<header class="whdr"><div class="whdr-row"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><span style="flex:1;min-width:0"><div class="kicker">Programação</div><div class="ttl">' + esc(titulo) + '</div></span>' +
-      '<button class="badge" style="background:var(--navy-2);color:#fff;font-size:14px;padding:7px 14px" data-act="progEquipe" data-p="' + pj({}) + '">' + esc(eqNome) + '</button></div>' +
+      '<button class="badge" style="background:var(--navy-2);color:#fff;font-size:15.5px;padding:7px 14px" data-act="progEquipe" data-p="' + pj({}) + '">' + esc(eqNome) + '</button></div>' +
       '<div class="tabs3">' + [['dia', 'Dia'], ['semana', 'Semana'], ['mes', 'Mês']].map(t => '<button class="' + (modo === t[0] ? 'on' : '') + '" data-act="progIr" data-p="' + pj({ modo: t[0] }) + '">' + t[1] + '</button>').join('') + '</div></header>',
     body: '<div class="navper"><button class="back" data-act="progIr" data-p="' + pj({ ref: ant }) + '" aria-label="Anterior">' + I('left') + '</button><h3>' + esc(rotuloNav) + '</h3><button class="back" data-act="progIr" data-p="' + pj({ ref: prx }) + '" aria-label="Próximo">' + I('right') + '</button></div>' +
       '<div id="progBox">' + SKEL + '</div>',
@@ -382,14 +442,17 @@ const Graf = {
       });
     });
   },
+  /** Mapa real e interativo (OpenStreetMap). Sem internet, fica o desenho ilustrativo com os pontos. */
   mapa(pontos, alt) {
     if (!pontos.length) return '<div class="empty small">Escolas sem coordenadas. Use o menu VistAR › Geocodificar escolas na planilha.</div>';
     const la = pontos.map(p => p.lat), ln = pontos.map(p => p.lng);
     const mnA = Math.min.apply(null, la), mxA = Math.max.apply(null, la), mnL = Math.min.apply(null, ln), mxL = Math.max.apply(null, ln);
     const px = p => 6 + (mxL === mnL ? 0.5 : (p.lng - mnL) / (mxL - mnL)) * 88, py = p => 8 + (mxA === mnA ? 0.5 : (mxA - p.lat) / (mxA - mnA)) * 80;
-    return '<div class="mapdots"' + (alt ? ' style="aspect-ratio:auto;height:' + alt + 'px"' : '') + '>' + Views.mapaIlustrativo().replace(/<path d="M112[^>]*\/>|<circle[^>]*\/>|<path d="M478[^>]*\/>|<text[^>]*>[^<]*<\/text>/g, '') +
+    const id = 'mp' + Math.random().toString(36).slice(2, 8);
+    (MapaReal.fila = MapaReal.fila || {})[id] = { pontos: pontos };
+    return '<div class="mapdots mapa-real" id="' + id + '"' + (alt ? ' style="aspect-ratio:auto;height:' + alt + 'px"' : '') + '>' + Views.mapaIlustrativo().replace(/<path d="M112[^>]*\/>|<circle[^>]*\/>|<path d="M478[^>]*\/>|<text[^>]*>[^<]*<\/text>/g, '') +
       pontos.map(p => '<button style="left:' + px(p) + '%;top:' + py(p) + '%;background:' + (ST_ESC[p.st] || ST_ESC.nao_iniciada)[1] + '" data-act="' + (p.act || 'escolaAbrir') + '" data-id="' + p.id + '" title="' + esc(p.nome) + '" aria-label="' + esc(p.nome) + '"></button>').join('') +
-      '<span class="lbl-m" style="position:absolute;right:8px;bottom:8px;background:var(--card);font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:99px">Mapa ilustrativo</span></div>';
+      '<span class="lbl-m" style="position:absolute;right:8px;bottom:8px;background:var(--card);font-size:13px;font-weight:600;padding:3px 9px;border-radius:99px">Carregando mapa…</span></div>';
   },
   legenda(ks) { return '<div class="leg">' + (ks || Object.keys(ST_ESC)).map(k => '<span><i style="background:' + ST_ESC[k][1] + '"></i>' + ST_ESC[k][0].replace(/s$/, '').replace('Concluída', 'Concluída') + '</span>').join('') + '</div>'; }
 };
@@ -403,7 +466,7 @@ const Painel = {
     const per = { hoje: 'hoje', semana: 'sem.', mes: '14 dias', contrato: 'contrato' }[d.periodo];
     return '<section class="prog-hero"><div class="kh">Avanço das vistorias</div><div class="donut-wrap"><div>' + Graf.donut(c, t) + '</div><div>' +
         '<div class="big">' + c.concluida + ' <small>de ' + d.total + ' escolas</small></div>' +
-        '<div style="color:#C9D6E6;font-size:14px;margin-top:4px">Ritmo de <b style="color:#fff">' + fmt(d.ritmo, 1) + ' escola/dia</b> nos últimos 14 dias.</div>' +
+        '<div style="color:#C9D6E6;font-size:15.5px;margin-top:4px">Ritmo de <b style="color:#fff">' + fmt(d.ritmo, 1) + ' escola/dia</b> nos últimos 14 dias.</div>' +
         (delta !== null ? '<span class="pill-l ' + (delta >= 0 ? 'up' : 'down') + '">' + (delta >= 0 ? '▲ +' : '▼ ') + fmt(delta * 100, 0) + ' p.p. ' + (delta >= 0 ? 'acima' : 'abaixo') + ' da meta</span>' : '') +
         (d.previsao ? '<span class="pill-l">Previsão ' + dataBR(d.previsao) + '</span>' : '') + '</div></div>' +
         '<div class="leg2">' + ['concluida', 'andamento', 'agendada', 'retorno', 'nao_iniciada'].map(k => '<div><i style="background:' + ST_ESC[k][1] + '"></i>' + ST_ESC[k][0] + '<b>' + c[k] + '</b></div>').join('') +
@@ -466,7 +529,7 @@ Views.escola = p => {
         if (!r) return encher('#escBox', erroBox(err));
         const x = r.escola, s = ST_ESC[r.status] || ST_ESC.nao_iniciada;
         const stCls = { concluida: 'b-green', andamento: 'b-blue', agendada: 'b-amber', retorno: 'b-red', nao_iniciada: 'b-gray' }[r.status];
-        encher('#escSt', '<span class="badge ' + stCls + '" style="font-size:13px;padding:6px 12px">' + s[0].replace(/s$/, '').replace('Retorno pendente', 'Retorno') + '</span>');
+        encher('#escSt', '<span class="badge ' + stCls + '" style="font-size:14.5px;padding:6px 12px">' + s[0].replace(/s$/, '').replace('Retorno pendente', 'Retorno') + '</span>');
         const ct = r.contato;
         const end = [x.logradouro, x.numero].filter(Boolean).join(', ') + (x.bairro ? ' · ' + x.bairro : '') + (x.cep ? ' · CEP ' + x.cep : '');
         const pode = !V;
@@ -479,8 +542,8 @@ Views.escola = p => {
             '<p class="muted" style="margin:10px 0">' + esc(end) + '</p><div class="grid2"><button class="btn btn-out" data-act="maps" data-id="' + x.id + '">Abrir rota</button><button class="btn btn-out" data-act="reagendar" data-id="' + x.id + '">Programar visita</button></div>' + (pode ? acao : '') + '</section>' +
           (ct ? '<section class="card"><div class="kh">Contato da unidade</div>' +
             (ct.nome ? '<div class="doc-row"><span><b>' + esc(ct.nome) + '</b><small>' + esc([ct.cargo, ct.rf ? 'RF ' + ct.rf : ''].filter(Boolean).join(' · ')) + '</small></span>' + (ct.tel ? '<button class="btn btn-teal btn-sm" style="margin-left:auto;border-radius:99px" data-act="tel" data-tel="' + esc(ct.tel) + '">Ligar</button>' : '') + '</div>' : '') +
-            (ct.tel ? '<div class="doc-row"><span><b>' + esc(ct.tel) + '</b><small>Telefone da direção</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="copiar" data-v="' + esc(ct.tel) + '">Copiar</button></div>' : '') +
-            (ct.email ? '<div class="doc-row"><span style="min-width:0"><b style="word-break:break-all">' + esc(ct.email) + '</b><small>E-mail</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="mailto" data-v="' + esc(ct.email) + '">Enviar</button></div>' : '') + '</section>' : '') +
+            (ct.tel ? '<div class="doc-row"><span><b>' + esc(ct.tel) + '</b><small>Telefone da direção</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:15.5px" data-act="copiar" data-v="' + esc(ct.tel) + '">Copiar</button></div>' : '') +
+            (ct.email ? '<div class="doc-row"><span style="min-width:0"><b style="word-break:break-all">' + esc(ct.email) + '</b><small>E-mail</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:15.5px" data-act="mailto" data-v="' + esc(ct.email) + '">Enviar</button></div>' : '') + '</section>' : '') +
           (r.resumo ? '<section class="card"><div class="kh">Resumo</div><div class="counts" style="margin-bottom:0"><div><b>' + r.resumo.blocos + '</b><span>blocos</span></div><div><b>' + r.resumo.ambientes + '</b><span>ambientes</span></div><div><b>' + fmt(r.resumo.m2clim) + '</b><span>m² clim.</span></div></div></section>' : '') +
           '<section class="card"><div class="kh">Vistorias</div>' + (r.historico.length || r.retorno ? '' : '<p class="muted">Nenhuma vistoria registrada.</p>') +
             r.historico.map(h => '<button class="sum-row" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: h.id }) + '\'><i style="width:12px;height:12px;border-radius:50%;flex:none;background:' + (h.status === 'finalizada' ? 'var(--green)' : h.status === 'cancelada' ? 'var(--red)' : 'var(--c-and)') + '"></i>' +
@@ -488,8 +551,8 @@ Views.escola = p => {
               '<span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>').join('') +
             (r.retorno ? '<button class="sum-row" data-act="reagendar" data-id="' + x.id + '"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)"></i><span><b>Retorno · ' + (r.retorno.data ? dataBR(r.retorno.data) + (r.retorno.hora ? ' ' + r.retorno.hora : '') : 'a definir') + '</b><small>' + plural(r.pendencias.length, 'pendência aberta', 'pendências abertas') + '</small></span><span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>' : '') + '</section>' +
           (r.documentos && (r.documentos.vistoria || r.documentos.completo) ? '<section class="card"><div class="kh">Documentos</div>' +
-            (r.documentos.vistoria ? '<div class="doc-row"><span><b>Relatório de vistoria</b><small>1 folha' + (r.documentos.assinadoEm ? ' · assinado em ' + dataBR(r.documentos.assinadoEm) : '') + '</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'vistoria', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') +
-            (r.documentos.completo ? '<div class="doc-row"><span><b>Relatório completo</b><small>PDF ' + fmt(r.documentos.completo.bytes / 1048576, 1) + ' MB</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'completo', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') + '</section>' : '') +
+            (r.documentos.vistoria ? '<div class="doc-row"><span><b>Relatório de vistoria</b><small>1 folha' + (r.documentos.assinadoEm ? ' · assinado em ' + dataBR(r.documentos.assinadoEm) : '') + '</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:15.5px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'vistoria', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') +
+            (r.documentos.completo ? '<div class="doc-row"><span><b>Relatório completo</b><small>PDF ' + fmt(r.documentos.completo.bytes / 1048576, 1) + ' MB</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:15.5px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'completo', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') + '</section>' : '') +
           (r.fotos.length ? '<section class="card"><div class="card-h"><span class="kh">Fotos recentes</span><button class="link" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: x.id }) + '\'>Ver todas</button></div>' +
             '<div class="gal" style="grid-template-columns:repeat(4,1fr)">' + r.fotos.slice(0, 4).map((f, i) => '<button data-act="verServ" data-k="esc:' + x.id + '" data-i="' + i + '"><img data-th="s' + f.id + '" data-fid="' + f.fileId + '" alt=""></button>').join('') + '</div></section>' : '') +
           '<section class="card"><div class="kh">Contrato e equipe</div><div class="doc-row"><span><b>' + esc(r.cfg.contrato + ' · ' + r.cfg.lote) + '</b><small>' + esc(r.cfg.consorcio) + '</small></span></div>' +
@@ -700,17 +763,22 @@ const Visor = {
     const f = this.lista[this.i], n = this.lista.length;
     const enviada = f.st !== 'pend';
     const loc = f.lat && f.lng ? fmt(f.lat, 4) + ' / ' + fmt(f.lng, 4) : '—';
+    // Foto em destaque: no celular em pé, os detalhes ficam recolhidos; deitado ou no computador, ao lado da foto.
+    const aberto = !!this.detalhes;
     $('#layer').innerHTML = '<div class="pv"><div class="pv-top"><button class="back" data-act="sheetClose" aria-label="Fechar">' + I('left') + '</button><span class="t"><b>Foto ' + (this.i + 1) + ' de ' + n + '</b><small>' + esc(ROTULO_ETAPA[f.etapa] || '') + '</small></span>' +
-      '<button class="back" data-act="visorMais" aria-label="Mais">' + I('share', 20) + '</button></div>' +
-      '<div class="pv-img" id="pvImg"><img id="pvI" alt=""></div>' +
-      '<div class="pv-strip">' + this.lista.map((x, j) => '<button class="' + (j === this.i ? 'on' : '') + '" data-act="visorIr" data-i="' + j + '"><img data-th="' + x.id + '"' + (x.fileId ? ' data-fid="' + x.fileId + '"' : '') + ' alt=""></button>').join('') + '</div>' +
-      '<div class="pv-info"><div class="grab" style="width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px"></div>' +
-        '<div class="row" style="align-items:flex-start"><span style="flex:1"><b style="font-size:19px">' + esc(f.rotulo || 'Foto') + '</b><div class="muted">' + esc(f.escola || '') + '</div></span><span class="badge ' + (enviada ? 'b-green">Enviada' : 'b-amber">Na fila') + '</span></div>' +
-        '<div class="kv2"><div><small>Data e hora</small><b>' + (f.criadoEm ? dataBR(f.criadoEm, true) + ' · ' + hora(f.criadoEm) : '—') + '</b></div><div><small>Local</small><b>' + loc + '</b></div>' +
-        '<div><small>Registrada por</small><b>' + esc(f.autor || (f.local ? ((App.data || {}).usuario || {}).nome : '') || '—') + '</b></div><div><small>Etapa</small><b>' + esc(ROTULO_ETAPA[f.etapa] || f.etapa || '—') + '</b></div></div>' +
-        '<div class="kh">Legenda</div><textarea class="inp mt" id="pvLeg" placeholder="Descreva o que a foto mostra" style="min-height:64px">' + esc(f.legenda || '') + '</textarea>' +
-        '<div class="grid3 mt">' + (f.local ? '<button class="btn btn-out" data-act="visorRefazer">Refazer</button>' : '<span></span>') + '<button class="btn btn-out" data-act="visorShare">Compartilhar</button>' +
-          (f.local ? '<button class="btn btn-out-red" data-act="visorDel">Excluir</button>' : '<span></span>') + '</div></div></div>';
+      '<button class="back" data-act="visorMais" aria-label="Compartilhar">' + I('share', 20) + '</button></div>' +
+      '<div class="pv-corpo"><div class="pv-foto"><div class="pv-img" id="pvImg"><img id="pvI" alt="">' +
+        (n > 1 ? '<button class="pv-nav ant" data-act="visorIr" data-i="' + (this.i - 1) + '" aria-label="Foto anterior"' + (this.i ? '' : ' disabled') + '>' + I('left', 26) + '</button>' +
+          '<button class="pv-nav prox" data-act="visorIr" data-i="' + (this.i + 1) + '" aria-label="Próxima foto"' + (this.i < n - 1 ? '' : ' disabled') + '>' + I('right', 26) + '</button>' : '') + '</div>' +
+        (n > 1 ? '<div class="pv-strip">' + this.lista.map((x, j) => '<button class="' + (j === this.i ? 'on' : '') + '" data-act="visorIr" data-i="' + j + '" aria-label="Foto ' + (j + 1) + '"><img data-th="' + x.id + '"' + (x.fileId ? ' data-fid="' + x.fileId + '"' : '') + ' alt=""></button>').join('') + '</div>' : '') + '</div>' +
+      '<div class="pv-info' + (aberto ? ' aberto' : '') + '">' +
+        '<div class="row" style="align-items:flex-start"><span style="flex:1;min-width:0"><b style="font-size:19px">' + esc(f.rotulo || 'Foto') + '</b><div class="muted">' + esc(f.escola || '') + '</div></span><span class="badge ' + (enviada ? 'b-green">Enviada' : 'b-amber">Na fila') + '</span></div>' +
+        '<textarea class="inp mt" id="pvLeg" placeholder="Legenda: o que a foto mostra" rows="1" style="min-height:48px">' + esc(f.legenda || '') + '</textarea>' +
+        '<button class="pv-mais" data-act="visorDetalhes" aria-expanded="' + aberto + '">' + (aberto ? 'Ocultar detalhes' : 'Detalhes e ações') + ' <span>' + (aberto ? '▴' : '▾') + '</span></button>' +
+        '<div class="pv-det"><div class="kv2"><div><small>Data e hora</small><b>' + (f.criadoEm ? dataBR(f.criadoEm, true) + ' · ' + hora(f.criadoEm) : '—') + '</b></div><div><small>Local</small><b>' + loc + '</b></div>' +
+          '<div><small>Registrada por</small><b>' + esc(f.autor || (f.local ? ((App.data || {}).usuario || {}).nome : '') || '—') + '</b></div><div><small>Etapa</small><b>' + esc(ROTULO_ETAPA[f.etapa] || f.etapa || '—') + '</b></div></div>' +
+          '<div class="grid2">' + (f.local ? '<button class="btn btn-out" data-act="visorRefazer">Refazer</button>' : '') + '<button class="btn btn-out" data-act="visorShare">Compartilhar</button>' +
+            (f.local ? '<button class="btn btn-out-red" data-act="visorDel">Excluir</button>' : '') + '</div></div></div></div></div>';
     Thumbs.hydrate();
     const img = $('#pvI');
     img.src = await this.src(f, false);
@@ -826,7 +894,7 @@ Object.assign(Act, {
 });
 
 /* ═════════════ Itens com erro (envios recusados pelo servidor) ═════════════ */
-const DESC_ACAO = { uploadFoto: 'Foto', salvarEtapa: 'Etapa', checkin: 'Check-in', finalizar: 'Finalização', cancelar: 'Cancelamento', legenda: 'Legenda', removerFoto: 'Exclusão de foto', sairVistoria: 'Saída da vistoria', resolverPendencia: 'Pendência' };
+const DESC_ACAO = { uploadFoto: 'Foto', salvarEtapa: 'Etapa', checkin: 'Check-in', finalizar: 'Finalização', documentos: 'Relatórios da vistoria', cancelar: 'Cancelamento', legenda: 'Legenda', removerFoto: 'Exclusão de foto', sairVistoria: 'Saída da vistoria', resolverPendencia: 'Pendência' };
 Views.falhas = () => ({
   header: Views.hdrNavy('Sincronização', 'Itens com erro'),
   body: '<p class="intro">Envios que o servidor recusou 3 vezes. <b>Nada foi apagado</b>: eles ficam guardados neste aparelho e uma cópia foi para a pasta "Falhas de sincronização" do Drive. Corrija a causa (ex.: entrar de novo, pedir acesso à escola) e reenvie.</p><div id="flBox">' + SKEL + '</div>',
@@ -947,7 +1015,7 @@ Object.assign(Act, {
   },
   paFim() { App.form = null; App.aplicarBoot(App.data); App.iniciarSessao(); },
   termos() {
-    Sheet.open('<h3>Termos de uso e privacidade</h3><div class="muted" style="font-size:14px;line-height:1.5">' +
+    Sheet.open('<h3>Termos de uso e privacidade</h3><div class="muted" style="font-size:15.5px;line-height:1.5">' +
       '<p>O VistAR é uma ferramenta de trabalho do ' + esc(((App.boot || {}).cfg || {}).consorcio || 'consórcio') + ' para vistorias em unidades escolares.</p>' +
       '<p><b>Dados coletados:</b> nome, matrícula, e-mail, equipe, localização no check-in, check-out e enquanto o app está aberto (para a supervisão acompanhar as equipes), fotos e assinaturas das vistorias.</p>' +
       '<p><b>Finalidade (LGPD, art. 7º, V e IX):</b> execução do contrato, registro técnico das vistorias e segurança das equipes em campo. Os dados ficam no Google Workspace do consórcio e são acessados só por pessoas autorizadas.</p>' +
@@ -997,6 +1065,7 @@ Object.assign(Act, {
   mailto(el) { abrirExterno('mailto:' + el.dataset.v); },
   verServ(el) { const l = (App._galeria || {})[el.dataset.k] || []; if (l.length) Visor.abrir(l, Number(el.dataset.i)); },
   visorIr(el) { Visor.ir(Number(el.dataset.i)); },
+  visorDetalhes() { Visor.detalhes = !Visor.detalhes; const i = $('.pv-info'); if (!i) return; i.classList.toggle('aberto', Visor.detalhes); const b = $('.pv-mais'); b.setAttribute('aria-expanded', Visor.detalhes); b.innerHTML = (Visor.detalhes ? 'Ocultar detalhes' : 'Detalhes e ações') + ' <span>' + (Visor.detalhes ? '▴' : '▾') + '</span>'; },
   async visorShare() {
     const f = Visor.lista[Visor.i];
     const src = await Visor.src(f, true);

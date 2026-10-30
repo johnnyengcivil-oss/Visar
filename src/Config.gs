@@ -5,7 +5,7 @@
  * Rode `instalarVistAR()` uma vez no editor (ou pelo menu VistAR da planilha).
  */
 
-const VERSAO = '1.2.0';
+const VERSAO = '1.2.1';
 
 /** Valores padrão. Podem ser sobrescritos na aba "Config" da planilha. */
 const CONFIG_PADRAO = {

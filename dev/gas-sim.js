@@ -96,7 +96,7 @@ const META_OK = ['viewport', 'mobile-web-app-capable', 'apple-mobile-web-app-cap
 function saida(html) {
   const o = {
     html, metas: [], getContent: () => html, setTitle: t => { o.titulo = t; return o; }, setXFrameOptionsMode: () => o, setFaviconUrl: () => o,
-    addMetaTag: (n, v) => { if (META_OK.indexOf(n) < 0) throw new Error('A metatag especificada não é permitida neste contexto.'); o.metas.push(n); return o; },
+    addMetaTag: (n, v) => { if (META_OK.indexOf(n) < 0) throw new Error('A metatag especificada não é permitida neste contexto.'); o.metas.push(n); (o.metaVal = o.metaVal || {})[n] = v; return o; },
     getAs: tipo => fakeBlob(Array.from(Buffer.from('%PDF ' + html.length)), tipo, 'x.pdf')
   };
   return o;
@@ -169,6 +169,8 @@ console.log('Abrir o app (doGet)');
 const pg = ctx.doGet({ parameter: {} }); if (pg.titulo === 'VistAR · erro') console.log('    ' + pg.html.replace(/<[^>]+>/g, ' ').slice(0, 400));
 ok(/window.__BOOT__ = \{/.test(pg.html) && pg.metas.indexOf('viewport') >= 0 && !/<\?/.test(pg.html), 'página do app abre com as meta tags permitidas pelo Google');
 ok(/App\.start\(\)/.test(pg.html) && pg.html.length > 100000, 'app completo dentro da página (' + Math.round(pg.html.length / 1024) + ' KB)');
+
+ok(pg.metaVal && pg.metaVal.viewport === 'width=device-width, initial-scale=1', 'viewport no formato documentado pelo Google (sem maximum-scale)');
 
 console.log('Login');
 ok(!api('login', '', { email: '1001', senha: 'errada' }).ok, 'senha errada é recusada');
@@ -296,6 +298,13 @@ ok(base && base.etapas.dados && base.fotos.length === 1, 'dados para retomar vê
 const v3 = api('checkin', T, { id: 'v-teste-3', escolaId: 'e-infante', retomarDe: base.id, fotosCopiar: [{ id: 'foto3b', de: 'foto3' }] });
 ok(v3.ok && /-R2$/.test(v3.data.codigo), 'retomada cria nova versão (' + (v3.data && v3.data.codigo) + ')');
 ok(vm.runInContext("Db.find(" + JSON.stringify('Fotos') + "," + JSON.stringify('foto3b') + ")", ctx).vistoriaId === 'v-teste-3', 'fotos anteriores valem na nova versão');
+
+console.log('Finalização em duas etapas');
+const f3 = api('finalizar', T, { vistoriaId: 'v-teste-3', checkout: new Date().toISOString(), resumo: { ambientes: 1, fotos: 1, pendencias: 0 }, docsDepois: true }).data;
+ok(f3 && f3.docs.pendente && f3.copia.pendente && !vm.runInContext("Db.find('Vistorias','v-teste-3')", ctx).relCompletoId, 'finalização responde sem esperar os PDFs (não segura o servidor)');
+const d3 = api('documentos', T, { vistoriaId: 'v-teste-3' }).data;
+ok(d3 && d3.docs.completo.fileId && d3.docs.vistoria.fileId, 'relatórios gerados na segunda etapa');
+ok(!api('documentos', T, { vistoriaId: 'v-par' }).ok, 'relatórios só para vistoria finalizada');
 
 console.log('Supervisão');
 const sup = api('login', '', { email: 'roberto.lima@exemplo.com', senha: 'vistar2026' }).data.token;

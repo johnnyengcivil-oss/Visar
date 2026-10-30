@@ -141,8 +141,8 @@ Views.usuariosRender = () => {
   encher('#uBox', '<div class="muted small" style="margin:0 4px 10px">' + plural(l.length, 'usuário') + ' · ' + r.usuarios.filter(x => x.codigoPendente && !x.ativado).length + ' aguardando primeiro acesso</div>' +
     l.map(x => '<button class="sch" data-act="usuarioEditar" data-id="' + x.id + '"><span class="avatar" style="' + (x.ativo ? '' : 'background:var(--muted-2)') + '">' + esc(String(x.nome).split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()) + '</span>' +
       '<span style="flex:1;min-width:0"><b style="font-size:16px">' + esc(x.nome) + '</b><div class="muted small">' + esc([x.matricula ? 'Mat. ' + x.matricula : '', x.email].filter(Boolean).join(' · ')) + '</div>' +
-      '<div class="tags" style="margin-top:6px"><span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc((PERFIS.find(p => p[0] === x.perfil) || [0, x.perfil])[1]) + '</span><span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc(eq(x.equipeId)) + '</span>' +
-      (!x.ativo ? '<span class="tag b-red" style="font-size:12px;padding:3px 9px">Desativado</span>' : x.ativado ? '<span class="tag b-green" style="font-size:12px;padding:3px 9px">Ativo' + (x.ultimoAcesso ? ' · ' + haQuanto(x.ultimoAcesso) : '') + '</span>' : '<span class="tag b-amber" style="font-size:12px;padding:3px 9px">Aguardando 1º acesso</span>') + '</div></span>' +
+      '<div class="tags" style="margin-top:6px"><span class="tag b-gray" style="font-size:13.5px;padding:3px 9px">' + esc((PERFIS.find(p => p[0] === x.perfil) || [0, x.perfil])[1]) + '</span><span class="tag b-gray" style="font-size:13.5px;padding:3px 9px">' + esc(eq(x.equipeId)) + '</span>' +
+      (!x.ativo ? '<span class="tag b-red" style="font-size:13.5px;padding:3px 9px">Desativado</span>' : x.ativado ? '<span class="tag b-green" style="font-size:13.5px;padding:3px 9px">Ativo' + (x.ultimoAcesso ? ' · ' + haQuanto(x.ultimoAcesso) : '') + '</span>' : '<span class="tag b-amber" style="font-size:13.5px;padding:3px 9px">Aguardando 1º acesso</span>') + '</div></span>' +
       '<span class="chev">' + I('right') + '</span></button>').join(''));
 };
 

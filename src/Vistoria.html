@@ -544,7 +544,7 @@ Object.assign(Act, {
     App.final = null; LS.del('final');
     await Sync.add('finalizar', {
       vistoriaId: V.id, checkout: V.checkout, lat: pos ? pos.lat : '', lng: pos ? pos.lng : '',
-      pendencias: pend, resumo: App.finalLocal.resumo
+      pendencias: pend, resumo: App.finalLocal.resumo, docsDepois: true
     });
     Router.reset('finalizada');
   },
@@ -857,7 +857,7 @@ const Etapas = {
     const V = App.V;
     const nb = Number(V.d.estrutura.nBlocos) || 1;
     if (nb < 2) return '';
-    return F.card('', '<span class="lbl" style="text-transform:uppercase;letter-spacing:.6px;font-size:11.5px;font-weight:700">' + (lbl || 'Dados do bloco') + '</span><div class="chips">' +
+    return F.card('', '<span class="lbl" style="text-transform:uppercase;letter-spacing:.6px;font-size:13px;font-weight:700">' + (lbl || 'Dados do bloco') + '</span><div class="chips">' +
       Array.from({ length: nb }, (x, b) => '<button class="chip' + (V.ui.bloco === b ? ' on' : '') + '" data-act="bloco" data-b="' + b + '">' + esc(NB(b)) + ' · ' + (Number(V.d.estrutura.blocos[b].pav) || 1) + ' pav.</button>').join('') + '</div>');
   },
 
@@ -1024,7 +1024,7 @@ const Etapas = {
     return F.card('', F.lbl('Bloco') + '<div class="chips">' + Array.from({ length: nb }, (x, i) => '<button class="chip' + (b === i ? ' on' : '') + '" data-act="bloco" data-b="' + i + '">' + esc(NB(i)) + '</button>').join('') + '</div>' +
         F.lbl('Pavimento') + '<div class="pav-tabs">' + Array.from({ length: pavs }, (x, i) => {
           const st = ok[b + '-' + i] ? 'ok' : Amb.lista(b, i).length ? 'and' : 'pend';
-          return '<button class="' + st + (p === i ? ' on' : '') + '" data-act="pav" data-p="' + i + '">' + PAV(i) + (st === 'ok' ? ' ✓' : p === i ? '<br><small>em andamento</small>' : st === 'pend' ? ' · pendente' : '') + '</button>';
+          return '<button class="' + st + (p === i ? ' on' : '') + '" data-act="pav" data-p="' + i + '">' + PAV(i) + (st === 'ok' ? ' ✓' : p === i ? '<br><span style="font-size:13px;font-weight:600">em andamento</span>' : st === 'pend' ? ' · pendente' : '') + '</button>';
         }).join('') + '</div>') +
       '<section class="card"><div class="pav-head"><span><b>' + esc(NB(b)) + ' · ' + (p === 0 ? 'Térreo' : PAV(p) + ' pavimento') + '</b><small>Ambientes deste pavimento</small></span><span class="badge">' + totalUn + ' un.</span></div>' +
         (lista.length ? lista.map(a => Amb.linha(a)).join('') + '<div class="tot"><span>Área do pavimento</span><b>' + fmt(areaPav, areaPav % 1 ? 1 : 0) + ' m²</b></div>'
@@ -1046,7 +1046,7 @@ const Etapas = {
       const last = fs[fs.length - 1];
       return '<div class="equip"><div class="equip-h"><input data-k="' + P + 'nome" value="' + esc(x.nome) + '" placeholder="Nome do equipamento">' +
         F.stepper(P + 'qtd', '', { min: 1, max: 50, sm: true }) +
-        '<button class="icon-btn" style="color:var(--muted);width:34px;height:34px;margin:0" data-act="eqRm" data-id="' + x.id + '" aria-label="Remover">' + I('x', 18) + '</button></div>' +
+        '<button class="icon-btn" style="color:var(--muted);width:44px;height:44px;margin:0" data-act="eqRm" data-id="' + x.id + '" aria-label="Remover">' + I('x', 18) + '</button></div>' +
         '<div class="cols"><div><span class="lbl" style="margin-top:0">Potência nominal</span>' +
         (x.desc ? '<div class="pot" style="color:var(--muted-2)">—</div>' :
           '<input class="pot" data-k="' + P + 'pot" value="' + esc(x.pot) + '" inputmode="decimal" placeholder="Ex.: 3">' +

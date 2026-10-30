@@ -22,9 +22,10 @@ function doGet(e) {
       .replace(/</g, '\\u003c');
 
     const out = t.evaluate().setTitle('VistAR · ' + cfg.CONSORCIO).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-    [['viewport', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'], ['mobile-web-app-capable', 'yes'],
+    // Viewport exatamente no formato documentado pelo Google: sem ele o celular desenha a página com ~980 px e encolhe tudo.
+    [['viewport', 'width=device-width, initial-scale=1'], ['mobile-web-app-capable', 'yes'],
       ['apple-mobile-web-app-capable', 'yes'], ['apple-mobile-web-app-title', 'VistAR'], ['apple-mobile-web-app-status-bar-style', 'black-translucent']]
-      .forEach(m => { try { out.addMetaTag(m[0], m[1]); } catch (err) { console.warn('meta ' + m[0], err); } });
+      .forEach(m => { try { out.addMetaTag(m[0], m[1]); } catch (err) { console.error('[doGet] meta tag recusada: ' + m[0], err); } });
     return out;
   } catch (err) {
     console.error('[doGet]', err && err.stack ? err.stack : err);
@@ -103,6 +104,7 @@ function acoes_() {
     removerFoto: { fn: acaoRemoverFoto_, lock: true },
     cancelar: { fn: acaoCancelar_, lock: true },
     finalizar: { fn: acaoFinalizar_, lock: true },
+    documentos: { fn: acaoDocumentos_ },
     relatorio: { fn: acaoRelatorio_ },
     pdf: { fn: acaoPdf_ },
     enviarCopia: { fn: acaoEnviarCopia_ },

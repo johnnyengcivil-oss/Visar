@@ -86,6 +86,7 @@ npm install && npm test      # tudo abaixo de uma vez (também roda no GitHub Ac
 node dev/gas-sim.js          # testa o servidor (.gs) com Planilha/Drive/e-mail simulados
 node dev/build-preview.js    # gera dev/preview.html com servidor simulado (dev/mock.js)
 node dev/smoke.js            # percorre todas as telas no Chromium e salva screenshots em dev/shots
+node dev/auditoria-celular.js # celular em 320/360/390/430 px: rolagem lateral, texto ≥ 13 px, toque ≥ 40 px, escala
 node dev/build-dist.js       # gera dist/ (6 arquivos para colar no Apps Script)
 node dev/gas-sim.js --dist   # testa o pacote dist/
 python3 dev/build-guia.py    # gera o PDF do guia de implantação

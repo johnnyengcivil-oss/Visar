@@ -410,6 +410,12 @@ Quando receber uma versão nova dos arquivos:
 
 O link continua o mesmo. Nos celulares, basta fechar e abrir o app.
 
+### Atualizando da versão 1.2 para a 1.2.1
+
+Só mudam **`Codigo.gs`** e **`Index`**. Cole os dois por cima, salve e publique a nova versão (passos 4 a 6 acima). Não precisa executar nenhuma função.
+
+Depois, no celular, feche o app e abra de novo. A tela deve aparecer em **uma coluna**, com letras e botões grandes. Se ainda aparecer miniatura, recarregue a página.
+
 ### Atualizando da versão 1.1 para a 1.2
 
 A versão 1.2 traz um arquivo novo, o **Manual** (etapa 6.3). Faça assim:

@@ -215,9 +215,10 @@
       const rev = ((db.etapas[v.id] || {}).revisao || {}).dados || {};
       const ass = !!(rev.assResp && rev.assEmpresa);
       return { id: v.id, codigo: v.codigo, escolaId: v.escolaId, checkin: v.checkin, checkout: v.checkout, assinado: ass, assinantes: ['Johnny', rev.respNome || ''], resumo: p.resumo,
-        docs: { vistoria: { paginas: 1, tamanho: '0,8 MB' }, completo: { paginas: 12, tamanho: '2,4 MB' } },
-        copia: ass && rev.respEmail ? { enviada: true, para: rev.respEmail, em: new Date().toISOString() } : { enviada: false }, equipeStatus: 'em_transito', proxima: { escolaId: 'e-infante', hora: '13:30' } };
+        docs: p.docsDepois ? { pendente: true } : { vistoria: { paginas: 1, tamanho: '0,8 MB' }, completo: { paginas: 12, tamanho: '2,4 MB' } },
+        copia: p.docsDepois ? { pendente: true } : ass && rev.respEmail ? { enviada: true, para: rev.respEmail, em: new Date().toISOString() } : { enviada: false }, equipeStatus: 'em_transito', proxima: { escolaId: 'e-infante', hora: '13:30' } };
     },
+    documentos: p => ({ id: p.vistoriaId, docs: { vistoria: { paginas: 1, tamanho: '0,8 MB' }, completo: { paginas: 12, tamanho: '2,4 MB' } }, copia: { enviada: false }, assinado: true, assinantes: ['Johnny'] }),
     relatorio: p => ({ html: relHtml(p.tipo, db.vistorias[p.vistoriaId]), assinado: true, codigo: db.vistorias[p.vistoriaId].codigo, geradoEm: new Date().toLocaleString('pt-BR').slice(0, 17), paginas: p.tipo === 'completo' ? 12 : 1 }),
     pdf: p => ({ base64: btoa('%PDF-1.4 simulado'), nome: 'Relatorio_' + p.tipo + '.pdf', url: '#', tamanho: '0,8 MB' }),
     enviarCopia: p => ({ enviada: true, para: p.para, em: new Date().toISOString(), cc: 'consorcio@exemplo.com' }),

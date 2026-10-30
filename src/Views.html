@@ -99,7 +99,7 @@ const Views = {
         '<span class="lbl">Senha</span><input class="inp" name="senha" type="password" autocomplete="current-password" required>' +
         '<button class="btn btn-navy btn-lg mt" type="submit">' + I('arrow') + ' Entrar</button>' +
         '<p class="muted small" style="margin:14px 0 0;text-align:center">Esqueceu a senha? Fale com seu supervisor.</p></form>' +
-        '<p style="margin-top:auto;text-align:center;color:#7F93AE;font-size:12px">VistAR ' + esc(cfg.versao || '') + ' · funciona offline depois do primeiro acesso</p></div>',
+        '<p style="margin-top:auto;text-align:center;color:#7F93AE;font-size:13.5px">VistAR ' + esc(cfg.versao || '') + ' · funciona offline depois do primeiro acesso</p></div>',
       flush: true,
       after() {
         const f = $('#fLogin');
@@ -208,10 +208,22 @@ const Views = {
     }
     const box = $(sel);
     if (!box) return;
-    box.innerHTML = '<div class="map">' + (r && r.mapa ? '<img src="' + r.mapa + '" alt="Mapa da rota">' : Views.mapaIlustrativo()) +
-      '<span class="lbl-m">' + (r && r.mapa ? 'Google Maps' : 'Mapa ilustrativo') + '</span></div>' +
+    // Mapa interativo com a rota do Google (quando há); sem internet para o mapa, a imagem do Google ou o desenho.
+    const e = App.escola(escolaId) || {};
+    const dest = r && r.destino ? { lat: r.destino[0], lng: r.destino[1] } : e.lat && e.lng ? { lat: Number(e.lat), lng: Number(e.lng) } : null;
+    let mapaHtml;
+    if (dest && navigator.onLine !== false) {
+      const id = 'rt' + Math.random().toString(36).slice(2, 8);
+      MapaReal.fila[id] = { pontos: [dest].map(x => ({ lat: x.lat, lng: x.lng, nome: e.nome, cor: '#D93C3C' })).concat(pos ? [{ lat: pos.lat, lng: pos.lng, nome: 'Você', cor: '#0F2140' }] : []),
+        linha: r && r.poly ? MapaReal.decodificar(r.poly) : null };
+      mapaHtml = '<div class="map mapa-real" id="' + id + '">' + (r && r.mapa ? '<img src="' + r.mapa + '" alt="Mapa da rota">' : Views.mapaIlustrativo()) + '<span class="lbl-m">Carregando mapa…</span></div>';
+    } else {
+      mapaHtml = '<div class="map">' + (r && r.mapa ? '<img src="' + r.mapa + '" alt="Mapa da rota">' : Views.mapaIlustrativo()) + '<span class="lbl-m">' + (r && r.mapa ? 'Google Maps' : 'Mapa ilustrativo') + '</span></div>';
+    }
+    box.innerHTML = mapaHtml +
       (box.dataset.full && r && r.min ? '<div class="eta"><div><small>Tempo previsto</small><b>' + r.min + ' min</b></div><div><small>Distância</small><b>' + fmt(r.km, 1) + ' km</b></div><div><small>Chegada prevista</small><b>' + hora(r.chegada) + '</b></div></div>' : '');
     $$('[data-eta]').forEach(el => { el.textContent = r && r.chegada ? hora(r.chegada) : '--:--'; });
+    MapaReal.ligar();
   },
 
   /* ───── Escolas ───── */
@@ -339,12 +351,12 @@ const Views = {
         '<h2>' + esc(u.nome) + '</h2><div class="muted">' + esc(u.cargo || '') + ' · ' + esc(eq.nome || '') + '</div>' +
         (u.rg ? '<div class="tag b-gray mt" style="font-size:16px"><small class="muted" style="margin-right:6px">RG</small> ' + esc(u.rg) + '</div>' : '') +
         '<div class="emp"><small>EMPRESA</small>' + esc(D.empresa || u.empresa || '') + '</div>' +
-        '<div class="ctr"><span><small class="muted" style="font-weight:700;letter-spacing:.5px;font-size:11px">CONTRATO</small><br><b>' + esc((D.cfg || {}).contrato || '') + '</b></span>' + (dreAtual ? '<span class="tag b-teal">DRE ' + esc(dreAtual) + '</span>' : '') + '</div></div>' +
+        '<div class="ctr"><span><small class="muted" style="font-weight:700;letter-spacing:.5px;font-size:13px">CONTRATO</small><br><b>' + esc((D.cfg || {}).contrato || '') + '</b></span>' + (dreAtual ? '<span class="tag b-teal">DRE ' + esc(dreAtual) + '</span>' : '') + '</div></div>' +
         '<div style="padding:0 2px">' +
         (eq.supervisorNome ? '<div class="contact"><span><small class="k">Supervisor da empresa</small><b>' + esc(eq.supervisorNome) + '</b><span class="tel">' + esc(eq.supervisorTel || '') + '</span></span>' +
           (eq.supervisorTel ? '<button class="call" data-act="tel" data-tel="' + esc(eq.supervisorTel) + '" aria-label="Ligar">' + I('phone', 24) + '</button>' : '') + '</div>' : '') +
         '<div class="lbl" style="font-weight:700;letter-spacing:.6px;margin:20px 4px 10px">DRES AUTORIZADAS</div>' +
-        dres.map(d => '<div class="contact"><span><span class="tag b-teal" style="padding:3px 10px;font-size:13px">DRE ' + esc(d.id) + '</span>' + (d.id === dreAtual && V ? '<span class="muted small"> · desta vistoria</span>' : '') +
+        dres.map(d => '<div class="contact"><span><span class="tag b-teal" style="padding:3px 10px;font-size:14.5px">DRE ' + esc(d.id) + '</span>' + (d.id === dreAtual && V ? '<span class="muted small"> · desta vistoria</span>' : '') +
           '<small class="k" style="margin-top:8px">' + esc(d.engenheiroCargo || 'Engenheiro DRE') + '</small><b>' + esc(d.engenheiroNome || '') + '</b><span class="tel">' + esc(d.engenheiroTel || '') + '</span></span>' +
           (d.engenheiroTel ? '<button class="call" data-act="tel" data-tel="' + esc(d.engenheiroTel) + '" aria-label="Ligar">' + I('phone', 24) + '</button>' : '') + '</div>').join('') +
         '<div class="grid2 mt"><button class="btn btn-out" data-act="senha">' + I('lock', 20) + ' Alterar senha</button><button class="btn btn-out-red" data-act="sair">' + I('logout', 20) + ' Sair da conta</button></div>' +
@@ -405,7 +417,7 @@ const Views = {
           '<div class="pt"><span><b>TUG</b><small>Tomada de uso geral</small></span>' + qi('@tug', a.tug || '', 'un.') + '</div>' +
           '<div class="pt"><span><b>Iluminação</b><small>Detalhe o tipo de luminária</small></span>' + qi('', ilum, 'pontos', true) + '</div>' +
           (a.lum || []).map((l, i) => '<div class="pt sub"><span><input class="nm" data-k="@lum.' + i + '.nome" value="' + esc(l.nome) + '" placeholder="Ex.: LED painel 36 W">' +
-            '<small><input class="nm" style="width:28px;font-weight:600;font-size:13px" data-k="@lum.' + i + '.lamp" value="' + esc(l.lamp) + '" inputmode="numeric"> lâmpada(s) por luminária · <a href="#" data-act="rmLinha" data-l="lum" data-id="' + l.id + '" style="color:var(--red)">remover</a></small></span>' +
+            '<small><input class="nm" style="width:28px;font-weight:600;font-size:14.5px" data-k="@lum.' + i + '.lamp" value="' + esc(l.lamp) + '" inputmode="numeric"> lâmpada(s) por luminária · <a href="#" data-act="rmLinha" data-l="lum" data-id="' + l.id + '" style="color:var(--red)">remover</a></small></span>' +
             qi('@lum.' + i + '.qtd', l.qtd, 'pontos') + '</div>').join('') +
           '<button class="add-link" data-act="addLum">+ Adicionar tipo de luminária</button>' +
           (ext ? '' : '<div class="pt-sec">Equipamentos (TUE)</div>' + (a.tue || []).map((t, i) => '<div class="pt"><span><input class="nm" data-k="@tue.' + i + '.nome" value="' + esc(t.nome) + '" placeholder="Nome do equipamento">' +
@@ -455,7 +467,7 @@ const Views = {
     const cache = App._rel && App._rel[vid + p.tipo];
     return {
       header: Views.hdrNavy(completo ? 'Relatório completo' : 'Relatório de vistoria', (V && V.d.dados.nome) || (App.escola(p.escolaId) || {}).nome || '',
-        '<span id="relSt">' + (cache ? (cache.assinado ? '<span class="badge b-green" style="font-size:14px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:14px;padding:6px 12px">Preliminar</span>') : '') + '</span>'),
+        '<span id="relSt">' + (cache ? (cache.assinado ? '<span class="badge b-green" style="font-size:15.5px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:15.5px;padding:6px 12px">Preliminar</span>') : '') + '</span>'),
       flush: true,
       body: '<div class="rel-meta" id="relMeta">' + (cache ? Views.relMeta(cache, completo) : '<span>Gerando prévia…</span>') + '</div>' +
         '<div class="rel-stage" id="relStage"><div class="skel" style="position:absolute;inset:24px;border-radius:4px"></div></div>',
@@ -470,7 +482,7 @@ const Views = {
           const st = $('#relStage');
           if (!st) return;
           $('#relMeta').innerHTML = Views.relMeta(r, completo);
-          $('#relSt').innerHTML = r.assinado ? '<span class="badge b-green" style="font-size:14px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:14px;padding:6px 12px">Preliminar</span>';
+          $('#relSt').innerHTML = r.assinado ? '<span class="badge b-green" style="font-size:15.5px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:15.5px;padding:6px 12px">Preliminar</span>';
           st.innerHTML = '<iframe id="relFrame" title="Relatório"></iframe>' +
             '<div class="zoom"><button data-act="zoom" data-d="-1" aria-label="Diminuir">–</button><span id="zv">100%</span><button data-act="zoom" data-d="1" aria-label="Aumentar">+</button></div>' +
             (completo ? '<div class="pgpill" id="pgpill">Página 1 / ' + r.paginas + ' · deslize →</div>' : '');
@@ -527,6 +539,7 @@ const Views = {
     const eq = (App.data || {}).equipe || {};
     const res = F0.resumo && F0.resumo.fotos !== undefined ? F0.resumo : (L.resumo || {});
     const d = F0.docs || {};
+    const docsProntos = pronto && !d.pendente;
     const prox = F0.proxima ? App.escola(F0.proxima.escolaId) : null;
     const espera = '<span class="badge b-amber">' + (navigator.onLine === false ? 'Na fila' : 'Gerando…') + '</span>';
     const docRow = (t, s, badge) => '<div class="doc-row"><span><b>' + t + '</b><small>' + s + '</small></span>' + badge + '</div>';
@@ -539,12 +552,12 @@ const Views = {
           (pronto ? '<span class="badge ' + (F0.equipeStatus === 'em_transito' ? 'b-amber">Em trânsito' : 'b-green">Disponível') + '</span>' : espera) + '</section>' +
         '<section class="card"><div class="counts" style="margin:0"><div><b>' + (res.ambientes || 0) + '</b><span>ambientes</span></div><div><b>' + (res.fotos || 0) + '</b><span>fotos</span></div><div><b class="c-amber">' + (res.pendencias || 0) + '</b><span>pendências</span></div></div></section>' +
         '<section class="card"><div class="lbl" style="font-weight:700;letter-spacing:.6px;margin:0 0 4px">ENVIO E DOCUMENTOS</div>' +
-          docRow('Relatório de vistoria', pronto ? (F0.assinado ? 'Assinado por ' + esc(F0.assinantes.join(' e ')) : 'Versão preliminar · sem assinaturas') : 'Aguardando servidor',
-            pronto ? (d.vistoria && d.vistoria.erro ? '<span class="badge b-red">Erro</span>' : F0.assinado ? '<span class="badge b-green">Assinado</span>' : '<span class="badge b-amber">Gerado</span>') : espera) +
-          docRow('Relatório completo', pronto && d.completo && !d.completo.erro ? d.completo.paginas + ' páginas · PDF ' + d.completo.tamanho : 'PDF com fotos e pré-dimensionamento',
-            pronto ? (d.completo && d.completo.erro ? '<span class="badge b-red">Erro</span>' : '<span class="badge b-green">Gerado</span>') : espera) +
-          docRow('Cópia para a unidade', pronto ? (F0.copia.enviada ? 'Enviada às ' + hora(F0.copia.em) + ' para ' + esc(F0.copia.para) : F0.copia.erro ? esc(F0.copia.erro) : 'Não enviada · envie pela tela do relatório') : 'Envio automático após assinatura',
-            pronto ? (F0.copia.enviada ? '<span class="badge b-green">Enviado</span>' : '<span class="badge b-gray">Pendente</span>') : espera) +
+          docRow('Relatório de vistoria', docsProntos ? (F0.assinado ? 'Assinado por ' + esc(F0.assinantes.join(' e ')) : 'Versão preliminar · sem assinaturas') : pronto ? 'Gerando o PDF no Drive' : 'Aguardando servidor',
+            docsProntos ? (d.vistoria && d.vistoria.erro ? '<span class="badge b-red">Erro</span>' : F0.assinado ? '<span class="badge b-green">Assinado</span>' : '<span class="badge b-amber">Gerado</span>') : espera) +
+          docRow('Relatório completo', docsProntos && d.completo && !d.completo.erro ? d.completo.paginas + ' páginas · PDF ' + d.completo.tamanho : 'PDF com fotos e pré-dimensionamento',
+            docsProntos ? (d.completo && d.completo.erro ? '<span class="badge b-red">Erro</span>' : '<span class="badge b-green">Gerado</span>') : espera) +
+          docRow('Cópia para a unidade', docsProntos ? (F0.copia.enviada ? 'Enviada às ' + hora(F0.copia.em) + ' para ' + esc(F0.copia.para) : F0.copia.erro ? esc(F0.copia.erro) : 'Não enviada · envie pela tela do relatório') : 'Envio automático após assinatura',
+            docsProntos ? (F0.copia.enviada ? '<span class="badge b-green">Enviado</span>' : '<span class="badge b-gray">Pendente</span>') : espera) +
           docRow('Sincronização', Sync.q.length ? plural(Sync.q.length, 'item', 'itens') + ' na fila' : 'Dados e fotos no servidor', Sync.q.length ? '<span class="badge b-amber">' + (navigator.onLine === false ? 'Offline' : 'Enviando') + '</span>' : '<span class="badge b-green">OK</span>') +
         '</section>' +
         (prox ? '<section class="next-card"><div class="kick">Próxima escola do roteiro · hoje às ' + esc(F0.proxima.hora || '') + '</div><h3 style="margin:4px 0 2px;font-size:20px">' + esc(prox.nome) + '</h3>' +
@@ -553,7 +566,7 @@ const Views = {
           '<div class="small muted" style="text-align:center;font-weight:700;margin:6px 0 8px">Abrir rota no aplicativo</div>' +
           '<div class="navapps"><button class="btn btn-out-teal" data-act="maps" data-id="' + prox.id + '"><span class="gdot"></span>Google Maps</button><button class="btn btn-out-teal" data-act="waze" data-id="' + prox.id + '"><span class="wdot"></span>Waze</button></div>' +
           '<p class="muted small" style="text-align:center;margin:10px 0 0">O check-in é feito ao chegar na unidade.</p></section>' : '') +
-        (pronto ? '<button class="btn btn-out btn-lg" data-act="verRelatorios">Ver relatórios</button>' : '') +
+        (docsProntos ? '<button class="btn btn-out btn-lg" data-act="verRelatorios">Ver relatórios</button>' : '') +
         '<button class="btn btn-out btn-lg mt" data-act="tab" data-to="home">' + I('left') + ' Voltar ao início</button></div>',
       after() { if (prox) Views.carregarRota(prox.id, '#rotaFinal'); }
     };
@@ -701,6 +714,8 @@ Views.cancelar.onBack = () => { App.form = null; };
 /* Resultado da finalização (chega pela fila, mesmo se o envio ocorreu depois, offline). */
 Sync.on('finalizar', r => {
   App.final = r; LS.set('final', r);
+  // Relatórios e cópia saem numa segunda etapa da fila, sem atrasar a equipe nem o servidor.
+  if (r.docs && r.docs.pendente) Sync.add('documentos', { vistoriaId: r.id }, 'docs:' + r.id);
   if (App.V && App.V.id === r.id) { App.V = null; Vist.salvar(true); }
   LS.del('finalLocal');
   const D = App.data;
@@ -712,8 +727,14 @@ Sync.on('finalizar', r => {
     LS.set('boot', D);
   }
   if (App.route && App.route.name === 'finalizada') App.rerender();
-  else toast('Vistoria sincronizada e relatórios gerados', 'ok');
+  else toast(r.docs && r.docs.pendente ? 'Vistoria sincronizada · gerando relatórios' : 'Vistoria sincronizada e relatórios gerados', 'ok');
   App.refresh();
+});
+Sync.on('documentos', r => {
+  if (App.final && App.final.id === r.id) { Object.assign(App.final, { docs: r.docs, copia: r.copia, assinado: r.assinado, assinantes: r.assinantes }); LS.set('final', App.final); }
+  Dados.limpar('vd:' + r.id);
+  if (App.route && App.route.name === 'finalizada') App.rerender();
+  else toast('Relatórios da vistoria gerados', 'ok');
 });
 Sync.on('finalizar:erro', e => { if (App.V) { App.V.status = 'em_andamento'; Vist.salvar(true); } toast('Não foi possível finalizar: ' + e.message, 'err', 6000); Router.reset('home'); });
 Sync.on('cancelar', () => App.refresh());

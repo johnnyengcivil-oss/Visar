@@ -300,6 +300,33 @@ function acaoCancelar_(p, u) {
 
 /* ───────────────────────── Finalização ───────────────────────── */
 
+/** PDFs no Drive e cópia para a unidade (pode levar de 20 s a 1 min). */
+function documentosVistoria_(vf, escola, u) {
+  const cfg = getConfig_();
+  const docs = {};
+  try { docs.vistoria = gerarPdf_(vf.id, 'vistoria'); } catch (e) { console.error(e); docs.vistoria = { erro: String(e.message || e) }; }
+  try { docs.completo = gerarPdf_(vf.id, 'completo'); } catch (e) { console.error(e); docs.completo = { erro: String(e.message || e) }; }
+  let copia = { enviada: false };
+  const atual = Db.find('Vistorias', vf.id) || vf;
+  const rev = ((lerEtapas_(vf.id).revisao || {}).dados) || {};
+  const para = rev.respEmail || escola.email;
+  if (/^sim/i.test(cfg.ENVIO_AUTOMATICO_COPIA) && para && atual.assinadoEm && !atual.copiaEnviadaEm) {
+    try { copia = acaoEnviarCopia_({ vistoriaId: vf.id, para: para }, u); } catch (e) { copia = { enviada: false, erro: String(e.message || e) }; }
+  } else if (atual.copiaEnviadaEm) {
+    copia = { enviada: true, para: atual.copiaPara, em: atual.copiaEnviadaEm };
+  }
+  return { docs: docs, copia: copia };
+}
+
+/** Segunda parte da finalização: relatórios e cópia, fora da trava (as outras equipes não esperam). */
+function acaoDocumentos_(p, u) {
+  const v = exigirVistoria_(p.vistoriaId, u);
+  if (v.status !== 'finalizada') throw new Error('A vistoria ainda não foi finalizada.');
+  const r = documentosVistoria_(v, Db.find('Escolas', v.escolaId) || {}, u);
+  const rev = ((lerEtapas_(v.id).revisao || {}).dados) || {};
+  return { id: v.id, docs: r.docs, copia: r.copia, assinado: !!v.assinadoEm, assinantes: [getConfig_().RESPONSAVEL_TECNICO, rev.respNome].filter(String) };
+}
+
 function acaoFinalizar_(p, u) {
   const v = exigirVistoria_(p.vistoriaId, u);
   const cfg = getConfig_();
@@ -348,19 +375,10 @@ function acaoFinalizar_(p, u) {
   const prox = proximaEscola_(v.equipeId, v.escolaId);
   const st = statusEquipeAposEncerrar_(v.equipeId, v.id, prox);
 
-  // Relatórios em PDF no Drive.
-  const docs = {};
-  try { docs.vistoria = gerarPdf_(v.id, 'vistoria'); } catch (e) { console.error(e); docs.vistoria = { erro: String(e.message || e) }; }
-  try { docs.completo = gerarPdf_(v.id, 'completo'); } catch (e) { console.error(e); docs.completo = { erro: String(e.message || e) }; }
-
-  let copia = { enviada: false };
+  // Relatórios e cópia: no próprio envio (apps antigos) ou depois, pela ação "documentos" (sem segurar a trava do servidor).
+  const extra = p.docsDepois ? { docs: { pendente: true }, copia: { pendente: true } } : documentosVistoria_(vf, escola, u);
+  const docs = extra.docs, copia = extra.copia;
   const rev = ((lerEtapas_(v.id).revisao || {}).dados) || {};
-  const para = rev.respEmail || escola.email;
-  if (/^sim/i.test(cfg.ENVIO_AUTOMATICO_COPIA) && para && vf.assinadoEm && !vf.copiaEnviadaEm) {
-    try { copia = acaoEnviarCopia_({ vistoriaId: v.id, para: para }, u); } catch (e) { copia = { enviada: false, erro: String(e.message || e) }; }
-  } else if (vf.copiaEnviadaEm) {
-    copia = { enviada: true, para: vf.copiaPara, em: vf.copiaEnviadaEm };
-  }
   log_(u.id, 'finalizar', { vistoria: vf.codigo, escola: escola.nome });
 
   return {
@@ -440,6 +458,7 @@ function acaoRota_(p, u) {
       out.km = Math.round(rota.m / 100) / 10;
       out.chegada = new Date(Date.now() + rota.seg * 1000).toISOString();
       out.destino = out.destino || rota.fim;
+      out.poly = rota.poly;
       if (p.mapa !== false) {
         const mapa = Maps.newStaticMap().setSize(640, 320).setLanguage('pt-BR').setMobile(true)
           .setPathStyle(5, '0x1F8F86FF', '0x00000000')

@@ -11,16 +11,25 @@ const OUT = process.argv[2] || path.join(__dirname, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR4nO3PQQ0AIBDAMMC/5+ECHi0Klg3P3rM6+wF2gAEGGGCAAQYYYIABBhhggAEGGGCAAQYYYIABBhhggAEGGF4WsATe8Q4+MQAAAABJRU5ErkJggg==', 'base64');
 
+// Mapas: sem internet no teste, a biblioteca Leaflet vem de LEAFLET_DIR (se houver) e os blocos do mapa são simulados.
+const LF = process.env.LEAFLET_DIR;
+const rotas = async c => {
+  await c.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\//, r => LF ? r.fulfill({ path: path.join(LF, /\.css$/.test(r.request().url()) ? 'leaflet.css' : 'leaflet.js') }) : r.abort());
+  await c.route(/tile\.openstreetmap\.org/, r => r.fulfill({ contentType: 'image/png', body: PNG }));
+};
+const ignorar = t => /Failed to load resource/.test(t); // recursos externos dependem da rede do teste
+
 (async () => {
   const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
     geolocation: { latitude: -23.5443, longitude: -46.5263 }, permissions: ['geolocation', 'camera'], locale: 'pt-BR'
   });
-  const page = await ctx.newPage();
+  await rotas(ctx);
+  let page = await ctx.newPage();
   const erros = [];
   page.on('pageerror', e => erros.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error') erros.push('console: ' + m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !ignorar(m.text())) erros.push('console: ' + m.text()); });
   const shot = async n => { await page.waitForTimeout(450); await page.screenshot({ path: path.join(OUT, n + '.png'), fullPage: true }); };
   const clica = async (sel, opts) => { await page.locator(sel).first().click(opts); await page.waitForTimeout(200); };
   const confirma = async () => { await page.waitForSelector('#cfOk'); await page.click('#cfOk'); await page.waitForTimeout(300); };
@@ -276,9 +285,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await shot('32-sup-nova-visita');
 
   // ═══ Computador: administrador (menu lateral, cadastros, perfis, extração, assistente) ═══
-  await page.setViewportSize({ width: 1440, height: 900 });
+  // Computador de verdade (mouse, tela grande): novo contexto, sem toque.
+  const ctxPc = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, geolocation: { latitude: -23.5443, longitude: -46.5263 }, permissions: ['geolocation', 'camera'], locale: 'pt-BR' });
+  await rotas(ctxPc);
+  page = await ctxPc.newPage();
+  page.on('pageerror', e => erros.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !ignorar(m.text())) erros.push('console: ' + m.text()); });
+  await page.goto('file://' + path.join(__dirname, 'preview.html'));
   const sair = async () => { await page.evaluate(() => { Sheet.close(true); App.token = null; LS.del('token'); LS.del('boot'); LS.del('modo'); App.data = null; Dados.mem = {}; Router.reset('login'); }); };
-  const entrar = async login => { await sair(); await page.fill('input[name=email]', login); await page.fill('input[name=senha]', 'vistar2026'); await clica('button[type=submit]'); await page.waitForTimeout(900); };
+  const entrar = async login => { await sair(); await page.waitForTimeout(400); await page.fill('input[name=email]', login); await page.fill('input[name=senha]', 'vistar2026'); await clica('button[type=submit]'); await page.waitForTimeout(900); };
   await entrar('1000');
   await page.waitForSelector('.prog-hero');
   await shot('40-pc-admin-painel');
@@ -356,7 +371,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await shot('66-cel-orcamentos-lista');
   await page.setViewportSize({ width: 820, height: 1180 });
   await entrar('1001');
-  await page.waitForSelector('.stats');
+  await page.waitForSelector('.stats', { timeout: 8000 }).catch(async e => { await shot('erro-tablet'); console.error(await page.evaluate(() => [document.body.className, App.route && App.route.name, document.querySelector('#main').innerText.slice(0, 300), document.querySelector('#layer').innerText.slice(0, 200)])); throw e; });
   await shot('62-tablet-vistoriador');
 
   await browser.close();
