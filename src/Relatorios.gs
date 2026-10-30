@@ -262,10 +262,10 @@ function acaoEnviarCopia_(p, u) {
     'anexo obrigatório ao memorial descritivo do contrato ' + cfg.CONTRATO + '.</p>' +
     '<p style="color:#5B6B82;font-size:13px">Equipe: ' + (R.equipe.nome || '') + ' · ' + (R.equipe.membros || '') + '<br>Horário: ' + R.horario + '</p>' +
     '<p style="color:#5B6B82;font-size:12px">Mensagem enviada pelo VistAR.</p></div></div>';
-  MailApp.sendEmail({
-    to: para, cc: cfg.EMAIL_COPIA_CONSORCIO || '', name: 'VistAR · ' + cfg.CONSORCIO,
-    subject: 'Relatório de vistoria · ' + R.escola.nome + ' · ' + R.data, htmlBody: corpo, attachments: anexos
-  });
+  const email = { to: para, name: 'VistAR · ' + cfg.CONSORCIO, subject: 'Relatório de vistoria · ' + R.escola.nome + ' · ' + R.data, htmlBody: corpo, attachments: anexos };
+  if (cfg.EMAIL_COPIA_CONSORCIO) email.cc = cfg.EMAIL_COPIA_CONSORCIO;
+  if (MailApp.getRemainingDailyQuota() < 1) throw new Error('A cota diária de e-mails do Google acabou. A cópia pode ser enviada amanhã pela tela do relatório.');
+  MailApp.sendEmail(email);
   const em = agora_();
   Db.upsert('Vistorias', { id: v.id, copiaPara: para, copiaEnviadaEm: em });
   log_(u.id, 'copia', { vistoria: v.codigo, para: para });

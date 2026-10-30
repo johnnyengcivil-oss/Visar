@@ -111,22 +111,58 @@ const IDB = (() => {
 
 /* ───── Chamada ao servidor (google.script.run) ───── */
 const Api = {
+  /** Tempo máximo de espera (ms): ações que geram PDF ou e-mail demoram mais. */
+  limite(acao) { return /finalizar|pdf|enviarCopia|relatorio/.test(acao) ? 330000 : /uploadFoto|thumbs|galeria|painel/.test(acao) ? 120000 : 60000; },
   run(acao, payload) {
     return new Promise((res, rej) => {
+      let fim = false;
+      const t = setTimeout(() => { if (!fim) { fim = true; const e = new Error('O servidor demorou para responder. Vamos tentar de novo.'); e.net = true; e.timeout = true; rej(e); } }, this.limite(acao));
       const ok = r => {
+        if (fim) return; fim = true; clearTimeout(t);
         if (r && r.ok) return res(r.data);
         const e = new Error((r && r.error) || 'Erro no servidor');
-        e.code = r && r.code; e.biz = true; rej(e);
+        e.code = r && r.code;
+        // Falha passageira do Google (cota, servidor ocupado): repetir, sem contar como recusa.
+        if (e.code === 'TEMP') e.net = true; else e.biz = true;
+        rej(e);
       };
-      const fail = err => { const e = new Error((err && err.message) || 'Sem conexão com o servidor'); e.net = true; rej(e); };
+      const fail = err => {
+        if (fim) return; fim = true; clearTimeout(t);
+        const e = new Error(Api.traduzir(err)); e.net = true; rej(e);
+      };
       if (window.google && google.script && google.script.run) {
         google.script.run.withSuccessHandler(ok).withFailureHandler(fail).api(acao, App.token, payload || {});
       } else if (window.MockApi) {
         window.MockApi(acao, App.token, payload || {}).then(ok, fail);
       } else fail(new Error('Servidor indisponível'));
     });
+  },
+  /** Mensagens do Google em português simples. */
+  traduzir(err) {
+    const m = String((err && err.message) || err || '');
+    if (/NetworkError|network|Failed to fetch|conex/i.test(m)) return 'Sem conexão com o servidor.';
+    if (/authoriz|autoriza|PERMISSION/i.test(m)) return 'O app precisa ser autorizado de novo pelo administrador.';
+    if (/too large|grande demais|exceeds/i.test(m)) return 'Envio grande demais para o servidor.';
+    return m || 'Sem conexão com o servidor.';
   }
 };
+
+/* ───── Erros inesperados de tela: aviso discreto + registro na aba Log ───── */
+const Erros = {
+  enviados: 0, ultimo: '',
+  registrar(msg, onde) {
+    msg = String(msg || '').slice(0, 300);
+    if (!msg || msg === this.ultimo || /ResizeObserver|Script error\.?$/.test(msg)) return;
+    this.ultimo = msg;
+    console.error('[VistAR]', msg, onde || '');
+    toast('Algo não saiu como esperado. Seus dados estão salvos no aparelho.', 'warn', 4000);
+    if (this.enviados++ < 10 && App.token && navigator.onLine !== false) {
+      Api.run('logErro', { msg: msg, onde: onde || '', tela: App.route ? App.route.name : '', versao: ((App.boot || {}).cfg || {}).versao || '' }).catch(() => {});
+    }
+  }
+};
+window.addEventListener('error', e => Erros.registrar(e.message, (e.filename || '') + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => { const r = e.reason || {}; if (!r.net && !r.biz) Erros.registrar(r.message || String(r), 'promessa'); });
 
 /* ───── Fila offline: tudo que altera dados passa por aqui ───── */
 const Sync = {

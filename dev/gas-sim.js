@@ -79,8 +79,9 @@ function compilar(src) {
   let last = 0;
   src.replace(/<\?(!?=)?([\s\S]*?)\?>/g, (m, tipo, corpo, idx) => {
     code += '__o+=' + JSON.stringify(src.slice(last, idx)) + ';';
-    if (tipo === '=') code += '__o+=__esc(' + corpo + ');';
-    else if (tipo === '!=') code += '__o+=String(' + corpo + ');';
+    const expr = corpo.trim().replace(/;+$/, '');
+    if (tipo === '=') code += '__o+=__esc(' + expr + ');';
+    else if (tipo === '!=') code += '__o+=String(' + expr + ');';
     else code += corpo + '\n';
     last = idx + m.length;
     return m;
@@ -89,7 +90,17 @@ function compilar(src) {
   return new Function('__d', '__esc', code);
 }
 const escHtml = v => String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-const ler = n => fs.readFileSync(path.join(SRC, n + '.html'), 'utf8');
+const ler = n => { const f = path.join(SRC, n + '.html'); if (!fs.existsSync(f)) throw new Error('No HTML file named ' + n); return fs.readFileSync(f, 'utf8'); };
+/** Saída do HtmlService com as mesmas restrições do Google (meta tags permitidas). */
+const META_OK = ['viewport', 'mobile-web-app-capable', 'apple-mobile-web-app-capable', 'apple-mobile-web-app-title', 'apple-mobile-web-app-status-bar-style', 'google-site-verification'];
+function saida(html) {
+  const o = {
+    html, metas: [], getContent: () => html, setTitle: t => { o.titulo = t; return o; }, setXFrameOptionsMode: () => o, setFaviconUrl: () => o,
+    addMetaTag: (n, v) => { if (META_OK.indexOf(n) < 0) throw new Error('A metatag especificada não é permitida neste contexto.'); o.metas.push(n); return o; },
+    getAs: tipo => fakeBlob(Array.from(Buffer.from('%PDF ' + html.length)), tipo, 'x.pdf')
+  };
+  return o;
+}
 
 /* ───── Serviços ───── */
 const props = {};
@@ -124,18 +135,20 @@ const S = {
     getFileById: id => { if (!drive.files[id]) throw new Error('arquivo não encontrado'); return drive.files[id]; } },
   Drive: { Files: { get: () => { throw new Error('sem serviço avançado no simulador'); } } },
   UrlFetchApp: { fetchAll: () => [] },
-  MailApp: { sendEmail: o => emails.push(o) },
+  MailApp: { sendEmail: o => { if ('cc' in o && !o.cc) throw new Error('Endereço de e-mail inválido: '); emails.push(o); }, getRemainingDailyQuota: () => 100 },
   ScriptApp: { getOAuthToken: () => 't', getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/X/exec' }), getProjectTriggers: () => [],
     newTrigger: () => { const t = { timeBased: () => t, atHour: () => t, everyDays: () => t, inTimezone: () => t, create: () => t }; return t; }, deleteTrigger: () => {} },
   Maps: { newDirectionFinder: () => { throw new Error('Maps indisponível no simulador'); }, DirectionFinder: { Mode: {} } },
   MimeType: { PDF: 'application/pdf' },
   HtmlService: {
     createTemplateFromFile: n => {
-      const t = { evaluate: () => { const html = compilar(ler(n))(t, escHtml); return { getContent: () => html }; } };
+      ler(n);
+      const t = { evaluate: () => { const html = compilar(ler(n))(Object.assign({ include: ctx.include }, t), escHtml); return saida(html); } };
       return t;
     },
-    createHtmlOutput: html => ({ getAs: tipo => fakeBlob(Array.from(Buffer.from('%PDF ' + html.length)), tipo, 'x.pdf') }),
-    createHtmlOutputFromFile: n => ({ getContent: () => ler(n) })
+    createHtmlOutput: html => saida(html),
+    createHtmlOutputFromFile: n => saida(ler(n)),
+    XFrameOptionsMode: { ALLOWALL: 'ALLOWALL' }
   }
 };
 const ctx = vm.createContext(S);
@@ -151,6 +164,11 @@ console.log('Instalação e dados de exemplo');
 const msg = ctx.carregarExemplo();
 ok(/Primeiro acesso de teste/.test(msg), 'carregarExemplo devolve as credenciais');
 ok(ss.getSheetByName('Usuarios').getLastRow() >= 5, 'usuários criados');
+
+console.log('Abrir o app (doGet)');
+const pg = ctx.doGet({ parameter: {} }); if (pg.titulo === 'VistAR · erro') console.log('    ' + pg.html.replace(/<[^>]+>/g, ' ').slice(0, 400));
+ok(/window.__BOOT__ = \{/.test(pg.html) && pg.metas.indexOf('viewport') >= 0 && !/<\?/.test(pg.html), 'página do app abre com as meta tags permitidas pelo Google');
+ok(/App\.start\(\)/.test(pg.html) && pg.html.length > 100000, 'app completo dentro da página (' + Math.round(pg.html.length / 1024) + ' KB)');
 
 console.log('Login');
 ok(!api('login', '', { email: '1001', senha: 'errada' }).ok, 'senha errada é recusada');
@@ -301,6 +319,13 @@ ok(api('usuarios', sup).data.usuarios.length >= 5, 'lista de usuários');
 ok(api('cobrarDre', sup, { escolaId: 'e-bilac' }).ok, 'cobrar DRE (sem e-mail: devolve telefone)');
 ok(api('reabrir', sup, { vistoriaId: vid, motivo: 'medir QDC do bloco B' }).ok, 'reabrir vistoria para retorno');
 ok(api('rota', T, { escolaId: 'e-infante', lat: -23.54, lng: -46.52 }).data.km > 0, 'rota cai na estimativa quando o Maps falha');
+
+console.log('Tratamento de erros');
+ok(api('acaoQueNaoExiste', T).error.indexOf('desatualizado') > 0, 'ação desconhecida pede para recarregar o app');
+ok(vm.runInContext('erroTemporario_("Serviço invocado muitas vezes: Service invoked too many times")', ctx) && !vm.runInContext('erroTemporario_("Escola não encontrada.")', ctx), 'falhas passageiras do Google são marcadas para repetir');
+ok(api('logErro', T, { msg: 'TypeError: x', tela: 'home' }).ok, 'erros de tela ficam registrados na aba Log');
+const err = vm.runInContext('paginaErro_(new Error("Planilha não configurada. Execute instalarVistAR() no editor."))', ctx);
+ok(/instalarVistAR/.test(err.html), 'página de erro amigável explica o que fazer');
 
 console.log('Pré-dimensionamento');
 const calc = vm.runInContext('preDimensionamento_', ctx)({
