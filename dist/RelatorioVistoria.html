@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 9.5px; margin: 0; }
+  .pg { width: 100%; }
+  .frame { border: 1px solid #333; width: 100%; }
+  table { border-collapse: collapse; width: 100%; }
+  td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
+  .lbl { font-weight: bold; font-size: 8px; }
+  .small { font-size: 7.5px; line-height: 1.35; }
+  .center { text-align: center; }
+  .brasao { width: 42px; height: 42px; border: 1px dashed #999; font-size: 6px; color: #999; text-align: center; padding-top: 12px; display: inline-block; vertical-align: middle; }
+  .cab { display: inline-block; vertical-align: middle; margin-left: 8px; text-align: left; }
+  .cab b { font-size: 15px; display: block; line-height: 1.05; }
+  .corpo { border: 1px solid #333; border-top: 0; padding: 14px 18px; min-height: 520px; }
+  .corpo li { margin: 0 0 6px; list-style: none; }
+  .ass { width: 50%; text-align: center; border: 0; padding: 30px 20px 0; vertical-align: bottom; }
+  .ass img { height: 46px; }
+  .ass .linha { border-top: 1px solid #333; padding-top: 3px; font-size: 7px; }
+  .ass .nome { font-size: 7px; margin-top: 8px; line-height: 1.4; }
+  .vazio { height: 46px; }
+  <? if (modo === 'tela') { ?>
+  html { background: transparent; }
+  body { padding: 0; }
+  .pg { background: #fff; width: 794px; padding: 42px 40px; margin: 0 auto; box-shadow: 0 10px 30px rgba(15,33,64,.18); }
+  <? } ?>
+</style>
+</head>
+<body>
+<div class="pg">
+  <table>
+    <tr><td colspan="4" class="center" style="padding:12px">
+      <span class="brasao">brasão<br>oficial</span>
+      <span class="cab"><span style="font-size:9px;font-weight:bold">CIDADE DE</span><b>SÃO PAULO</b><span style="font-size:7px;font-weight:bold">EDUCAÇÃO</span></span>
+    </td></tr>
+    <tr><td colspan="4" class="center"><b style="font-size:10px">RELATÓRIO DE VISTORIA</b><br><span class="small">Anexo Obrigatório ao Memorial Descritivo</span></td></tr>
+    <tr>
+      <td colspan="2"><span class="lbl">UNIDADE:</span> <?= R.d.nome ?></td>
+      <td style="width:22%"><span class="lbl">DATA</span> <?= R.data ?></td>
+      <td style="width:16%"><span class="lbl">Folha nº</span> 01/01</td>
+    </tr>
+    <tr>
+      <td style="width:36%"><span class="small">solicitações feitas durante a vistoria por:</span><br><br><?= R.rev.respNome || R.d.diretor || '' ?><?= R.rev.respCargo ? ' · ' + R.rev.respCargo : '' ?></td>
+      <td style="width:26%"><span class="small">Telefone(s)</span><br><br><?= R.rev.respTel || R.d.telefone || '' ?></td>
+      <td colspan="2"><span class="small">E-mail</span><br><br><?= R.rev.respEmail || R.d.email || '' ?></td>
+    </tr>
+    <tr>
+      <? var im = String(R.d.imovel || 'Próprio'); ?>
+      <td colspan="2" class="lbl">IMÓVEL: PRÓPRIO ( <?= im === 'Próprio' ? 'X' : ' ' ?> ) &nbsp; LOCADO ( <?= im === 'Locado' ? 'X' : ' ' ?> ) &nbsp; ESTADUAL ( <?= im === 'Estadual' ? 'X' : ' ' ?> ) &nbsp; OUTROS ( <?= im === 'Outros' ? 'X' : ' ' ?> ):</td>
+      <td colspan="2" class="lbl">TEMPO APROX DE CONSTRUÇÃO &nbsp; <?= R.d.idadeAnos || '—' ?> &nbsp;ANOS</td>
+    </tr>
+    <tr><td colspan="4" class="small" style="text-align:justify">PRINCIPAIS SERVIÇOS SOLICITADOS, CONFORME AVALIAÇÃO DO RESPONSÁVEL PELA UNIDADE, POR PRIORIDADE, NECESSÁRIOS À MANUTENÇÃO, DE ACORDO COM AS DIRETRIZES ESTIPULADAS PELA SECRETARIA EM QUE A UNIDADE ESTÁ VINCULADA, BEM COMO A LEGISLAÇÃO PERTINENTE DE ATA. APÓS O INÍCIO DA MANUTENÇÃO NÃO PODERÁ HAVER ALTERAÇÕES DOS SERVIÇOS RELACIONADOS ABAIXO:</td></tr>
+  </table>
+  <div class="corpo">
+    <p style="margin:0 0 10px">Prioridades da unidade:</p>
+    <ul style="padding:0;margin:0">
+      <? R.prioridades.forEach(function (p) { ?><li>- <?= p ?></li><? }); ?>
+    </ul>
+    <? if (R.rev.obsGerais) { ?><p style="margin-top:16px"><b>Observações:</b> <?= R.rev.obsGerais ?></p><? } ?>
+    <table style="margin-top:60px">
+      <tr>
+        <td class="ass">
+          <? if (R.rev.assEmpresa) { ?><img src="<?= R.rev.assEmpresa ?>"><? } else { ?><div class="vazio"></div><? } ?>
+          <div class="linha">Assinatura e carimbo do Técnico de SME</div>
+          <div class="nome"><b><?= R.cfg.RESPONSAVEL_TECNICO ?></b><br><?= R.cfg.RESPONSAVEL_TECNICO_CARGO ?><br><?= R.cfg.CONSORCIO ?></div>
+        </td>
+        <td class="ass">
+          <? if (R.rev.assResp) { ?><img src="<?= R.rev.assResp ?>"><? } else { ?><div class="vazio"></div><? } ?>
+          <div class="linha">Assinatura e carimbo do responsável pela unidade</div>
+          <div class="nome"><b><?= R.rev.respNome || '' ?></b><br><?= R.rev.respCargo || '' ?><br><?= R.d.nome ?></div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+</body>
+</html>

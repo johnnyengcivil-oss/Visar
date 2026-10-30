@@ -47,7 +47,14 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', cloud: '<path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
   gallery: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   north: '<path d="M12 3 7 19l5-3 5 3z" fill="currentColor"/>', doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>',
-  ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'
+  ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+  share: '<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7 8l5-5 5 5"/>', copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0M16 4.5a3.5 3.5 0 0 1 0 7M18 13.5a6 6 0 0 1 4 6.5"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>', fingerprint: '<path d="M12 11v3a8 8 0 0 1-2 5M8 6.5A6 6 0 0 1 18 11v2M6 10a6 6 0 0 0 0 1v3a12 12 0 0 1-1 4M15 15a14 14 0 0 1-1 5M12 7a4 4 0 0 0-4 4v2"/>'
 };
 const I = (n, s, w) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
 const LOGO = '<svg width="46" height="46" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#3CC1B5"/><stop offset="1" stop-color="#2A7FD4"/></linearGradient></defs><path d="M38 12A17 17 0 1 0 38 36" fill="none" stroke="url(#lg)" stroke-width="6" stroke-linecap="round"/><path d="M22 17v14M16 20l12 8M28 20l-12 8" stroke="#3CC1B5" stroke-width="2.4" stroke-linecap="round"/></svg>';
@@ -150,6 +157,8 @@ const Sync = {
     this.busy = true; this.render();
     while (this.q.length) {
       const it = this.q[0];
+      if (it.acao === 'uploadFoto' && !Prefs.wifiOk()) { this.esperaWifi = true; break; }
+      this.esperaWifi = false;
       it.running = true;
       try {
         const r = await Api.run(it.acao, it.payload);
@@ -171,7 +180,7 @@ const Sync = {
       }
       this.render();
     }
-    this.busy = false; this.render(); this.done();
+    this.busy = false; this.forcar = false; this.render(); this.done();
     if (this.q.length && this.fails) this.kickSoon(Math.min(60000, 2000 * Math.pow(2, this.fails)));
   },
   done() { if (!this.q.length) { const w = this.waiters; this.waiters = []; w.forEach(f => f()); } },
@@ -190,7 +199,7 @@ const Sync = {
     $$('[data-sync]').forEach(el => {
       el.classList.toggle('hidden', !n && !off);
       el.className = 'sync' + (off ? ' off' : '') + (this.busy ? ' run' : '') + (this.fails > 2 ? ' err' : '') + (!n && !off ? ' hidden' : '');
-      el.innerHTML = '<i></i>' + (off ? 'Offline' + (n ? ' · ' + n : '') : this.busy ? 'Enviando ' + n : n + ' na fila');
+      el.innerHTML = '<i></i>' + (off ? 'Offline' + (n ? ' · ' + n : '') : this.busy ? 'Enviando ' + n : this.esperaWifi ? n + ' · aguarda Wi-Fi' : n + ' na fila');
     });
   }
 };
@@ -292,11 +301,36 @@ const Thumbs = {
   }
 };
 
-/* ───── Câmera: compressão, carimbo de data/escola e envio em fila ───── */
+/* ───── Preferências do aparelho ───── */
+const Prefs = {
+  padrao: { fonte: 'M', tema: 'auto', qualidade: 'alta', soWifi: false, galeria: false, lembrete: true, avisoPend: true, avisoFalha: true, camera: 'app', biometria: false },
+  get(k) { const p = LS.get('prefs', {}) || {}; return k in p ? p[k] : this.padrao[k]; },
+  set(k, v) { const p = LS.get('prefs', {}) || {}; p[k] = v; LS.set('prefs', p); this.aplicar(); },
+  aplicar() {
+    document.body.style.zoom = { P: 0.9, M: 1, G: 1.12 }[this.get('fonte')] || 1;
+    const t = this.get('tema');
+    const escuro = t === 'escuro' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+  },
+  wifiOk() {
+    if (!this.get('soWifi') || Sync.forcar) return true;
+    const c = navigator.connection;
+    return !c || !c.type || c.type === 'wifi' || c.type === 'ethernet';
+  }
+};
+
+/* ───── Câmera: própria (getUserMedia) com fallback para a câmera do sistema ───── */
 const Camera = {
-  alvo: null,
+  alvo: null, stream: null, frente: false, fotosSessao: 0,
   abrir(alvo, galeria) {
     this.alvo = alvo;
+    if (!galeria && Prefs.get('camera') === 'app' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !alvo.sistema) {
+      this.aoVivo().catch(() => this.sistema(false));
+      return;
+    }
+    this.sistema(galeria);
+  },
+  sistema(galeria) {
     const inp = galeria ? $('#gal') : $('#cam');
     inp.value = '';
     inp.click();
@@ -306,46 +340,115 @@ const Camera = {
     if (!alvo || !files || !files.length) return;
     for (const f of Array.from(files)) {
       try {
-        const img = await this.processar(f, alvo.carimbo);
+        const pos = await Geo.get(2500);
+        const img = await this.processar(f, this.carimbo(alvo, pos));
         if (alvo.onFoto) await alvo.onFoto(img); else await Fotos.adicionar(alvo, img);
+        if (Prefs.get('galeria') && alvo.carimbo !== false) baixarDataUrl(img.full, 'VistAR_' + Date.now() + '.jpg');
       } catch (e) { console.error(e); toast('Não foi possível ler a foto.', 'err'); }
     }
   },
+  carimbo(alvo, pos) {
+    if (alvo.carimbo === false) return null;
+    const quando = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' ·');
+    return [alvo.escola || alvo.carimbo || '', alvo.sub || alvo.rotulo || '', quando + (pos ? ' · ' + fmt(pos.lat, 4) + ' / ' + fmt(pos.lng, 4) : '')].filter(Boolean);
+  },
   carregar(file) {
     return new Promise((res, rej) => {
-      const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => res(img);
       img.onerror = rej;
-      img.src = url;
+      img.src = URL.createObjectURL(file);
     });
   },
-  async processar(file, carimbo) {
-    let src = null;
-    try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { src = await this.carregar(file); }
+  /** Aceita arquivo ou canvas; devolve JPEG comprimido com carimbo + miniatura. */
+  async processar(fonte, linhas) {
+    let src = fonte;
+    if (fonte instanceof Blob) {
+      try { src = await createImageBitmap(fonte, { imageOrientation: 'from-image' }); } catch (e) { src = await this.carregar(fonte); }
+    }
     const W = src.width, H = src.height;
+    const alta = Prefs.get('qualidade') === 'alta';
     const desenhar = (max, q, stamp) => {
       const s = Math.min(1, max / Math.max(W, H));
       const c = document.createElement('canvas');
       c.width = Math.round(W * s); c.height = Math.round(H * s);
       const g = c.getContext('2d');
       g.drawImage(src, 0, 0, c.width, c.height);
-      if (stamp) {
-        const fs = Math.max(14, Math.round(c.width / 48));
-        g.font = '600 ' + fs + 'px Inter, Arial, sans-serif';
-        const txt = stamp;
-        const w = g.measureText(txt).width + fs;
-        g.fillStyle = 'rgba(15,33,64,.72)';
-        g.fillRect(0, c.height - fs * 1.9, Math.min(c.width, w), fs * 1.9);
-        g.fillStyle = '#fff';
-        g.fillText(txt, fs / 2, c.height - fs * 0.62);
+      if (stamp && stamp.length) {
+        const fs = Math.max(13, Math.round(c.width / 52));
+        const lh = fs * 1.35, pad = fs * 0.7;
+        g.font = '700 ' + fs + 'px Inter, Arial, sans-serif';
+        const w = Math.min(c.width - pad * 2, Math.max.apply(null, stamp.map(t => g.measureText(t).width)) + pad * 2);
+        const h = lh * stamp.length + pad * 1.2;
+        g.fillStyle = 'rgba(40,40,40,.62)';
+        g.fillRect(pad, c.height - h - pad, w, h);
+        stamp.forEach((t, i) => {
+          g.font = (i ? '500 ' : '700 ') + fs + 'px Inter, Arial, sans-serif';
+          g.fillStyle = i ? 'rgba(255,255,255,.88)' : '#fff';
+          g.fillText(t, pad * 2, c.height - h - pad + pad * 0.6 + lh * (i + 0.8));
+        });
       }
       return c.toDataURL('image/jpeg', q);
     };
-    const stamp = carimbo === false ? '' : [new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }), carimbo || ''].filter(Boolean).join(' · ');
-    return { full: desenhar(1600, 0.78, stamp), thumb: desenhar(360, 0.62, '') };
-  }
+    return { full: desenhar(alta ? 1600 : 1280, alta ? 0.8 : 0.7, linhas), thumb: desenhar(360, 0.62, null) };
+  },
+
+  async aoVivo() {
+    const a = this.alvo;
+    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: this.frente ? 'user' : 'environment', width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false });
+    this.fotosSessao = 0;
+    Geo.get(4000);
+    $('#layer').innerHTML = '<div class="camui"><div class="cam-top"><button class="back" data-act="camFechar" aria-label="Fechar">' + I('x') + '</button>' +
+      '<span class="cam-tt"><small id="camK"></small><b id="camT"></b></span><button class="back" data-act="camLuz" aria-label="Lanterna" id="camLuz">' + I('bolt', 22) + '</button></div>' +
+      '<div class="cam-view"><video id="camV" playsinline autoplay muted></video><div class="cam-grid"></div><div class="cam-frame"></div><div class="cam-stamp" id="camS"></div></div>' +
+      '<div class="cam-chips" id="camC"></div>' +
+      '<div class="cam-bar"><button class="cam-last" data-act="camFechar" id="camL" aria-label="Concluir"></button><button class="cam-shot" data-act="camFoto" aria-label="Fotografar"><i></i></button>' +
+      '<button class="back cam-flip" data-act="camVirar" aria-label="Virar câmera">' + I('rotate', 24) + '</button></div>' +
+      '<div class="cam-hint" id="camH"></div></div>';
+    Sheet.opts = { onClose: () => this.parar() };
+    const v = $('#camV');
+    v.srcObject = this.stream;
+    this.ui();
+  },
+  ui() {
+    const a = this.alvo || {};
+    $('#camK').textContent = (ROTULO_ETAPA[a.etapa] || '').toUpperCase();
+    $('#camT').textContent = a.rotulo || 'Foto';
+    const pos = Geo.last;
+    const l = this.carimbo(a, pos) || [];
+    $('#camS').innerHTML = l.map((t, i) => i ? '<span>' + esc(t) + '</span>' : '<b>' + esc(t) + '</b>').join('');
+    $('#camC').innerHTML = (a.opcoes || []).map((o, i) => '<button class="' + (o.slot === a.slot ? 'on' : '') + '" data-act="camSlot" data-i="' + i + '">' + esc(o.rot) + '</button>').join('');
+    $('#camH').textContent = a.dica || 'Enquadre o item inteiro e a identificação';
+    const last = $('#camL');
+    last.innerHTML = this._ultima ? '<img src="' + this._ultima + '" alt="">' + (this.fotosSessao ? '<span>' + this.fotosSessao + '</span>' : '') : '';
+  },
+  async foto() {
+    const v = $('#camV');
+    if (!v || !v.videoWidth) return;
+    vib(18);
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    $('.cam-view').classList.add('flash');
+    setTimeout(() => { const x = $('.cam-view'); if (x) x.classList.remove('flash'); }, 180);
+    const a = Object.assign({}, this.alvo, { toast: false });
+    const img = await this.processar(c, this.carimbo(a, Geo.last));
+    this._ultima = img.thumb; this.fotosSessao++;
+    if (a.onFoto) { await a.onFoto(img); this.fechar(); return; }
+    await Fotos.adicionar(a, img);
+    if (Prefs.get('galeria')) baixarDataUrl(img.full, 'VistAR_' + Date.now() + '.jpg');
+    // Avança para o próximo item da lista que ainda não tem foto.
+    const ops = a.opcoes || [];
+    const prox = ops.find(o => o.slot !== a.slot && !Vist.fotosDe(o.slot).length);
+    if (prox && !a.unico) Object.assign(this.alvo, prox, { rotulo: prox.rot, sub: (ROTULO_ETAPA[prox.etapa] || '') + ' · ' + prox.rot });
+    this.ui();
+  },
+  parar() { if (this.stream) this.stream.getTracks().forEach(t => t.stop()); this.stream = null; this._ultima = null; },
+  fechar() { this.parar(); $('#layer').innerHTML = ''; Sheet.opts = null; this.alvo = null; App.rerender(); }
 };
+function baixarDataUrl(url, nome) {
+  try { const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { /* sem download */ }
+}
 
 /* ───── Utilidades de navegação externa ───── */
 function abrirExterno(url) {
@@ -422,7 +525,10 @@ const App = {
   token: null, data: null, V: null, route: null, form: null, final: null,
 
   async start() {
+    Prefs.aplicar();
+    try { if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => Prefs.aplicar()); } catch (e) { /* navegador antigo */ }
     this.token = LS.get('token');
+    try { if (!this.token) this.token = sessionStorage.getItem('vistar.token'); } catch (e) { /* sem sessionStorage */ }
     if (!this.token && this.boot.sso && !LS.get('saiu')) { this.token = this.boot.sso.token; LS.set('token', this.token); }
     this.bind();
     await Promise.all([Sync.init(), Thumbs.load()]);
@@ -430,10 +536,20 @@ const App = {
     this.V = LS.get('v');
     this.final = LS.get('final');
     if (!this.token) { Router.reset('login'); return; }
+    if (Prefs.get('biometria') && !(await Bio.desbloquear())) { Router.reset('bloqueio'); return; }
+    this.iniciarSessao();
+  },
+
+  iniciarSessao() {
     Router.reset(!this.data ? 'loading' : this.V && this.V.status === 'finalizando' ? 'finalizada' : 'home');
     this.refresh();
     Sync.kickSoon(1500);
+    if (this._sessao) return;
+    this._sessao = true;
     setInterval(() => this.tick(), 30000);
+    setInterval(() => this.ping(), 5 * 60000);
+    setTimeout(() => this.ping(), 8000);
+    Lembretes.agendar();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && Date.now() - (this._lastRefresh || 0) > 60000) this.refresh();
     });
@@ -482,6 +598,22 @@ const App = {
     else if (['home', 'escolas', 'pendencias', 'credencial', 'fotos'].indexOf(r) >= 0 && !this.editando()) this.rerender();
   },
 
+  guardarToken(t, manter) {
+    this.token = t;
+    if (manter === false) { LS.del('token'); try { sessionStorage.setItem('vistar.token', t); } catch (e) { LS.set('token', t); } }
+    else { LS.set('token', t); try { sessionStorage.removeItem('vistar.token'); } catch (e) { /* ignora */ } }
+    LS.del('saiu');
+  },
+
+  /** Posição e fila para o painel da supervisão (a cada 5 min, só com o app aberto). */
+  async ping() {
+    if (!this.token || navigator.onLine === false || !this.data || !(this.data.usuario || {}).equipeId) return;
+    const pos = await Geo.get(5000);
+    Api.run('ping', { lat: pos ? pos.lat : '', lng: pos ? pos.lng : '', fila: Sync.q.length }).catch(() => {});
+  },
+
+  supervisor() { const u = (this.data || {}).usuario || {}; return !!u.supervisor && LS.get('modo') !== 'campo'; },
+
   editando() { const a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName); },
 
   escola(id) { return ((this.data && this.data.escolas) || []).find(e => e.id === id) || null; },
@@ -489,6 +621,7 @@ const App = {
 
   authLost() {
     this.token = null; LS.del('token');
+    try { sessionStorage.removeItem('vistar.token'); } catch (e) { /* ignora */ }
     toast('Sua sessão expirou. Entre novamente — nada do que foi coletado se perdeu.', 'warn', 5000);
     Router.reset('login');
   },
@@ -501,7 +634,8 @@ const App = {
       sim: 'Sair', perigo: true
     }).then(ok => {
       if (!ok) return;
-      this.token = null; LS.del('token'); LS.del('boot'); LS.set('saiu', true);
+      this.token = null; LS.del('token'); LS.del('boot'); LS.set('saiu', true); LS.del('modo');
+      try { sessionStorage.removeItem('vistar.token'); } catch (e) { /* ignora */ }
       this.data = null;
       Router.reset('login');
     });

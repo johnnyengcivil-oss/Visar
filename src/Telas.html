@@ -1,0 +1,1091 @@
+<script>
+'use strict';
+/* ═══════════════════════ VistAR · telas complementares ═══════════════════════
+   Login, primeiro acesso, configurações, programação, painel de escolas,
+   detalhe de escola e de vistoria, pendências de retorno, galeria de fotos,
+   visualizador de fotos e assinatura em tela cheia. */
+
+const ST_ESC = {
+  concluida: ['Concluídas', 'var(--c-ok)'], andamento: ['Em andamento', 'var(--c-and)'], agendada: ['Agendadas', 'var(--c-ag)'],
+  retorno: ['Retorno pendente', 'var(--c-ret)'], nao_iniciada: ['Não iniciadas', 'var(--c-ni)']
+};
+const SITUACAO = {
+  retorno_solicitado: ['Retorno solicitado', 'var(--amber)', 'b-amber'], nao_concluida: ['Não concluída no dia', 'var(--teal)', 'b-teal'],
+  sem_acesso: ['Sem acesso', '#8A9AB0', 'b-gray'], recusa: ['Recusa da direção', 'var(--red)', 'b-red'],
+  aguardando_autorizacao: ['Aguardando autorização', 'var(--c-and)', 'b-blue'], area_interditada: ['Área interditada', 'var(--amber)', 'b-amber'],
+  pendencias: ['Pendências da vistoria', 'var(--amber)', 'b-amber'], outro: ['Retorno', '#8A9AB0', 'b-gray']
+};
+const pct = (x, c) => fmt((x || 0) * 100, c || 0) + '%';
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const SEMANA = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+const dISO = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const dDe = iso => new Date(iso + 'T12:00:00');
+const somaD = (iso, n) => { const d = dDe(iso); d.setDate(d.getDate() + n); return dISO(d); };
+const minutos = h => { const m = String(h || '').match(/(\d+):(\d+)/); return m ? +m[1] * 60 + +m[2] : null; };
+const hm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const durTxt = m => Math.floor(m / 60) + 'h' + (m % 60 ? String(m % 60).padStart(2, '0') : '');
+
+/** Busca no servidor com cache (memória + aparelho): mostra o que tem e atualiza. */
+const Dados = {
+  mem: {},
+  obter(chave, acao, payload, render, opts) {
+    const c = this.mem[chave] || (opts && opts.semLS ? null : LS.get('c:' + chave));
+    if (c) render(c, true);
+    return Api.run(acao, payload).then(d => {
+      this.mem[chave] = d;
+      if (!(opts && opts.semLS)) LS.set('c:' + chave, d);
+      render(d, false);
+      return d;
+    }).catch(e => { if (e.code === 'AUTH') return App.authLost(); if (!c) render(null, false, e); });
+  },
+  limpar(prefixo) { Object.keys(this.mem).forEach(k => { if (k.indexOf(prefixo) === 0) delete this.mem[k]; }); }
+};
+function encher(sel, html) { const el = $(sel); if (el) { el.innerHTML = html; Thumbs.hydrate(); } return el; }
+function erroBox(e) { return '<div class="empty">' + I('cloud', 36) + '<div><b>Sem dados por enquanto</b></div><div class="small">' + esc(e ? e.message : 'Conecte-se à internet para carregar.') + '</div><button class="btn btn-out btn-sm mt" data-act="rerender">' + I('refresh', 16) + ' Tentar de novo</button></div>'; }
+const SKEL = '<div class="skel" style="height:180px;margin-bottom:14px"></div><div class="skel" style="height:120px;margin-bottom:14px"></div><div class="skel" style="height:120px"></div>';
+
+/* ═════════════ Biometria (trava local do aparelho via WebAuthn) e lembretes ═════════════ */
+const b64 = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+const deB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const Bio = {
+  async disponivel() {
+    try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (e) { return false; }
+  },
+  async ativar() {
+    const u = (App.data || {}).usuario || {};
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: 'VistAR' },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: u.email || u.matricula || 'vistar', displayName: u.nome || 'VistAR' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' }, timeout: 60000 } });
+    LS.set('bioId', b64(cred.rawId));
+  },
+  async desbloquear() {
+    const id = LS.get('bioId');
+    if (!id) return true;
+    try {
+      await navigator.credentials.get({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: deB64(id) }], userVerification: 'required', timeout: 60000 } });
+      return true;
+    } catch (e) { return false; }
+  }
+};
+
+const Lembretes = {
+  timers: [],
+  agendar() {
+    this.timers.forEach(clearTimeout); this.timers = [];
+    if (!Prefs.get('lembrete') || !window.Notification || Notification.permission !== 'granted') return;
+    const D = App.data || {};
+    const hoje = hojeISO();
+    (D.roteiro || []).filter(r => r.data === hoje && r.status === 'agendada' && r.hora).forEach(r => {
+      const quando = dDe(hoje); const m = minutos(r.hora);
+      quando.setHours(Math.floor(m / 60), m % 60 - 30, 0, 0);
+      const ms = quando - Date.now();
+      if (ms > 0 && ms < 18 * 3600e3) this.timers.push(setTimeout(() => {
+        try { new Notification('Visita em 30 min', { body: ((App.escola(r.escolaId) || {}).nome || '') + ' às ' + r.hora }); } catch (e) { toast('Visita em 30 min · ' + ((App.escola(r.escolaId) || {}).nome || '')); }
+      }, ms));
+    });
+  }
+};
+
+/* ═════════════ Login, primeiro acesso, bloqueio ═════════════ */
+Views.login = () => {
+  const cfg = (App.boot && App.boot.cfg) || {};
+  return {
+    flush: true,
+    body: '<div class="login2"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:14px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+      '<form class="card" id="fLogin" autocomplete="on"><h2 style="margin:0;font-size:28px">Entrar</h2><p class="muted" style="margin:4px 0 16px">Acesse com seu usuário do consórcio.</p>' +
+      '<span class="lbl">E-mail ou matrícula</span><div class="in-ic">' + I('user', 20) + '<input class="inp" name="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '"></div>' +
+      '<span class="lbl">Senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" name="senha" type="password" autocomplete="current-password" required><button type="button" class="eye" data-act="olho" aria-label="Mostrar senha">' + I('eye', 20) + '</button></div>' +
+      '<div class="row mt" style="justify-content:space-between"><button type="button" class="check on" id="manter" data-act="manterCon" style="width:auto;padding:0"><span class="box">' + I('check', 16, 3) + '</span><span style="font-weight:500">Manter conectado</span></button>' +
+      '<button type="button" class="link" data-act="esqueci">Esqueci a senha</button></div>' +
+      '<button class="btn btn-teal btn-lg mt" type="submit">Entrar</button>' +
+      '<button type="button" class="btn btn-out btn-lg mt" data-act="primeiroAcesso">Primeiro acesso</button></form>' +
+      '<p style="margin-top:auto;text-align:center;color:#9FB6D2;font-size:13px;padding-top:30px">VistAR · versão ' + esc(cfg.versao || '') + '<br>Precisa de ajuda? Fale com o administrador do sistema</p></div>',
+    after() {
+      const f = $('#fLogin');
+      f.onsubmit = async ev => {
+        ev.preventDefault();
+        const btn = $('button[type=submit]', f);
+        carregando(btn, true, 'Entrando');
+        const manter = $('#manter').classList.contains('on');
+        try {
+          const r = await Api.run('login', { email: f.email.value, senha: f.senha.value, manter: manter });
+          App.guardarToken(r.token, manter); LS.set('ultimoEmail', f.email.value);
+          App.aplicarBoot(r.boot);
+          App.iniciarSessao();
+          Sync.kick();
+        } catch (e) { carregando(btn, false); toast(e.net ? 'Sem conexão. O primeiro acesso precisa de internet.' : e.message, 'err', 4000); }
+      };
+    }
+  };
+};
+
+Views.primeiro = () => {
+  const f = App.form && App.form._pa ? App.form : (App.form = { _pa: true, passo: 1, login: LS.get('ultimoEmail') || '', codigo: '', senha: '', rep: '', aceite: false });
+  const passos = ['Código', 'Senha', 'Permissões'];
+  const topo = '<div class="steps3">' + passos.map((p, i) => '<div class="' + (i + 1 < f.passo ? 'done' : i + 1 === f.passo ? 'cur' : '') + '">' + (i + 1) + ' · ' + p + '</div>').join('') + '</div>';
+  let corpo = '';
+  if (f.passo === 1) {
+    corpo = '<section class="card"><h2 style="margin:0 0 4px">Bem-vindo!</h2><p class="muted" style="margin:0 0 14px">Informe seu e-mail ou matrícula e o código de 6 dígitos que o administrador enviou.</p>' +
+      '<span class="lbl">E-mail ou matrícula</span><div class="in-ic">' + I('user', 20) + '<input class="inp" data-k="@login" value="' + esc(f.login) + '" autocomplete="username"></div>' +
+      '<span class="lbl">Código de ativação</span><input class="inp" data-k="@codigo" value="' + esc(f.codigo) + '" inputmode="numeric" maxlength="6" placeholder="000000" style="letter-spacing:8px;font-size:22px;font-weight:800;text-align:center"></section>' +
+      '<button class="btn btn-teal btn-lg" data-act="paCodigo">Validar código</button>';
+  } else if (f.passo === 2) {
+    const s = f.senha || '';
+    const regras = [[s.length >= 8, 'Mínimo de 8 caracteres'], [/[A-Z]/.test(s), 'Uma letra maiúscula'], [/\d/.test(s), 'Um número'], [/[^\w\s]/.test(s), 'Um símbolo (!@#$%) · recomendado']];
+    const forca = regras.filter(r => r[0]).length;
+    const cor = forca >= 4 ? 'var(--green)' : forca === 3 ? 'var(--green)' : forca === 2 ? 'var(--amber)' : 'var(--red)';
+    corpo = '<section class="card"><h2 style="margin:0 0 4px">Olá, ' + esc(String(f.info.nome || '').split(' ')[0]) + '!</h2><p class="muted" style="margin:0 0 14px">Seu administrador criou o acesso. Defina uma senha pessoal para começar.</p>' +
+      '<div class="row" style="background:var(--field);border-radius:16px;padding:12px"><span class="avatar">' + esc(f.info.iniciais) + '</span><span style="flex:1"><b>' + esc(f.info.nome) + '</b><div class="muted small">' + esc([f.info.equipe, f.info.cargo].filter(Boolean).join(' · ')) + '</div></span><span class="badge b-green">Código validado</span></div>' +
+      '<span class="lbl">Nova senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" type="password" id="paSenha" value="' + esc(s) + '" autocomplete="new-password"><button type="button" class="eye" data-act="olho">' + I('eye', 20) + '</button></div>' +
+      '<div class="forca" id="paForca">' + [0, 1, 2, 3].map(i => '<i style="' + (i < forca ? 'background:' + (i === forca - 1 && forca < 3 ? cor : i < 2 ? 'var(--green)' : forca >= 3 ? (i < 3 ? 'var(--green)' : 'var(--green)') : 'var(--amber)') : '') + '"></i>').join('') + '</div>' +
+      '<span class="lbl">Confirmar nova senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" type="password" id="paRep" value="' + esc(f.rep) + '" placeholder="Repita a senha" autocomplete="new-password"></div>' +
+      '<div class="mt" id="paRegras">' + regras.map(r => '<div class="regra' + (r[0] ? ' ok' : '') + '"><i>' + (r[0] ? I('check', 14, 3) : '') + '</i>' + r[1] + '</div>').join('') + '</div>' +
+      '<button class="check' + (f.aceite ? ' on' : '') + ' mt" data-act="chk" data-k="@aceite" style="width:100%;text-align:left"><span class="box">' + (f.aceite ? I('check', 16, 3) : '') + '</span><span>Li e aceito os <a href="#" data-act="termos">Termos de uso</a> e a <a href="#" data-act="termos">Política de privacidade</a> (LGPD).</span></button></section>' +
+      '<button class="btn btn-teal btn-lg" data-act="paSenha">Continuar</button>';
+  } else {
+    corpo = '<section class="card"><h2 style="margin:0 0 4px">Quase lá!</h2><p class="muted" style="margin:0 0 6px">O VistAR usa estes recursos do aparelho em campo. Toque para permitir.</p>' +
+      '<div id="paPerm">' + Views.permissoes() + '</div></section><button class="btn btn-teal btn-lg" data-act="paFim">Começar a usar</button>';
+  }
+  return {
+    header: Views.hdrNavy('Primeiro acesso', 'Ative sua conta', '', f.passo === 3 ? 'paFim' : 'paVoltar'),
+    body: topo + corpo + '<p class="muted small" style="text-align:center;margin-top:14px">Seus dados de perfil e equipe são definidos pelo administrador do sistema.</p>',
+    after() {
+      const s = $('#paSenha'), r = $('#paRep');
+      if (s) s.oninput = () => { f.senha = s.value; const p = s.selectionStart; App.rerender(); const n = $('#paSenha'); n.focus(); n.setSelectionRange(p, p); };
+      if (r) r.oninput = () => { f.rep = r.value; };
+      if (f.passo === 3) Views.atualizarPermissoes();
+    }
+  };
+};
+
+Views.bloqueio = () => ({
+  flush: true,
+  body: '<div class="lock"><div><div class="logo" style="font-size:40px">Vist<b>AR</b></div><p style="color:#C9D6E6">App bloqueado neste aparelho.</p>' +
+    '<button class="btn btn-teal btn-lg mt" data-act="desbloquear">' + I('fingerprint') + ' Desbloquear</button>' +
+    '<button class="btn btn-out btn-lg mt" data-act="sairBloqueio">Entrar com senha</button></div></div>'
+});
+
+/* ═════════════ Permissões (primeiro acesso e configurações) ═════════════ */
+Views.permissoes = () => [['geolocation', 'Localização', 'Check-in, check-out e rota', 'pin'], ['camera', 'Câmera', 'Fotos das vistorias', 'camera'], ['notifications', 'Notificações', 'Lembretes e alertas', 'alert']]
+  .map(p => '<div class="set-row"><span><b>' + p[1] + '</b><small>' + p[2] + '</small></span><button class="badge b-gray" data-act="pedirPerm" data-p="' + p[0] + '" data-perm="' + p[0] + '">Verificar</button></div>').join('');
+Views.atualizarPermissoes = async () => {
+  for (const el of $$('[data-perm]')) {
+    let st = 'prompt';
+    try {
+      if (el.dataset.perm === 'notifications' && window.Notification) st = Notification.permission === 'default' ? 'prompt' : Notification.permission;
+      else if (navigator.permissions) st = (await navigator.permissions.query({ name: el.dataset.perm })).state;
+    } catch (e) { st = 'prompt'; }
+    const m = { granted: ['b-green', 'Permitida'], denied: ['b-red', 'Bloqueada'], prompt: ['b-amber', 'Permitir'] }[st] || ['b-amber', 'Permitir'];
+    el.className = 'badge ' + m[0]; el.textContent = m[1];
+  }
+};
+
+/* ═════════════ Menu e configurações ═════════════ */
+Views.configuracoes = () => {
+  const u = (App.data || {}).usuario || {}, eq = (App.data || {}).equipe || {};
+  const seg = (k, ops) => '<span class="segm">' + ops.map(o => '<button class="' + (Prefs.get(k) === o[0] ? 'on' : '') + '" data-act="pref" data-k="' + k + '" data-v="' + o[0] + '">' + o[1] + '</button>').join('') + '</span>';
+  const tog = (k, t, s) => '<div class="set-row"><span><b>' + t + '</b>' + (s ? '<small>' + s + '</small>' : '') + '</span><button class="tog' + (Prefs.get(k) ? ' on' : '') + '" data-act="prefTog" data-k="' + k + '" aria-label="' + esc(t) + '" aria-pressed="' + !!Prefs.get(k) + '"></button></div>';
+  return {
+    header: Views.hdrNavy('Conta e aplicativo', 'Configurações'),
+    body: '<section class="card"><div class="row"><span class="avatar" style="width:64px;height:64px;font-size:22px">' + esc(u.iniciais || '') + '</span><span><b style="font-size:19px">' + esc(u.nome || '') + '</b><div class="muted">' + esc(u.email || u.matricula || '') + '</div><div class="muted">' + esc([eq.nome, String(u.cargo || '').toLowerCase()].filter(Boolean).join(' · ')) + '</div></span></div>' +
+        '<p class="muted small" style="margin:10px 0 0">Dados de perfil e equipe são gerenciados pelo administrador.</p></section>' +
+      '<section class="card"><div class="kh">Aplicativo</div>' +
+        '<div class="set-row"><span><b>Tamanho do texto</b></span>' + seg('fonte', [['P', 'P'], ['M', 'M'], ['G', 'G']]) + '</div>' +
+        '<div class="set-row"><span><b>Tema</b></span>' + seg('tema', [['claro', 'Claro'], ['escuro', 'Escuro'], ['auto', 'Auto']]) + '</div>' +
+        '<div class="set-row"><span><b>Idioma</b></span><span class="muted" style="font-weight:600">Português (BR)</span></div></section>' +
+      '<section class="card"><div class="kh">Fotos e dados</div>' +
+        '<div class="set-row"><span><b>Qualidade das fotos</b><small>Alta ocupa mais espaço no aparelho</small></span>' + seg('qualidade', [['media', 'Média'], ['alta', 'Alta']]) + '</div>' +
+        tog('soWifi', 'Enviar fotos só no Wi-Fi', 'Economiza dados móveis em campo') + tog('galeria', 'Salvar cópia na galeria', 'Mantém as fotos no aparelho') +
+        '<div class="set-row"><span><b>Câmera</b><small>Do VistAR (com guia e carimbo) ou do sistema</small></span>' + seg('camera', [['app', 'VistAR'], ['sistema', 'Sistema']]) + '</div></section>' +
+      '<section class="card"><div class="kh">Notificações</div>' + tog('lembrete', 'Lembrete da programação', 'Aviso 30 min antes da visita') +
+        tog('avisoPend', 'Pendências e retornos', 'Datas combinadas com as unidades') + tog('avisoFalha', 'Falha de envio', 'Fotos ou relatórios na fila') + '</section>' +
+      '<section class="card"><div class="kh">Permissões do aparelho</div>' + Views.permissoes() + '</section>' +
+      '<section class="card"><div class="kh">Segurança</div><button class="set-row" data-act="senha" style="width:100%;text-align:left"><span><b>Alterar senha</b></span>' + I('right') + '</button>' +
+        tog('biometria', 'Entrar com biometria', 'Digital ou rosto neste aparelho') + '</section>' +
+      '<button class="btn btn-out-red btn-lg" data-act="sair">Sair da conta</button>' +
+      '<p class="muted small" style="text-align:center;margin-top:16px">VistAR · versão ' + esc(((App.data || {}).cfg || {}).versao || '') + '<br>Configurações avançadas são feitas pelo administrador do sistema.</p>',
+    after: Views.atualizarPermissoes
+  };
+};
+
+/* ═════════════ Programação: dia, semana e mês ═════════════ */
+Views.programacao = p => {
+  const modo = p.modo || 'dia', ref = p.ref || hojeISO();
+  const sup = App.supervisor();
+  const eqId = p.equipeId !== undefined ? p.equipeId : (sup ? '' : ((App.data || {}).equipe || {}).id);
+  let ini = ref, fim = ref, titulo = '';
+  const d = dDe(ref);
+  if (modo === 'semana') {
+    const dow = (d.getDay() + 6) % 7; ini = somaD(ref, -dow); fim = somaD(ini, 6);
+    titulo = 'Semana ' + dataBR(ini) + ' a ' + dataBR(fim);
+  } else if (modo === 'mes') {
+    const p1 = dISO(new Date(d.getFullYear(), d.getMonth(), 1));
+    const u1 = dISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    ini = somaD(p1, -((dDe(p1).getDay() + 6) % 7)); fim = somaD(u1, 6 - ((dDe(u1).getDay() + 6) % 7));
+    titulo = MESES[d.getMonth()][0].toUpperCase() + MESES[d.getMonth()].slice(1) + ' de ' + d.getFullYear();
+  } else {
+    titulo = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][d.getDay()] + ', ' + d.getDate() + ' de ' + MESES[d.getMonth()];
+  }
+  const eqNome = eqId ? ((((App._equipesLista || []).find(e => e.id === eqId)) || {}).nome || ((App.data || {}).equipe || {}).nome) : 'Todas as equipes';
+  const pj = o => esc(JSON.stringify(Object.assign({ modo: modo, ref: ref, equipeId: eqId }, o)));
+  const nav = { dia: 1, semana: 7 }[modo];
+  const ant = modo === 'mes' ? dISO(new Date(d.getFullYear(), d.getMonth() - 1, 1)) : somaD(ref, -nav);
+  const prx = modo === 'mes' ? dISO(new Date(d.getFullYear(), d.getMonth() + 1, 1)) : somaD(ref, nav);
+  const rotuloNav = modo === 'dia' ? (ref === hojeISO() ? 'Hoje · ' : '') + dataBR(ref) : modo === 'semana' ? dataBR(ini) + ' – ' + dataBR(fim) : titulo.replace(' de ', ' ');
+  return {
+    header: '<header class="whdr"><div class="whdr-row"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><span style="flex:1;min-width:0"><div class="kicker">Programação</div><div class="ttl">' + esc(titulo) + '</div></span>' +
+      '<button class="badge" style="background:var(--navy-2);color:#fff;font-size:14px;padding:7px 14px" data-act="progEquipe" data-p="' + pj({}) + '">' + esc(eqNome) + '</button></div>' +
+      '<div class="tabs3">' + [['dia', 'Dia'], ['semana', 'Semana'], ['mes', 'Mês']].map(t => '<button class="' + (modo === t[0] ? 'on' : '') + '" data-act="progIr" data-p="' + pj({ modo: t[0] }) + '">' + t[1] + '</button>').join('') + '</div></header>',
+    body: '<div class="navper"><button class="back" data-act="progIr" data-p="' + pj({ ref: ant }) + '" aria-label="Anterior">' + I('left') + '</button><h3>' + esc(rotuloNav) + '</h3><button class="back" data-act="progIr" data-p="' + pj({ ref: prx }) + '" aria-label="Próximo">' + I('right') + '</button></div>' +
+      '<div id="progBox">' + SKEL + '</div>',
+    fab: sup ? '<button class="fab" data-act="visitaNova" data-p="' + pj({}) + '">' + I('plus', 22) + ' Nova visita</button>' : '',
+    after() {
+      Dados.obter('prog:' + ini + ':' + fim + ':' + eqId, 'programacao', { inicio: ini, fim: fim, equipeId: eqId }, (r, cache, e) => {
+        if (!r) return encher('#progBox', erroBox(e));
+        if (r.equipes) App._equipesLista = r.equipes;
+        encher('#progBox', Views['prog_' + modo](r.itens, { ref: ref, ini: ini, fim: fim, pj: pj }));
+      });
+    }
+  };
+};
+Views.corItem = it => it.status === 'concluida' ? 'var(--green)' : it.status === 'retorno' || it.status === 'cancelada' ? 'var(--red)' : it.tipo === 'escritorio' ? 'var(--muted-2)' : 'var(--amber)';
+Views.clsItem = it => it.status === 'concluida' ? 'ok' : it.status === 'retorno' ? 'ret' : it.status === 'em_andamento' ? 'and' : '';
+Views.prog_mes = (itens, o) => {
+  const ref = dDe(o.ref), mes = ref.getMonth();
+  const doMes = itens.filter(i => dDe(i.data).getMonth() === mes);
+  const visitas = doMes.filter(i => i.tipo !== 'escritorio');
+  const porDia = {};
+  itens.forEach(i => { (porDia[i.data] = porDia[i.data] || []).push(i); });
+  let cel = '';
+  for (let x = o.ini; x <= o.fim; x = somaD(x, 1)) {
+    const l = (porDia[x] || []).filter(i => i.tipo !== 'escritorio');
+    const cores = Array.from(new Set(l.map(Views.corItem))).slice(0, 3);
+    cel += '<button class="' + (dDe(x).getMonth() !== mes ? 'fora ' : '') + (x === hojeISO() ? 'hoje' : '') + '" data-act="progIr" data-p="' + o.pj({ modo: 'dia', ref: x }) + '">' + dDe(x).getDate() +
+      '<span class="dots">' + cores.map(c => '<i style="background:' + c + '"></i>').join('') + '</span></button>';
+  }
+  const prox = itens.filter(i => i.data >= hojeISO() && i.status !== 'concluida' && i.tipo !== 'escritorio').slice(0, 6);
+  return '<div class="kpi3"><div><small>Visitas</small><b>' + visitas.length + '</b></div><div><small>Concluídas</small><b class="c-green">' + visitas.filter(i => i.status === 'concluida').length + '</b></div>' +
+      '<div><small>Dias de campo</small><b>' + new Set(visitas.map(i => i.data)).size + '</b></div></div>' +
+    '<div class="cal"><div class="cal-h">' + ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map(s => '<span>' + s + '</span>').join('') + '</div><div class="cal-g">' + cel + '</div></div>' +
+    '<div class="leg"><span><i style="background:var(--green)"></i>Concluída</span><span><i style="background:var(--amber)"></i>Agendada ou parcial</span><span><i style="background:var(--red)"></i>Sem acesso ou recusa</span></div>' +
+    '<h3 style="margin:16px 4px 10px;font-size:19px">Próximos compromissos</h3>' +
+    (prox.length ? '<div class="tl">' + prox.map(i => '<div class="tl-row"><span class="h">' + dataBR(i.data) + '</span><i class="d" style="background:' + Views.corItem(i) + '"></i>' + Views.cartaoProg(i, true) + '</div>').join('') + '</div>'
+      : '<div class="empty">Nenhum compromisso futuro neste período.</div>');
+};
+Views.cartaoProg = (i, comHora) => {
+  const tipo = i.tipo === 'retorno' || i.status === 'retorno' ? 'Retorno' : 'Vistoria';
+  const sub = i.tipo === 'escritorio' ? esc(i.nota || 'Relatórios, reunião de equipe e treinamento')
+    : [comHora ? tipo : 'DRE ' + esc(i.dre || ''), (i.hora || '') + (i.horaFim && i.status === 'concluida' ? '–' + i.horaFim : ''), i.status === 'concluida' ? 'concluída' : i.confirmado ? 'confirmado com a unidade' : i.nota ? esc(i.nota) : comHora ? 'DRE ' + esc(i.dre || '') : i.status === 'retorno' ? 'retorno' : 'agendada'].filter(Boolean).join(' · ');
+  if (i.tipo === 'escritorio') return '<div class="tl-card leve"><b>Dia de escritório</b><small>' + sub + '</small></div>';
+  return '<button class="tl-card ' + Views.clsItem(i) + '" data-act="escolaAbrir" data-id="' + i.escolaId + '"' + (App.supervisor() ? ' data-visita="' + esc(i.id) + '"' : '') + '><b>' + esc(i.escola || '') + '</b><small>' + sub + '</small></button>';
+};
+Views.prog_semana = (itens, o) => {
+  const visitas = itens.filter(i => i.tipo !== 'escritorio');
+  let h = '<div class="kpi3"><div><small>Visitas</small><b>' + visitas.length + '</b></div><div><small>Concluídas</small><b class="c-green">' + visitas.filter(i => i.status === 'concluida').length + '</b></div>' +
+    '<div><small>Parciais</small><b class="c-amber">' + visitas.filter(i => i.status === 'retorno').length + '</b></div></div>';
+  for (let x = o.ini; x <= o.fim; x = somaD(x, 1)) {
+    const l = itens.filter(i => i.data === x);
+    h += '<div class="wk-row"><button class="wk-day' + (x === hojeISO() ? ' hoje' : '') + '" data-act="progIr" data-p="' + o.pj({ modo: 'dia', ref: x }) + '"><small>' + SEMANA[dDe(x).getDay()] + '</small><b>' + dDe(x).getDate() + '</b></button><div class="wk-list">' +
+      (l.length ? l.map(i => Views.cartaoProg(i)).join('') : '<div class="tl-card leve"><b>Sem programação</b></div>') + '</div></div>';
+  }
+  return h;
+};
+Views.prog_dia = (itens, o) => {
+  const l = itens.filter(i => i.data === o.ref).sort((a, b) => String(a.hora).localeCompare(b.hora));
+  const visitas = l.filter(i => i.tipo !== 'escritorio');
+  let campo = 0, previsto = 0;
+  visitas.forEach(i => {
+    const v = i.vistoria;
+    if (v && v.checkin) campo += Math.round(((v.checkout ? new Date(v.checkout) : new Date()) - new Date(v.checkin)) / 60000);
+    const a = minutos(i.hora), b = minutos(i.horaFim);
+    previsto += a !== null && b !== null && b > a ? b - a : 180;
+  });
+  const linhas = [];
+  let ultimoFim = null;
+  visitas.forEach((i, k) => {
+    const ini = minutos(i.vistoria && i.vistoria.checkin ? hora(i.vistoria.checkin) : i.hora);
+    const fim = minutos(i.horaFim) || (ini !== null ? ini + 180 : null);
+    if (k && ultimoFim !== null) {
+      linhas.push({ h: hm(ultimoFim + 2), s: '', cor: '#6B7A90', html: '<div class="tl-card leve"><b>Deslocamento</b><small>Até ' + esc(semPrefixo(i.escola)) + '. Status da equipe: em trânsito</small></div>' });
+      if (ultimoFim < 720 && ini !== null && ini > 780) linhas.push({ h: '12:00', s: '1h', cor: '#6B7A90', html: '<div class="tl-card leve"><b>Intervalo</b><small>Almoço da equipe</small></div>' });
+    }
+    const dur = i.vistoria && i.vistoria.checkout ? Math.round((new Date(i.vistoria.checkout) - new Date(i.vistoria.checkin)) / 60000) : (fim && ini !== null ? fim - ini : 180);
+    const tag = i.status === 'concluida' ? '<span class="tag b-green mt">Concluída · ' + durTxt(dur) + '</span>' : i.status === 'em_andamento' ? '<span class="tag b-blue mt">Em andamento</span>'
+      : i.status === 'retorno' ? '<span class="tag b-red mt">Retorno</span>' : '<span class="tag b-amber mt">Agendada · ' + durTxt(dur) + '</span>';
+    const r = i.vistoria && i.vistoria.resumo;
+    const det = ['DRE ' + (i.dre || ''), i.endereco, i.status === 'concluida' && r ? 'vistoria completa, ' + (r.ambientes || 0) + ' ambientes, ' + (r.fotos || 0) + ' fotos' : (i.ambientes ? i.ambientes + ' ambientes previstos' : ''),
+      i.responsavel ? 'responsável: ' + i.responsavel + (i.confirmado ? ' (confirmou presença)' : '') : ''].filter(Boolean).join(' · ');
+    linhas.push({ h: i.vistoria && i.vistoria.checkin ? hora(i.vistoria.checkin) : i.hora, s: fim ? 'até ' + hm(fim) : '', cor: Views.corItem(i),
+      html: '<button class="tl-card ' + Views.clsItem(i) + '" data-act="escolaAbrir" data-id="' + i.escolaId + '"><b>' + esc(i.escola) + '</b><small>' + esc(det) + '</small><br>' + tag + '</button>' });
+    ultimoFim = fim;
+  });
+  l.filter(i => i.tipo === 'escritorio').forEach(i => linhas.push({ h: i.hora || '08:00', s: '', cor: '#6B7A90', html: Views.cartaoProg(i) }));
+  if (visitas.length) linhas.push({ h: hm(Math.max(ultimoFim || 960, 960) + 15), s: '30 min', cor: 'var(--teal)', html: '<div class="tl-card leve"><b>Fechamento do dia</b><small>Sincronizar fotos, conferir pendências e enviar relatórios</small></div>' });
+  return '<div class="kpi3"><div><small>Escolas</small><b>' + visitas.length + '</b></div><div><small>Em campo</small><b>' + durTxt(campo) + '</b></div><div><small>Previsto</small><b>' + durTxt(previsto) + '</b></div></div>' +
+    (linhas.length ? '<div class="tl">' + linhas.map(x => '<div class="tl-row"><span class="h">' + esc(x.h || '') + (x.s ? '<small>' + esc(x.s) + '</small>' : '') + '</span><i class="d" style="background:' + x.cor + '"></i>' + x.html + '</div>').join('') + '</div>'
+      : '<div class="empty">' + I('calendar', 36) + '<div>Nada programado para este dia.</div></div>');
+};
+
+/* ═════════════ Painel de escolas (aba Escolas e supervisão) ═════════════ */
+const Graf = {
+  donut(cont, total) {
+    const ordem = ['concluida', 'andamento', 'agendada', 'retorno', 'nao_iniciada'];
+    const R = 52, C = 2 * Math.PI * R, gap = 3;
+    let off = 0;
+    const arcos = ordem.filter(k => cont[k]).map(k => {
+      const len = cont[k] / (total || 1) * C;
+      const a = '<circle r="' + R + '" cx="70" cy="70" fill="none" stroke="' + ST_ESC[k][1] + '" stroke-width="18" stroke-dasharray="' + Math.max(0, len - gap) + ' ' + (C - Math.max(0, len - gap)) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 70 70)"><title>' + ST_ESC[k][0] + ': ' + cont[k] + '</title></circle>';
+      off += len; return a;
+    }).join('');
+    return '<svg viewBox="0 0 140 140" role="img" aria-label="Situação das escolas">' + arcos + '<text x="70" y="70" text-anchor="middle" fill="#fff" font-size="27" font-weight="800" font-family="Inter,Arial">' + pct((cont.concluida || 0) / (total || 1)) + '</text>' +
+      '<text x="70" y="90" text-anchor="middle" fill="#C9D6E6" font-size="11" font-family="Inter,Arial">concluído</text></svg>';
+  },
+  /** Acumulado (%) x meta: uma escala só; barras diárias ficam num gráfico separado abaixo. */
+  evolucao(serie) {
+    if (!serie.length) return '';
+    const W = 340, H = 130, padL = 30, padB = 18, w = W - padL - 6, h = H - padB - 8;
+    const x = i => padL + (serie.length === 1 ? w / 2 : i * w / (serie.length - 1));
+    const y = v => 8 + h - v * h;
+    const max = Math.max(0.25, Math.ceil(Math.max.apply(null, serie.map(s => Math.max(s.pct, s.meta || 0))) * 4) / 4);
+    const yy = v => y(v / max);
+    const linha = serie.map((s, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + yy(s.pct).toFixed(1)).join(' ');
+    const meta = serie[0].meta !== null ? serie.map((s, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + yy(s.meta).toFixed(1)).join(' ') : '';
+    const grid = [0, 0.5, 1].map(f => '<line x1="' + padL + '" x2="' + (W - 6) + '" y1="' + yy(max * f) + '" y2="' + yy(max * f) + '" stroke="var(--line)"/><text x="' + (padL - 6) + '" y="' + (yy(max * f) + 4) + '" text-anchor="end" font-size="10" fill="var(--muted)">' + Math.round(max * f * 100) + '%</text>').join('');
+    const ticks = serie.map((s, i) => i % Math.ceil(serie.length / 7) === 0 || i === serie.length - 1 ? '<text x="' + x(i) + '" y="' + (H - 3) + '" text-anchor="middle" font-size="10" fill="var(--muted)">' + Number(s.d.slice(8)) + '</text>' : '').join('');
+    const last = serie[serie.length - 1];
+    const barW = Math.max(3, w / serie.length - 4), mx = Math.max(1, Math.max.apply(null, serie.map(s => s.n)));
+    const bars = serie.map((s, i) => s.n ? '<rect x="' + (x(i) - barW / 2) + '" y="' + (44 - s.n / mx * 36) + '" width="' + barW + '" height="' + (s.n / mx * 36) + '" rx="3" fill="var(--teal)"/>' : '').join('');
+    const hits = serie.map((s, i) => '<rect class="hit" data-i="' + i + '" x="' + (x(i) - w / serie.length / 2) + '" y="0" width="' + (w / serie.length) + '" height="' + H + '" fill="transparent"/>').join('');
+    return '<div class="chart" data-serie="' + esc(JSON.stringify(serie)) + '"><svg viewBox="0 0 ' + W + ' ' + H + '">' + grid + ticks +
+        (meta ? '<path d="' + meta + '" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>' : '') +
+        '<path d="' + linha + '" fill="none" stroke="var(--navy)" stroke-width="2.4" style="stroke:var(--ink)"/>' +
+        '<circle cx="' + x(serie.length - 1) + '" cy="' + yy(last.pct) + '" r="5" fill="var(--card)" stroke="var(--ink)" stroke-width="2.5"/>' +
+        '<text x="' + (x(serie.length - 1) - 8) + '" y="' + (yy(last.pct) - 10) + '" text-anchor="end" font-size="11" font-weight="800" fill="var(--ink)">' + pct(last.pct) + '</text>' + hits + '</svg>' +
+      '<div class="small muted" style="margin:10px 0 2px;font-weight:600">Concluídas por dia</div><svg viewBox="0 0 ' + W + ' 48">' + bars + '<line x1="' + padL + '" x2="' + (W - 6) + '" y1="44" y2="44" stroke="var(--line)"/></svg><div class="tip"></div></div>';
+  },
+  ligar() {
+    $$('.chart[data-serie]').forEach(ch => {
+      const serie = JSON.parse(ch.dataset.serie);
+      const tip = $('.tip', ch);
+      $$('.hit', ch).forEach(r => {
+        const mostra = () => {
+          const s = serie[r.dataset.i];
+          const b = r.getBoundingClientRect(), c = ch.getBoundingClientRect();
+          tip.innerHTML = '<b>' + dataBR(s.d) + '</b> · ' + s.n + ' concluída(s)<br>Acumulado ' + pct(s.pct) + (s.meta !== null ? ' · meta ' + pct(s.meta) : '');
+          tip.style.left = (b.left - c.left + b.width / 2) + 'px'; tip.style.top = '30px'; tip.style.display = 'block';
+        };
+        r.addEventListener('pointerenter', mostra); r.addEventListener('pointerdown', mostra);
+        r.addEventListener('pointerleave', () => { tip.style.display = 'none'; });
+      });
+    });
+  },
+  mapa(pontos, alt) {
+    if (!pontos.length) return '<div class="empty small">Escolas sem coordenadas. Use o menu VistAR › Geocodificar escolas na planilha.</div>';
+    const la = pontos.map(p => p.lat), ln = pontos.map(p => p.lng);
+    const mnA = Math.min.apply(null, la), mxA = Math.max.apply(null, la), mnL = Math.min.apply(null, ln), mxL = Math.max.apply(null, ln);
+    const px = p => 6 + (mxL === mnL ? 0.5 : (p.lng - mnL) / (mxL - mnL)) * 88, py = p => 8 + (mxA === mnA ? 0.5 : (mxA - p.lat) / (mxA - mnA)) * 80;
+    return '<div class="mapdots"' + (alt ? ' style="aspect-ratio:auto;height:' + alt + 'px"' : '') + '>' + Views.mapaIlustrativo().replace(/<path d="M112[^>]*\/>|<circle[^>]*\/>|<path d="M478[^>]*\/>|<text[^>]*>[^<]*<\/text>/g, '') +
+      pontos.map(p => '<button style="left:' + px(p) + '%;top:' + py(p) + '%;background:' + (ST_ESC[p.st] || ST_ESC.nao_iniciada)[1] + '" data-act="' + (p.act || 'escolaAbrir') + '" data-id="' + p.id + '" title="' + esc(p.nome) + '" aria-label="' + esc(p.nome) + '"></button>').join('') +
+      '<span class="lbl-m" style="position:absolute;right:8px;bottom:8px;background:var(--card);font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:99px">Mapa ilustrativo</span></div>';
+  },
+  legenda(ks) { return '<div class="leg">' + (ks || Object.keys(ST_ESC)).map(k => '<span><i style="background:' + ST_ESC[k][1] + '"></i>' + ST_ESC[k][0].replace(/s$/, '').replace('Concluída', 'Concluída') + '</span>').join('') + '</div>'; }
+};
+
+const Painel = {
+  html(d) {
+    const c = d.cont, t = d.total || 1;
+    const delta = d.deltaMeta;
+    const corDre = x => x >= 0.5 ? 'var(--green)' : x >= 0.35 ? 'var(--teal)' : x >= 0.2 ? 'var(--amber)' : 'var(--red)';
+    const v = (n, s) => n === null || n === undefined ? '' : '<small class="' + (n >= 0 ? 'up' : 'down') + '">' + (n >= 0 ? '▲ ' : '▼ ') + Math.abs(n) + '% ' + s + '</small>';
+    const per = { hoje: 'hoje', semana: 'sem.', mes: '14 dias', contrato: 'contrato' }[d.periodo];
+    return '<section class="prog-hero"><div class="kh">Avanço das vistorias</div><div class="donut-wrap"><div>' + Graf.donut(c, t) + '</div><div>' +
+        '<div class="big">' + c.concluida + ' <small>de ' + d.total + ' escolas</small></div>' +
+        '<div style="color:#C9D6E6;font-size:14px;margin-top:4px">Ritmo de <b style="color:#fff">' + fmt(d.ritmo, 1) + ' escola/dia</b> nos últimos 14 dias.</div>' +
+        (delta !== null ? '<span class="pill-l ' + (delta >= 0 ? 'up' : 'down') + '">' + (delta >= 0 ? '▲ +' : '▼ ') + fmt(delta * 100, 0) + ' p.p. ' + (delta >= 0 ? 'acima' : 'abaixo') + ' da meta</span>' : '') +
+        (d.previsao ? '<span class="pill-l">Previsão ' + dataBR(d.previsao) + '</span>' : '') + '</div></div>' +
+        '<div class="leg2">' + ['concluida', 'andamento', 'agendada', 'retorno', 'nao_iniciada'].map(k => '<div><i style="background:' + ST_ESC[k][1] + '"></i>' + ST_ESC[k][0] + '<b>' + c[k] + '</b></div>').join('') +
+        (d.metaData ? '<div><i style="background:#fff"></i>Meta ' + dataBR(d.metaData) + '<b>100%</b></div>' : '') + '</div></section>' +
+      '<section class="card"><div class="card-h"><span><h3>Evolução diária</h3><div class="muted small">% acumulado de escolas concluídas' + (d.serie[0] && d.serie[0].meta !== null ? ' e ritmo da meta' : '') + '</div></span>' +
+        (delta !== null ? '<span class="badge ' + (delta >= 0 ? 'b-green' : 'b-red') + '">' + (delta >= 0 ? '+' : '') + fmt(delta * 100, 0) + ' p.p. vs meta</span>' : '') + '</div>' +
+        Graf.evolucao(d.serie) + '<div class="leg"><span><i style="background:var(--ink)"></i>% acumulado</span>' + (d.serie[0] && d.serie[0].meta !== null ? '<span><i style="background:var(--amber)"></i>Ritmo da meta</span>' : '') + '<span><i style="background:var(--teal);border-radius:2px"></i>Concluídas no dia</span></div></section>' +
+      '<div class="grid3" style="margin-bottom:14px">' +
+        '<div class="card kpi-mini" style="margin:0;padding:12px"><div class="kh">Ambientes</div><b>' + fmt(d.kpis.ambientes) + '</b>' + v(d.kpis.ambientesVar, per) + '</div>' +
+        '<div class="card kpi-mini" style="margin:0;padding:12px"><div class="kh">Fotos</div><b>' + fmt(d.kpis.fotos) + '</b>' + v(d.kpis.fotosVar, per) + '</div>' +
+        '<div class="card kpi-mini" style="margin:0;padding:12px"><div class="kh">Assinados</div><b>' + d.kpis.assinados + '</b><small class="up">' + pct(d.kpis.assinadosPct) + ' das concluídas</small></div></div>' +
+      '<section class="card"><h3 style="margin:0">Avanço por DRE</h3><div class="muted small">Escolas concluídas / total da DRE</div>' +
+        d.porDre.map(x => { const r = x.concluidas / (x.total || 1); return '<div class="hbar"><div class="t"><span>DRE ' + esc(x.dre) + '</span><span><b style="color:' + corDre(r) + '">' + pct(r) + '</b><small>' + x.concluidas + ' de ' + x.total + '</small></span></div><div class="tr"><i style="width:' + r * 100 + '%;background:' + corDre(r) + '"></i></div></div>'; }).join('') + '</section>' +
+      '<section class="card"><h3 style="margin:0">Situação das escolas</h3><div class="muted small">' + d.total + ' unidades' + (d.dre ? ' da DRE ' + esc(d.dre) : ' do contrato') + '</div>' +
+        '<div class="stack">' + ['concluida', 'andamento', 'agendada', 'retorno', 'nao_iniciada'].filter(k => c[k]).map(k => '<div style="flex:' + c[k] + ';background:' + ST_ESC[k][1] + '" title="' + ST_ESC[k][0] + ': ' + c[k] + '">' + (c[k] / t >= 0.1 ? pct(c[k] / t) : '') + '</div>').join('') + '</div>' +
+        Graf.legenda() + '</section>' +
+      '<section class="card"><h3 style="margin:0">Produtividade por equipe</h3><div class="muted small">Escolas concluídas no período</div>' +
+        d.porEquipe.map(x => '<div class="hbar" style="display:grid;grid-template-columns:90px 1fr 70px;gap:10px;align-items:center"><b>' + esc(x.nome) + '</b><div class="tr"><i style="width:' + x.pct * 100 + '%;background:var(--teal)"></i></div><b style="text-align:right">' + x.n + ' · ' + pct(x.pct) + '</b></div>').join('') + '</section>' +
+      '<section class="card"><div class="card-h"><h3>Mapa das unidades</h3></div>' + Graf.mapa(d.mapa) + Graf.legenda() + '</section>';
+  }
+};
+
+Views.escolas = () => {
+  const D = App.data || {};
+  const st = App._esc = App._esc || { busca: '', dre: '', periodo: 'mes' };
+  const dres = (D.dres || []).map(d => d.id);
+  const q = st.busca.toLowerCase();
+  const lista = (D.escolas || []).filter(e => (!st.dre || e.dre === st.dre) && (!q || (e.nome + ' ' + e.logradouro + ' ' + e.cie + ' ' + e.bairro).toLowerCase().indexOf(q) >= 0))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  const rotPor = {};
+  (D.roteiro || []).forEach(r => { if (!rotPor[r.escolaId] || r.data >= rotPor[r.escolaId].data) rotPor[r.escolaId] = r; });
+  return {
+    header: Views.hdrApp(),
+    body: '<div class="search">' + I('search', 20) + '<input class="inp" id="busca" placeholder="Buscar escola, endereço ou CIE" value="' + esc(st.busca) + '"><button class="fbtn" data-act="limparBusca" aria-label="Limpar">' + (st.busca ? I('x', 18) : I('filter', 18)) + '</button></div>' +
+      '<div class="fchips">' + [['', 'Todas as DREs']].concat(dres.map(x => [x, x])).map(x => '<button class="chip dark' + (st.dre === x[0] ? ' on' : '') + '" data-act="escDre" data-v="' + esc(x[0]) + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
+      (st.busca ? '' : '<div class="segbar">' + [['hoje', 'Hoje'], ['semana', 'Semana'], ['mes', 'Mês'], ['contrato', 'Contrato']].map(x => '<button class="' + (st.periodo === x[0] ? 'on' : '') + '" data-act="escPer" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div><div id="painel">' + SKEL + '</div>') +
+      '<div class="sec-t"><h2>' + (st.busca ? 'Resultados' : 'Escolas') + ' · ' + lista.length + '</h2></div>' +
+      lista.map(e => Views.cartaoEscola(rotPor[e.id] || { escolaId: e.id, status: e.status, data: '' }, false)).join(''),
+    nav: 'escolas',
+    after() {
+      const b = $('#busca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => { const p = b.selectionStart; App.rerender(); const n = $('#busca'); n.focus(); n.setSelectionRange(p, p); }, 250); };
+      if (!st.busca) Dados.obter('painel:' + st.periodo + ':' + st.dre, 'painel', { periodo: st.periodo, dre: st.dre }, (d, c, e) => { encher('#painel', d ? Painel.html(d) : erroBox(e)); Graf.ligar(); });
+    }
+  };
+};
+
+/* ═════════════ Detalhe da escola ═════════════ */
+Views.escola = p => {
+  const e = App.escola(p.id) || { id: p.id, nome: '' };
+  const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+  return {
+    header: Views.hdrNavy('Escola', e.nome, '<span id="escSt"></span>'),
+    body: '<div id="escBox">' + SKEL + '</div>',
+    foot: V && V.escolaId === p.id ? '<button class="btn btn-navy" data-act="continuar">' + I('arrow') + ' Continuar vistoria</button>' : '',
+    footOne: true,
+    after() {
+      Dados.obter('esc:' + p.id, 'escola', { escolaId: p.id }, (r, c, err) => {
+        if (!r) return encher('#escBox', erroBox(err));
+        const x = r.escola, s = ST_ESC[r.status] || ST_ESC.nao_iniciada;
+        const stCls = { concluida: 'b-green', andamento: 'b-blue', agendada: 'b-amber', retorno: 'b-red', nao_iniciada: 'b-gray' }[r.status];
+        encher('#escSt', '<span class="badge ' + stCls + '" style="font-size:13px;padding:6px 12px">' + s[0].replace(/s$/, '').replace('Retorno pendente', 'Retorno') + '</span>');
+        const ct = r.contato;
+        const end = [x.logradouro, x.numero].filter(Boolean).join(', ') + (x.bairro ? ' · ' + x.bairro : '') + (x.cep ? ' · CEP ' + x.cep : '');
+        const pode = !V;
+        const acao = V ? '' : r.status === 'retorno' || (r.historico[0] && r.historico[0].status === 'cancelada')
+          ? '<button class="btn btn-teal mt" data-act="retomar" data-id="' + x.id + '">' + I('refresh') + ' Retomar vistoria</button>'
+          : r.status !== 'concluida' ? '<button class="btn btn-teal mt" data-act="checkinEscola" data-id="' + x.id + '">' + I('check') + ' Fazer check-in</button>' : '';
+        encher('#escBox',
+          '<section class="card"><h2 style="margin:0;font-size:21px">' + esc(x.nome) + '</h2><div class="muted">' + esc(['DRE ' + x.dre, x.cie ? 'CIE ' + x.cie : '', x.etapaEnsino].filter(Boolean).join(' · ')) + '</div>' +
+            '<div class="map mt" style="aspect-ratio:2.6/1">' + Views.mapaIlustrativo().replace(/<path d="M112[^>]*\/>|<circle[^>]*\/>|<text[^>]*>[^<]*<\/text>|<path d="M478[^>]*\/>/g, '').replace('</svg>', '<path d="M300 140c-14-18-20-28-20-38a20 20 0 0 1 40 0c0 10-6 20-20 38z" fill="#D93C3C"/><circle cx="300" cy="102" r="7" fill="#fff"/></svg>') + '</div>' +
+            '<p class="muted" style="margin:10px 0">' + esc(end) + '</p><div class="grid2"><button class="btn btn-out" data-act="maps" data-id="' + x.id + '">Abrir rota</button><button class="btn btn-out" data-act="reagendar" data-id="' + x.id + '">Programar visita</button></div>' + (pode ? acao : '') + '</section>' +
+          (ct ? '<section class="card"><div class="kh">Contato da unidade</div>' +
+            (ct.nome ? '<div class="doc-row"><span><b>' + esc(ct.nome) + '</b><small>' + esc([ct.cargo, ct.rf ? 'RF ' + ct.rf : ''].filter(Boolean).join(' · ')) + '</small></span>' + (ct.tel ? '<button class="btn btn-teal btn-sm" style="margin-left:auto;border-radius:99px" data-act="tel" data-tel="' + esc(ct.tel) + '">Ligar</button>' : '') + '</div>' : '') +
+            (ct.tel ? '<div class="doc-row"><span><b>' + esc(ct.tel) + '</b><small>Telefone da direção</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="copiar" data-v="' + esc(ct.tel) + '">Copiar</button></div>' : '') +
+            (ct.email ? '<div class="doc-row"><span style="min-width:0"><b style="word-break:break-all">' + esc(ct.email) + '</b><small>E-mail</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="mailto" data-v="' + esc(ct.email) + '">Enviar</button></div>' : '') + '</section>' : '') +
+          (r.resumo ? '<section class="card"><div class="kh">Resumo</div><div class="counts" style="margin-bottom:0"><div><b>' + r.resumo.blocos + '</b><span>blocos</span></div><div><b>' + r.resumo.ambientes + '</b><span>ambientes</span></div><div><b>' + fmt(r.resumo.m2clim) + '</b><span>m² clim.</span></div></div></section>' : '') +
+          '<section class="card"><div class="kh">Vistorias</div>' + (r.historico.length || r.retorno ? '' : '<p class="muted">Nenhuma vistoria registrada.</p>') +
+            r.historico.map(h => '<button class="sum-row" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: h.id }) + '\'><i style="width:12px;height:12px;border-radius:50%;flex:none;background:' + (h.status === 'finalizada' ? 'var(--green)' : h.status === 'cancelada' ? 'var(--red)' : 'var(--c-and)') + '"></i>' +
+              '<span><b>' + dataBR(h.checkin, true) + ' · ' + (h.status === 'finalizada' ? 'Vistoria completa' : h.status === 'cancelada' ? 'Cancelada' : 'Em andamento') + '</b><small>' + esc([h.equipe, h.checkout ? duracao(h.checkin, h.checkout) : '', h.fotos ? h.fotos + ' fotos' : '', h.assinado ? 'assinada' : '', h.motivo].filter(Boolean).join(' · ')) + '</small></span>' +
+              '<span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>').join('') +
+            (r.retorno ? '<button class="sum-row" data-act="reagendar" data-id="' + x.id + '"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)"></i><span><b>Retorno · ' + (r.retorno.data ? dataBR(r.retorno.data) + (r.retorno.hora ? ' ' + r.retorno.hora : '') : 'a definir') + '</b><small>' + plural(r.pendencias.length, 'pendência aberta', 'pendências abertas') + '</small></span><span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>' : '') + '</section>' +
+          (r.documentos && (r.documentos.vistoria || r.documentos.completo) ? '<section class="card"><div class="kh">Documentos</div>' +
+            (r.documentos.vistoria ? '<div class="doc-row"><span><b>Relatório de vistoria</b><small>1 folha' + (r.documentos.assinadoEm ? ' · assinado em ' + dataBR(r.documentos.assinadoEm) : '') + '</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'vistoria', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') +
+            (r.documentos.completo ? '<div class="doc-row"><span><b>Relatório completo</b><small>PDF ' + fmt(r.documentos.completo.bytes / 1048576, 1) + ' MB</small></span><button class="badge b-teal" style="margin-left:auto;padding:8px 16px;font-size:14px" data-act="go" data-to="relatorio" data-p=\'' + JSON.stringify({ tipo: 'completo', vistoriaId: r.documentos.vistoriaId, escolaId: x.id }) + '\'>Abrir</button></div>' : '') + '</section>' : '') +
+          (r.fotos.length ? '<section class="card"><div class="card-h"><span class="kh">Fotos recentes</span><button class="link" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: x.id }) + '\'>Ver todas</button></div>' +
+            '<div class="gal" style="grid-template-columns:repeat(4,1fr)">' + r.fotos.slice(0, 4).map((f, i) => '<button data-act="verServ" data-k="esc:' + x.id + '" data-i="' + i + '"><img data-th="s' + f.id + '" data-fid="' + f.fileId + '" alt=""></button>').join('') + '</div></section>' : '') +
+          '<section class="card"><div class="kh">Contrato e equipe</div><div class="doc-row"><span><b>' + esc(r.cfg.contrato + ' · ' + r.cfg.lote) + '</b><small>' + esc(r.cfg.consorcio) + '</small></span></div>' +
+            (r.equipe ? '<div class="doc-row"><span><b>' + esc(r.equipe.nome) + '</b><small>' + esc(String(r.equipe.membros || '').split(',').map(s => s.trim()).join(' e ')) + '</small></span></div>' : '') + '</section>');
+        App._galeria = App._galeria || {};
+        App._galeria['esc:' + x.id] = r.fotos.map(f => ({ id: 's' + f.id, fid: f.id, fileId: f.fileId, rotulo: f.legenda || ROTULO_ETAPA[f.etapa] || 'Foto', etapa: f.etapa, legenda: f.legenda, escola: x.nome }));
+      });
+    }
+  };
+};
+
+/* ═════════════ Detalhe da vistoria (somente leitura) ═════════════ */
+Views.vistoria = p => ({
+  header: Views.hdrNavy('Vistoria realizada', '', '<span id="vdSt"></span>'),
+  body: '<div id="vdBox">' + SKEL + '</div>',
+  footOne: true,
+  foot: '<div id="vdFoot"></div>',
+  after() {
+    Dados.obter('vd:' + p.id, 'vistoriaDetalhe', { vistoriaId: p.id }, (r, c, err) => {
+      if (!r) return encher('#vdBox', erroBox(err));
+      $('.whdr .ttl').textContent = r.codigo;
+      const fin = r.status === 'finalizada';
+      encher('#vdSt', '<span class="badge ' + (fin ? 'b-green">Concluída' : r.status === 'cancelada' ? 'b-red">Cancelada' : 'b-blue">Em andamento') + '</span>');
+      const res = r.resultado;
+      const pc = res.pct;
+      const val = r.validacao;
+      encher('#vdBox',
+        '<section class="card"><h2 style="margin:0;font-size:20px">' + esc(r.escola.nome) + '</h2><div class="muted">DRE ' + esc(r.escola.dre) + ' · ' + dataBR(r.data, true) + '</div>' +
+          '<div class="kpi3 mt" style="margin-bottom:8px">' + [['Check-in', hora(r.checkin)], ['Check-out', r.checkout ? hora(r.checkout) : '—'], ['Duração', r.duracao || '—']].map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b style="font-size:21px">' + k[1] + '</b></div>').join('') + '</div>' +
+          '<div class="muted small">' + esc(r.equipe + ' · ' + r.membros.join(' e ') + ' · Responsável técnico: ' + r.respTecnico) + '</div></section>' +
+        '<section class="card"><div class="kh">Resultado principal</div><div class="kpi3 mt" style="margin-bottom:10px">' +
+          [['Carga instalada', fmt(res.instalada, 1) + ' kW', ''], ['Demanda atual', res.demanda ? fmt(res.demanda, 1) + ' kVA' : '—', ''], ['Prevista c/ VRF', fmt(res.prevista, 1) + ' kVA', pc > 1 ? 'c-red' : 'c-green']]
+            .map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b class="' + k[2] + '" style="font-size:19px">' + k[1] + '</b></div>').join('') + '</div>' +
+          (pc ? '<div class="warn-box" style="margin:0;' + (pc > 1 ? 'background:var(--red-l);color:var(--red)' : 'background:var(--green-l);color:var(--green)') + '">Demanda prevista de <b>' + pct(pc) + '</b> do padrão atual' + (res.disjuntor ? ' (' + esc(res.disjuntor) + ' A)' : '') + '. ' + (pc > 1 ? 'Requer aumento de carga.' : 'O padrão atual comporta a climatização.') + '</div>' : '<p class="muted small" style="margin:0">Padrão de entrada sem disjuntor/potência informados.</p>') + '</section>' +
+        '<section class="card"><div class="kh">Etapas registradas</div>' + r.etapas.map((e, i) => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:' + (e.pend ? 'var(--amber)' : 'var(--green)') + '"></i><span><b>' + (i + 1) + ' · ' + esc(e.t) + '</b><small>' + esc(e.s) + '</small></span></div>').join('') + '</section>' +
+        (r.totalFotos ? '<section class="card"><div class="card-h"><span class="kh">Fotos</span><button class="link" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: r.escola.id }) + '\'>' + r.totalFotos + ' · Ver todas</button></div><div class="gal" style="grid-template-columns:repeat(4,1fr)">' +
+          r.fotos.map((f, i) => '<button data-act="verServ" data-k="vd:' + r.id + '" data-i="' + i + '"><img data-th="s' + f.id + '" data-fid="' + f.fileId + '" alt=""></button>').join('') + '</div></section>' : '') +
+        (r.pendencias.length ? '<section class="card"><div class="kh">Pendências registradas</div>' + r.pendencias.map(x => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)"></i><span><b>' + esc(x.descricao) + '</b><small>' + esc(ROTULO_ETAPA[x.etapa] || x.etapa) + '</small></span></div>').join('') + '</section>' : '') +
+        '<section class="card"><div class="kh">Assinaturas e relatórios</div>' + r.assinaturas.map(a => '<div class="doc-row"><span><b>' + esc(a.nome) + '</b><small>' + (a.ok ? 'Assinado em ' + dataBR(a.em, true) + ' · ' + hora(a.em) : 'Sem assinatura') + '</small></span><span class="badge ' + (a.ok ? 'b-green">Assinado' : 'b-amber">Pendente') + '</span></div>').join('') +
+          '<div class="doc-row"><span><b>Cópia enviada à unidade</b><small>' + (r.copia ? dataBR(r.copia.em, true) + ' · ' + hora(r.copia.em) + ' · ' + esc(r.copia.para) : 'Ainda não enviada') + '</small></span><span class="badge ' + (r.copia ? 'b-green">Enviada' : 'b-gray">Pendente') + '</span></div></section>' +
+        '<section class="card"><div class="kh">Validação da supervisão</div><div class="doc-row"><span><b>' + ({ aprovada: 'Aprovada', correcao: 'Correção solicitada', pendente: 'Aguardando validação' })[val.status] + '</b><small>' +
+          esc([val.por, val.em ? dataBR(val.em, true) : '', val.nota].filter(Boolean).join(' · ') || 'A supervisão confere a vistoria e aprova ou pede correção.') + '</small></span><span class="badge ' + ({ aprovada: 'b-green', correcao: 'b-red', pendente: 'b-amber' })[val.status] + '">' + ({ aprovada: 'OK', correcao: 'Corrigir', pendente: 'Pendente' })[val.status] + '</span></div>' +
+          (r.podeValidar && fin ? '<div class="grid2 mt"><button class="btn btn-out-red" data-act="validar" data-id="' + r.id + '" data-d="correcao">Pedir correção</button><button class="btn btn-teal" data-act="validar" data-id="' + r.id + '" data-d="aprovada">' + I('check', 18) + ' Aprovar</button></div>' : '') + '</section>' +
+        '<section class="card"><div class="kh">Histórico</div>' + r.historico.map(h => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--teal)"></i><span><b>Versão ' + h.v + ' · ' + esc(h.nota || '') + '</b><small>' + dataBR(h.em, true) + ' · ' + hora(h.em) + '</small></span></div>').join('') + '</section>' +
+        '<p class="muted small" style="text-align:center">Consulta somente leitura. Reabrir cria uma nova versão e mantém o histórico.</p>');
+      App._galeria = App._galeria || {};
+      App._galeria['vd:' + r.id] = r.fotos.map(f => ({ id: 's' + f.id, fid: f.id, fileId: f.fileId, rotulo: f.legenda || 'Foto', legenda: f.legenda, escola: r.escola.nome }));
+      const P = t => esc(JSON.stringify({ tipo: t, vistoriaId: r.id, escolaId: r.escola.id, email: r.respEmail }));
+      encher('#vdFoot', fin ? '<div class="grid2"><button class="btn btn-teal" data-act="go" data-to="relatorio" data-p="' + P('vistoria') + '">Relatório de vistoria</button><button class="btn btn-navy" data-act="go" data-to="relatorio" data-p="' + P('completo') + '">Relatório completo</button>' +
+        '<button class="btn btn-out" data-act="enviarCopiaDe" data-id="' + r.id + '" data-email="' + esc(r.respEmail || '') + '">Enviar cópia</button><button class="btn btn-out" data-act="reabrir" data-id="' + r.id + '">Reabrir para retorno</button></div>' : '');
+    });
+  }
+});
+
+/* ═════════════ Pendências de retorno ═════════════ */
+Views.pendencias = () => {
+  const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+  const st = App._pend = App._pend || { busca: '', sit: '', dre: '', equipe: '' };
+  const locais = V ? Pend.todas() : [];
+  const sits = [['', 'Todas'], ['retorno_solicitado', 'Retorno solicitado'], ['nao_concluida', 'Não concluída'], ['sem_acesso', 'Sem acesso'], ['recusa', 'Recusa'], ['aguardando_autorizacao', 'Aguardando DRE'], ['pendencias', 'Pendências']];
+  return {
+    header: Views.hdrApp(),
+    body: '<div class="search">' + I('search', 20) + '<input class="inp" id="pBusca" placeholder="Buscar escola ou motivo" value="' + esc(st.busca) + '"><button class="fbtn" data-act="pendFiltros" aria-label="Filtros">' + I('filter', 18) + '</button></div>' +
+      '<div class="fchips">' + sits.map(x => '<button class="chip dark' + (st.sit === x[0] ? ' on' : '') + '" data-act="pendSit" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<div class="fchips">' + [['dre', 'DRE'], ['equipe', 'Equipe']].map(x => '<button class="chip' + (st[x[0]] ? ' on' : '') + '" data-act="pendDrop" data-k="' + x[0] + '">' + esc(st[x[0]] || x[1]) + ' ▾</button>').join('') + '</div>' +
+      (V ? '<section class="card accent"><div class="card-h"><h3>Vistoria em andamento · ' + esc(curto(V.d.dados.nome)) + '</h3><span class="badge ' + (locais.length ? 'b-amber' : 'b-green') + '">' + (locais.length || 'OK') + '</span></div>' +
+        (locais.length ? ETAPAS.filter(e => e.k !== 'revisao').map(e => { const l = locais.filter(x => x.etapa === e.k); return l.length ? '<button class="sum-row" data-act="irEtapa" data-to="' + e.k + '"><span><b>' + e.t + '</b><small>' + esc(l.map(x => x.descricao).join(' · ')) + '</small></span><span class="badge b-amber">' + l.length + '</span></button>' : ''; }).join('') : '<p class="muted" style="margin:0">Tudo preenchido até aqui.</p>') + '</section>' : '') +
+      '<div id="pendBox">' + SKEL + '</div>',
+    nav: 'pendencias',
+    after() {
+      const b = $('#pBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.pendRender(), 200); };
+      Dados.obter('pend', 'pendenciasPainel', {}, (d, c, e) => { App._pendDados = d; if (!d) return encher('#pendBox', erroBox(e)); Views.pendRender(); });
+    }
+  };
+};
+Views.pendRender = () => {
+  const d = App._pendDados, st = App._pend;
+  if (!d || !$('#pendBox')) return;
+  const q = st.busca.toLowerCase();
+  const itens = d.itens.filter(i => (!st.sit || i.situacao === st.sit) && (!st.dre || i.dre === st.dre) && (!st.equipe || i.equipe === st.equipe) &&
+    (!q || (i.escola + ' ' + i.motivo + ' ' + i.descricao).toLowerCase().indexOf(q) >= 0));
+  const k = d.kpis;
+  const sup = App.supervisor();
+  const card = i => {
+    const s = SITUACAO[i.situacao] || SITUACAO.outro;
+    const feitas = i.etapas.filter(x => x === 'ok').length;
+    const frase = String(i.descricao || i.motivo || '').split(/(?<=[.!?])\s/);
+    const decisao = ['recusa', 'aguardando_autorizacao'].indexOf(i.situacao) >= 0;
+    let pe;
+    if (decisao) {
+      pe = '<span><small class="k">Aguardando</small><b class="c-amber">' + (i.situacao === 'recusa' ? 'Resposta da DRE' : 'Ofício da DRE') + '</b><small class="s">' + (i.cobradoEm ? 'Cobrado em ' + dataBR(i.cobradoEm) : 'Registro enviado em ' + dataBR(i.registroEm)) + '</small></span>' +
+        (i.situacao === 'recusa' ? '<button class="btn btn-out btn-sm" data-act="verRegistro" data-id="' + i.escolaId + '">Ver registro</button>' : '<button class="btn btn-out btn-sm" data-act="cobrar" data-id="' + i.escolaId + '">Cobrar</button><button class="btn btn-teal btn-sm" data-act="retomar" data-id="' + i.escolaId + '">Retomar</button>');
+    } else if (i.retorno && i.retorno.data) {
+      pe = '<span><small class="k">' + (i.situacao === 'nao_concluida' ? 'Reagendada para' : 'Retorno agendado') + '</small><b class="c-green">' + dataBR(i.retorno.data) + (i.retorno.hora ? ' · ' + esc(i.retorno.hora) : '') + '</b><small class="s">' + (i.retorno.confirmado ? 'Confirmado com a unidade' : esc(i.retorno.equipe || 'Mesma equipe')) + '</small></span>' +
+        '<button class="btn btn-teal btn-sm" data-act="retomar" data-id="' + i.escolaId + '">Retomar</button><button class="btn btn-out btn-sm" data-act="reagendar" data-id="' + i.escolaId + '">Reagendar</button>';
+    } else {
+      pe = '<span><small class="k">Nova data</small><b class="c-red">A definir</b><small class="s">' + (i.situacao === 'sem_acesso' ? 'Contato da DRE em andamento' : 'Combine com a unidade') + '</small></span><button class="btn btn-teal btn-sm" data-act="reagendar" data-id="' + i.escolaId + '">Reagendar</button>';
+    }
+    return '<section class="pcard" style="border-top-color:' + s[1] + '"><div class="row" style="align-items:flex-start"><span style="flex:1;min-width:0"><b style="font-size:17px">' + esc(i.escola) + '</b><div class="muted small">DRE ' + esc(i.dre) + (i.equipe ? ' · ' + esc(i.equipe) : '') + '</div></span><span class="badge ' + s[2] + '">' + s[0] + '</span></div>' +
+      (i.descricao || i.motivo ? '<div class="quote"><b>' + esc(frase[0]) + '</b> ' + esc(frase.slice(1).join(' ')) + '</div>' : '<div style="height:10px"></div>') +
+      '<div class="row" style="justify-content:space-between;margin-bottom:6px"><b class="small">Etapas concluídas</b><b class="small">' + feitas + ' de 5</b></div>' +
+      '<div class="seg5">' + ['Dados', 'Energia', 'Estrut.', 'Elétr.', 'Amb.'].map((n, x) => '<span><i class="' + i.etapas[x] + '"></i>' + n + '</span>').join('') + '</div>' +
+      '<div class="pfoot">' + pe + '</div>' + (sup ? '<button class="link small mt" data-act="escolaAbrir" data-id="' + i.escolaId + '">Abrir escola ›</button>' : '') + '</section>';
+  };
+  encher('#pendBox', '<div class="kpi4"><div><small>Vistorias pendentes</small><b>' + k.pendentes + '</b><span>de ' + k.total + ' escolas</span></div>' +
+      '<div style="border-left-color:var(--green)"><small>Com retorno marcado</small><b>' + k.comRetorno + '</b><span>' + (k.proximo ? 'próximo: ' + dataBR(k.proximo) : 'nenhum agendado') + '</span></div>' +
+      '<div style="border-left-color:#8A9AB0"><small>A reagendar</small><b>' + k.reagendar + '</b><span>sem data definida</span></div>' +
+      '<div style="border-left-color:var(--red)"><small>Decisão da DRE</small><b>' + k.decisaoDre + '</b><span>recusa ou autorização</span></div></div>' +
+    (itens.length ? itens.map(card).join('') : '<div class="empty">' + I('checksq', 40) + '<div>Nenhuma pendência com estes filtros.</div></div>'));
+};
+
+/* ═════════════ Fotos (galeria) ═════════════ */
+Views.fotos = () => {
+  const st = App._fot = App._fot || { busca: '', etapa: '', dre: '', periodo: '', escolaId: '', equipeId: '' };
+  const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+  const fila = Sync.q.filter(i => i.acao === 'uploadFoto');
+  const cats = [['', 'Todas'], ['dados', 'Fachada'], ['entrada', 'Energia'], ['estrutura', 'Estrutura'], ['eletrica', 'Elétrica'], ['ambientes', 'Ambientes'], ['equipamentos', 'Equipamentos'], ['doc', 'Documentos']];
+  const drops = [['escolaId', 'Escola'], ['dre', 'DRE'], ['periodo', 'Período']].concat(App.supervisor() ? [['equipeId', 'Equipe']] : []);
+  const rot = { periodo: { semana: 'Últimos 7 dias', mes: 'Últimos 30 dias' } };
+  const nomeDrop = k => st[k] ? (k === 'escolaId' ? curto((App.escola(st[k]) || {}).nome) : (rot[k] && rot[k][st[k]]) || (k === 'equipeId' ? ((App._equipesLista || []).find(e => e.id === st[k]) || {}).nome || st[k] : st[k])) : null;
+  return {
+    header: Views.hdrApp(),
+    body: '<div class="search">' + I('search', 20) + '<input class="inp" id="fBusca" placeholder="Buscar por escola, ambiente ou etapa" value="' + esc(st.busca) + '"><button class="fbtn" data-act="fotFiltros" aria-label="Filtros">' + I('filter', 18) + '</button></div>' +
+      '<div class="fchips">' + cats.map(c => '<button class="chip dark' + (st.etapa === c[0] ? ' on' : '') + '" data-act="fotCat" data-v="' + c[0] + '">' + c[1] + '</button>').join('') + '</div>' +
+      '<div class="fchips">' + drops.map(x => '<button class="chip' + (st[x[0]] ? ' on' : '') + '" data-act="fotDrop" data-k="' + x[0] + '">' + esc(nomeDrop(x[0]) || x[1]) + ' ▾</button>').join('') + '</div>' +
+      '<div id="fotKpi" class="kpi3"><div><small>Total de fotos</small><b>…</b></div><div><small>Enviadas</small><b>…</b></div><div><small>Na fila</small><b class="c-amber">' + fila.length + '</b><span class="small muted">aguardando</span></div></div>' +
+      (fila.length ? '<div class="banner"><span class="spin" style="border-color:var(--amber-b);border-top-color:var(--amber);width:22px;height:22px;border-width:3px;flex:none;border-radius:50%;animation:rot .9s linear infinite"></span><span style="flex:1"><b>' + plural(fila.length, 'foto aguardando envio', 'fotos aguardando envio') + '</b> · ' +
+        (navigator.onLine === false ? 'sem sinal na unidade atual' : Sync.esperaWifi ? 'aguardando Wi-Fi' : 'enviando') + '</span><button class="link" style="color:#8A5300" data-act="enviarAgora">Enviar agora</button></div>' : '') +
+      (V && !st.escolaId ? Views.grupoLocal(V) : '') +
+      '<div id="fotBox">' + SKEL + '</div>',
+    nav: 'fotos',
+    fab: V ? '<button class="fab" data-act="quickFoto">' + I('camera', 24) + ' Nova foto</button>' : '',
+    after() {
+      const b = $('#fBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.fotosCarregar(), 350); };
+      Views.fotosCarregar();
+    }
+  };
+};
+Views.grupoLocal = V => {
+  const st = App._fot;
+  let fs = Object.values(V.fotos).filter(f => !f.del && f.etapa !== 'cancelamento').sort((a, b) => a.criadoEm < b.criadoEm ? 1 : -1);
+  if (st.etapa) fs = fs.filter(f => f.etapa === st.etapa);
+  if (!fs.length) return '';
+  App._galeria = App._galeria || {};
+  App._galeria.local = fs.map(f => ({ id: f.id, fid: f.id, fileId: f.fileId, rotulo: f.legenda || ROTULO_ETAPA[f.etapa], etapa: f.etapa, criadoEm: f.criadoEm, lat: f.lat, lng: f.lng, st: f.st, legenda: f.legenda, local: true, escola: V.d.dados.nome }));
+  return '<div class="sec-t" style="margin-top:6px"><span><h2 style="font-size:19px">' + esc(V.d.dados.nome) + '</h2><div class="muted small">Vistoria em andamento · ' + plural(fs.length, 'foto') + '</div></span></div>' + Views.grade('local', App._galeria.local, 9);
+};
+Views.grade = (k, lista, max) => '<div class="gal3" style="margin-bottom:18px">' + lista.slice(0, max).map((f, i) => {
+  const mais = i === max - 1 && lista.length > max ? lista.length - max + 1 : 0;
+  return '<button data-act="verServ" data-k="' + k + '" data-i="' + i + '"><img data-th="' + f.id + '"' + (f.fileId ? ' data-fid="' + f.fileId + '"' : '') + ' alt="">' +
+    (mais ? '<span class="mais">+' + mais + '</span>' : '<span class="cap">' + esc(f.rotulo || 'Foto') + '</span><span class="' + (f.st === 'pend' ? 'wait">' + I('clock', 12, 3) : 'ok">' + I('check', 12, 3)) + '</span>') + '</button>';
+}).join('') + '</div>';
+Views.fotosCarregar = () => {
+  const st = App._fot;
+  const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+  const p = { busca: st.busca, etapa: st.etapa, dre: st.dre, periodo: st.periodo, escolaId: st.escolaId, equipeId: st.equipeId };
+  Dados.obter('gal:' + JSON.stringify(p), 'galeria', p, (d, c, e) => {
+    if (!d) return encher('#fotBox', erroBox(e));
+    const fila = Sync.q.filter(i => i.acao === 'uploadFoto').length;
+    encher('#fotKpi', '<div><small>Total de fotos</small><b>' + fmt(d.total + fila) + '</b><span class="small muted" style="display:block">' + d.escolasComFotos + ' escolas</span></div>' +
+      '<div><small>Enviadas</small><b>' + fmt(d.total) + '</b><span class="small muted" style="display:block">' + pct(d.total / Math.max(1, d.total + fila), 1) + '</span></div>' +
+      '<div><small>Na fila</small><b class="c-amber">' + fila + '</b><span class="small muted" style="display:block">aguardando</span></div>');
+    App._galeria = App._galeria || {};
+    const locais = V ? new Set(Object.keys(V.fotos)) : new Set();
+    const html = d.grupos.map(g => {
+      const lista = g.fotos.filter(f => !locais.has(f.id)).map(f => ({ id: 's' + f.id, fid: f.id, fileId: f.fileId, rotulo: f.rotulo, etapa: f.etapa, criadoEm: f.criadoEm, lat: f.lat, lng: f.lng, autor: d.autores[f.autor], legenda: f.legenda, escola: g.escola, st: 'ok' }));
+      if (!lista.length) return '';
+      App._galeria['g:' + g.escolaId] = lista;
+      return '<div class="sec-t" style="margin-top:6px"><span><h2 style="font-size:19px">' + esc(g.escola) + '</h2><div class="muted small">DRE ' + esc(g.dre) + ' · ' + dataBR(g.data) + ' · ' + plural(g.total, 'foto') + '</div></span>' +
+        (st.escolaId ? '' : '<button class="link" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: g.escolaId }) + '\'>Ver todas</button>') + '</div>' +
+        Views.grade('g:' + g.escolaId, lista, st.escolaId ? 999 : (g.total > 9 ? 9 : lista.length)).replace(/\+(\d+)</, () => '+' + (g.total - 8) + '<');
+    }).join('');
+    encher('#fotBox', html || (V ? '' : '<div class="empty">' + I('image', 40) + '<div>Nenhuma foto com estes filtros.</div></div>'));
+  }, { semLS: true });
+};
+Views.galeriaEscola = p => {
+  App._fot = Object.assign({ busca: '', etapa: '', dre: '', periodo: '', equipeId: '' }, App._fot || {}, { escolaId: p.escolaId });
+  const v = Views.fotos();
+  v.header = Views.hdrNavy('Fotos', (App.escola(p.escolaId) || {}).nome || '');
+  v.nav = null; v.fab = '';
+  return v;
+};
+Views.galeriaEscola.onBack = () => { if (App._fot) App._fot.escolaId = ''; };
+
+/* ═════════════ Visualizador de fotos ═════════════ */
+const Visor = {
+  abrir(lista, i) {
+    this.lista = lista; this.i = i;
+    Sheet.opts = {};
+    this.render();
+  },
+  async src(f, grande) {
+    if (f.local) {
+      const it = Sync.q.find(x => x.acao === 'uploadFoto' && x.payload.id === f.fid);
+      if (it && grande) return it.payload.data;
+    }
+    const k = 'g:' + f.fileId;
+    if (grande && f.fileId) {
+      if (Thumbs.mem.get(k)) return Thumbs.mem.get(k);
+      try { const r = await Api.run('thumbs', { ids: [f.fileId], tamanho: 1200 }); if (r[f.fileId]) { Thumbs.mem.set(k, r[f.fileId]); return r[f.fileId]; } } catch (e) { /* offline */ }
+    }
+    return Thumbs.mem.get(f.id) || Thumbs.mem.get(f.fid) || (f.fileId && Thumbs.mem.get('f:' + f.fileId)) || '';
+  },
+  async render() {
+    const f = this.lista[this.i], n = this.lista.length;
+    const enviada = f.st !== 'pend';
+    const loc = f.lat && f.lng ? fmt(f.lat, 4) + ' / ' + fmt(f.lng, 4) : '—';
+    $('#layer').innerHTML = '<div class="pv"><div class="pv-top"><button class="back" data-act="sheetClose" aria-label="Fechar">' + I('left') + '</button><span class="t"><b>Foto ' + (this.i + 1) + ' de ' + n + '</b><small>' + esc(ROTULO_ETAPA[f.etapa] || '') + '</small></span>' +
+      '<button class="back" data-act="visorMais" aria-label="Mais">' + I('share', 20) + '</button></div>' +
+      '<div class="pv-img" id="pvImg"><img id="pvI" alt=""></div>' +
+      '<div class="pv-strip">' + this.lista.map((x, j) => '<button class="' + (j === this.i ? 'on' : '') + '" data-act="visorIr" data-i="' + j + '"><img data-th="' + x.id + '"' + (x.fileId ? ' data-fid="' + x.fileId + '"' : '') + ' alt=""></button>').join('') + '</div>' +
+      '<div class="pv-info"><div class="grab" style="width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px"></div>' +
+        '<div class="row" style="align-items:flex-start"><span style="flex:1"><b style="font-size:19px">' + esc(f.rotulo || 'Foto') + '</b><div class="muted">' + esc(f.escola || '') + '</div></span><span class="badge ' + (enviada ? 'b-green">Enviada' : 'b-amber">Na fila') + '</span></div>' +
+        '<div class="kv2"><div><small>Data e hora</small><b>' + (f.criadoEm ? dataBR(f.criadoEm, true) + ' · ' + hora(f.criadoEm) : '—') + '</b></div><div><small>Local</small><b>' + loc + '</b></div>' +
+        '<div><small>Registrada por</small><b>' + esc(f.autor || (f.local ? ((App.data || {}).usuario || {}).nome : '') || '—') + '</b></div><div><small>Etapa</small><b>' + esc(ROTULO_ETAPA[f.etapa] || f.etapa || '—') + '</b></div></div>' +
+        '<div class="kh">Legenda</div><textarea class="inp mt" id="pvLeg" placeholder="Descreva o que a foto mostra" style="min-height:64px">' + esc(f.legenda || '') + '</textarea>' +
+        '<div class="grid3 mt">' + (f.local ? '<button class="btn btn-out" data-act="visorRefazer">Refazer</button>' : '<span></span>') + '<button class="btn btn-out" data-act="visorShare">Compartilhar</button>' +
+          (f.local ? '<button class="btn btn-out-red" data-act="visorDel">Excluir</button>' : '<span></span>') + '</div></div></div>';
+    Thumbs.hydrate();
+    const img = $('#pvI');
+    img.src = await this.src(f, false);
+    this.src(f, true).then(s => { if (s && $('#pvI') && this.lista[this.i] === f) $('#pvI').src = s; });
+    const leg = $('#pvLeg');
+    leg.onchange = () => this.legenda(f, leg.value);
+    // Deslizar para trocar de foto
+    let x0 = null;
+    const area = $('#pvImg');
+    area.addEventListener('pointerdown', e => { x0 = e.clientX; });
+    area.addEventListener('pointerup', e => { if (x0 === null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 50) this.ir(this.i + (dx < 0 ? 1 : -1)); });
+    const on = $('.pv-strip button.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+  },
+  ir(i) { if (i >= 0 && i < this.lista.length) { this.i = i; this.render(); } },
+  async legenda(f, txt) {
+    f.legenda = txt;
+    const V = App.V;
+    if (f.local && V && V.fotos[f.fid]) {
+      V.fotos[f.fid].legenda = txt; Vist.salvar();
+      const it = Sync.q.find(x => x.acao === 'uploadFoto' && x.payload.id === f.fid && !x.running);
+      if (it) { it.payload.legenda = txt; await IDB.put('outbox', it); toast('Legenda salva', 'ok', 1200); return; }
+    }
+    Sync.add('legenda', { id: f.fid, legenda: txt }, 'leg:' + f.fid);
+    toast('Legenda salva', 'ok', 1200);
+  }
+};
+Fotos.ver = (id, lista) => {
+  const V = App.V;
+  const ids = lista && lista.length ? lista : [id];
+  const itens = ids.map(x => V && V.fotos[x]).filter(Boolean).map(f => ({ id: f.id, fid: f.id, fileId: f.fileId, rotulo: f.legenda || ROTULO_ETAPA[f.etapa], etapa: f.etapa, criadoEm: f.criadoEm, lat: f.lat, lng: f.lng, st: f.st, legenda: f.legenda, local: true, escola: V.d.dados.nome }));
+  Visor.abrir(itens, Math.max(0, ids.indexOf(id)));
+};
+
+/* ═════════════ Assinatura em tela cheia ═════════════ */
+Views.assinatura = p => {
+  const V = App.V;
+  if (!V) { setTimeout(() => Router.back(), 0); return { body: '' }; }
+  const r = V.d.revisao, empresa = p.k === 'revisao.assEmpresa';
+  const u = (App.data || {}).usuario || {}, cfg = (App.data || {}).cfg || {};
+  const nome = empresa ? (cfg.responsavelTecnico || u.nome) : (r.respNome || 'Responsável pela unidade');
+  const sub = empresa ? [cfg.responsavelCargo || u.cargo, cfg.consorcio].filter(Boolean).join(' · ') : [r.respCargo, V.d.dados.nome].filter(Boolean).join(' · ');
+  const ini = String(nome).split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  return {
+    header: Views.hdrNavy('Revisão final', empresa ? 'Assinatura da empresa' : 'Assinatura do responsável'),
+    body: '<section class="card"><div class="row"><span class="avatar" style="width:56px;height:56px;font-size:20px">' + esc(ini) + '</span><span><b style="font-size:18px">' + esc(nome) + '</b><div class="muted">' + esc(sub) + '</div>' + (!empresa && r.respRF ? '<div class="muted">RF ' + esc(r.respRF) + '</div>' : '') + '</span></div></section>' +
+      '<p class="muted" style="margin:0 4px 14px">' + (empresa ? 'Declaro que a vistoria foi realizada conforme os dados registrados neste relatório.' : 'Declaro que acompanhei a vistoria e conferi os serviços relacionados no relatório.') + '</p>' +
+      (!empresa && !r.respNome ? '<div class="warn-box" style="margin:0 0 12px">Preencha o nome do responsável na revisão antes de assinar.</div>' : '') +
+      '<div class="sigbig" id="sigBig"><div class="dica">Assine com o dedo dentro do quadro</div><div class="base"></div><canvas></canvas></div>' +
+      '<div class="row small muted" style="justify-content:space-between;margin:8px 4px 14px;font-weight:600"><span data-clock>' + dataBR(new Date().toISOString(), true) + ' · ' + hora(new Date().toISOString()) + '</span><span id="sigGeo">Obtendo localização…</span></div>' +
+      '<div class="grid2" style="grid-template-columns:1fr 1.4fr"><button class="btn btn-out btn-lg" data-act="sigLimparBig">Limpar</button><button class="btn btn-teal btn-lg" data-act="sigOk" data-k="' + p.k + '">Confirmar assinatura</button></div>' +
+      '<p class="muted small" style="text-align:center;margin-top:14px">Dica: gire o aparelho para a horizontal para ter mais espaço.</p>',
+    after() {
+      Geo.get(6000).then(pos => { const g = $('#sigGeo'); if (g) g.textContent = pos ? 'Localização registrada' : 'Sem localização'; });
+      const box = $('#sigBig'), cv = $('canvas', box);
+      const dpr = window.devicePixelRatio || 1;
+      const ajustar = () => { const b = box.getBoundingClientRect(); cv.width = b.width * dpr; cv.height = b.height * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.lineWidth = 2.8; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#1B2F8A'; cv._n = 0; };
+      ajustar();
+      const g = () => cv.getContext('2d');
+      let des = false, last = null;
+      const pt = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+      cv.addEventListener('pointerdown', e => { des = true; last = pt(e); cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener('pointermove', e => {
+        if (!des) return;
+        const q = pt(e), c = g();
+        c.beginPath(); c.moveTo(last.x, last.y); c.quadraticCurveTo(last.x, last.y, (last.x + q.x) / 2, (last.y + q.y) / 2); c.lineTo(q.x, q.y); c.stroke();
+        last = q; cv._n++;
+      });
+      ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => { des = false; }));
+      window.addEventListener('orientationchange', () => setTimeout(ajustar, 300), { once: true });
+    }
+  };
+};
+F.sig = (k) => {
+  const v = Form.get(k);
+  return '<button class="sig sig-btn" data-act="go" data-to="assinatura" data-p=\'' + JSON.stringify({ k: k }) + '\'>' +
+    (v ? '<img src="' + v + '" style="width:100%;height:100%;object-fit:contain" alt="Assinatura"><span class="clr" style="color:var(--teal)">Refazer</span>' : '<div class="ph-t">' + I('edit', 20) + '&nbsp; Toque para assinar</div>') + '</button>';
+};
+const iniciarAssinaturasOriginal = iniciarAssinaturas;
+
+/* Cabeçalho: na supervisão mostra o papel em vez da equipe. */
+Views.hdrApp = (orig => function () {
+  const h = orig();
+  if (!App.supervisor()) return h;
+  const u = (App.data || {}).usuario || {};
+  return h.replace(/<div class="sub">[\s\S]*?<\/div><\/span>/, '<div class="sub"><b>Supervisão</b> · ' + esc(u.cargo || '') + '</div></span>');
+})(Views.hdrApp);
+
+/* ═════════════ Menu do cabeçalho ═════════════ */
+Views.menu = () => {
+  const u = (App.data || {}).usuario || {};
+  const sup = !!u.supervisor, modoSup = App.supervisor();
+  const it = (act, ic, t, s, extra) => '<button class="opt" data-act="' + act + '"' + (extra || '') + '><span class="ic">' + I(ic, 20) + '</span><span>' + t + (s ? '<small>' + s + '</small>' : '') + '</span></button>';
+  Sheet.open('<div class="row" style="margin-bottom:6px"><span class="avatar">' + esc(u.iniciais || '') + '</span><span><b>' + esc(u.nome || '') + '</b><div class="muted small">' + esc(u.cargo || '') + '</div></span></div>' +
+    (sup ? it('modo', 'swap', modoSup ? 'Ir para o modo campo' : 'Voltar à supervisão', modoSup ? 'Fazer vistorias com sua equipe' : 'Painel, equipes e validação') : '') +
+    it('menuIr', 'user', 'Credencial', 'Crachá, supervisor e DREs', ' data-to="credencial"') +
+    it('menuIr', 'calendar', 'Programação', 'Dia, semana e mês', ' data-to="programacao"') +
+    (modoSup ? it('menuIr', 'chart', 'Painel do contrato', 'Avanço por DRE e equipe', ' data-to="escolas"') + it('menuIr', 'image', 'Fotos', 'Galeria de todas as escolas', ' data-to="fotos"') + it('menuIr', 'users', 'Usuários e acessos', 'Cadastrar técnicos e códigos', ' data-to="usuarios"') : '') +
+    it('menuIr', 'settings', 'Configurações', 'Texto, tema, fotos, notificações', ' data-to="configuracoes"') +
+    it('sair', 'logout', 'Sair da conta', ''));
+};
+
+/* ═════════════ Retomar vistoria de onde parou ═════════════ */
+async function iniciarVistoria(e, pos, base) {
+  const V = Vist.novo(e, pos);
+  let fotosCopiar = [];
+  if (base) {
+    Object.keys(base.etapas || {}).forEach(k => { if (V.d[k]) V.d[k] = Object.assign(V.d[k], base.etapas[k].dados || {}); });
+    V.d.revisao.assResp = ''; V.d.revisao.assEmpresa = '';
+    (base.fotos || []).forEach(f => {
+      const id = uid();
+      V.fotos[id] = { id: id, etapa: f.etapa, slot: f.slot, ref: f.ref, fileId: f.fileId, legenda: f.legenda, criadoEm: f.criadoEm, st: 'ok' };
+      fotosCopiar.push({ id: id, de: f.id });
+      const th = Thumbs.mem.get('f:' + f.fileId); if (th) Thumbs.mem.set(id, th);
+    });
+    V.retomadaDe = base.id;
+  }
+  App.V = V;
+  Vist.salvar(true);
+  await Sync.add('checkin', { id: V.id, escolaId: e.id, checkin: V.checkin, lat: V.lat, lng: V.lng, retomarDe: base ? base.id : '', fotosCopiar: fotosCopiar });
+  ETAPAS.forEach(x => { if (base ? base.etapas && base.etapas[x.k] : x.k === 'dados') Vist.tocar(x.k, true); });
+  const D = App.data;
+  const rot = (D.roteiro || []).find(r => r.escolaId === e.id && r.status !== 'concluida');
+  if (rot) rot.status = 'em_andamento';
+  D.equipe.status = 'em_campo'; D.equipe.destinoEscolaId = '';
+  LS.set('boot', D);
+  vib(20);
+  toast((base ? 'Retomada' : 'Check-in') + ' às ' + hora(V.checkin) + ' · ' + curto(e.nome), 'ok');
+  if (base) {
+    const prim = ETAPAS.find(x => x.k !== 'revisao' && Pend.etapa(x.k).length);
+    V.etapa = prim ? prim.k : 'revisao';
+  }
+  Router.reset('home'); Router.go('etapa', { k: V.etapa || 'dados' });
+}
+
+/* ═════════════ Ações ═════════════ */
+Object.assign(Act, {
+  rerender() { Dados.mem = {}; App.rerender(); },
+  menu() { Views.menu(); },
+  menuIr(el) { Sheet.close(true); Router.go(el.dataset.to); },
+  modo() { Sheet.close(true); LS.set('modo', App.supervisor() ? 'campo' : 'sup'); Router.reset('home'); },
+  olho(el) { const i = $('input', el.parentElement); i.type = i.type === 'password' ? 'text' : 'password'; },
+  manterCon(el) { el.classList.toggle('on'); $('.box', el).innerHTML = el.classList.contains('on') ? I('check', 16, 3) : ''; },
+  primeiroAcesso() { App.form = null; Router.go('primeiro'); },
+  esqueci() {
+    Sheet.open('<h3>Esqueci a senha</h3><p class="muted small">Enviaremos um código para o seu e-mail cadastrado. Use-o em <b>Primeiro acesso</b> para criar uma nova senha.</p>' +
+      '<span class="lbl">E-mail ou matrícula</span><input class="inp" id="esqLogin" value="' + esc(($('#fLogin') && $('#fLogin').email.value) || '') + '">' +
+      '<button class="btn btn-teal mt" id="esqOk">Enviar código</button><p class="muted small" style="margin-top:10px">Sem e-mail cadastrado? Peça um código ao seu supervisor.</p>', { focus: true });
+    $('#esqOk').onclick = async () => {
+      carregando($('#esqOk'), true);
+      try { await Api.run('esqueciSenha', { login: $('#esqLogin').value }); Sheet.close(true); toast('Se o usuário existir, o código foi enviado por e-mail.', 'ok', 4000); }
+      catch (e) { carregando($('#esqOk'), false); toast(e.message, 'err'); }
+    };
+  },
+  paVoltar() { const f = App.form; if (f && f.passo === 2) { f.passo = 1; App.rerender(); } else { App.form = null; Router.reset('login'); } },
+  async paCodigo(el) {
+    const f = App.form;
+    if (!f.login || String(f.codigo).length !== 6) { toast('Informe o usuário e o código de 6 dígitos.', 'warn'); return; }
+    carregando(el, true, 'Validando');
+    try { f.info = await Api.run('validarCodigo', { login: f.login, codigo: f.codigo }); f.passo = 2; App.rerender(); }
+    catch (e) { carregando(el, false); toast(e.net ? 'Sem conexão.' : e.message, 'err', 4000); }
+  },
+  async paSenha(el) {
+    const f = App.form;
+    if (f.senha !== f.rep) { toast('As senhas não conferem.', 'warn'); return; }
+    if (!f.aceite) { toast('Aceite os termos de uso para continuar.', 'warn'); return; }
+    carregando(el, true, 'Ativando');
+    try {
+      const r = await Api.run('ativar', { login: f.login, codigo: f.codigo, senha: f.senha, aceite: true });
+      App.guardarToken(r.token, true); LS.set('ultimoEmail', f.login);
+      App.data = r.boot; LS.set('boot', r.boot);
+      f.passo = 3; App.rerender();
+    } catch (e) { carregando(el, false); toast(e.message, 'err', 4000); }
+  },
+  paFim() { App.form = null; App.aplicarBoot(App.data); App.iniciarSessao(); },
+  termos() {
+    Sheet.open('<h3>Termos de uso e privacidade</h3><div class="muted" style="font-size:14px;line-height:1.5">' +
+      '<p>O VistAR é uma ferramenta de trabalho do ' + esc(((App.boot || {}).cfg || {}).consorcio || 'consórcio') + ' para vistorias em unidades escolares.</p>' +
+      '<p><b>Dados coletados:</b> nome, matrícula, e-mail, equipe, localização no check-in, check-out e enquanto o app está aberto (para a supervisão acompanhar as equipes), fotos e assinaturas das vistorias.</p>' +
+      '<p><b>Finalidade (LGPD, art. 7º, V e IX):</b> execução do contrato, registro técnico das vistorias e segurança das equipes em campo. Os dados ficam no Google Workspace do consórcio e são acessados só por pessoas autorizadas.</p>' +
+      '<p><b>Seus direitos:</b> pedir acesso, correção ou exclusão dos seus dados pessoais ao administrador do sistema.</p>' +
+      '<p>Não fotografe alunos nem documentos pessoais. Use o app só para fins do contrato.</p></div><button class="btn btn-navy mt" data-act="sheetClose">Entendi</button>');
+  },
+  async pedirPerm(el) {
+    const p = el.dataset.p;
+    try {
+      if (p === 'geolocation') { Geo.last = null; await Geo.get(10000); }
+      else if (p === 'camera') { const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t => t.stop()); }
+      else if (window.Notification) { await Notification.requestPermission(); Lembretes.agendar(); }
+    } catch (e) { toast('Permissão não concedida. Libere nas configurações do navegador.', 'warn', 4000); }
+    Views.atualizarPermissoes();
+  },
+  async desbloquear() { if (await Bio.desbloquear()) App.iniciarSessao(); else toast('Não foi possível confirmar sua identidade.', 'err'); },
+  sairBloqueio() { Prefs.set('biometria', false); LS.del('bioId'); App.token = null; LS.del('token'); Router.reset('login'); },
+  pref(el) { vib(); Prefs.set(el.dataset.k, el.dataset.v); App.rerender(); },
+  async prefTog(el) {
+    vib();
+    const k = el.dataset.k, v = !Prefs.get(k);
+    if (k === 'biometria' && v) {
+      if (!(await Bio.disponivel())) { toast('Biometria indisponível neste aparelho ou navegador.', 'warn', 3500); return; }
+      try { await Bio.ativar(); } catch (e) { toast('Não foi possível ativar a biometria aqui.', 'warn', 3500); return; }
+    }
+    if (k === 'biometria' && !v) LS.del('bioId');
+    if (k === 'lembrete' && v && window.Notification && Notification.permission === 'default') await Notification.requestPermission();
+    Prefs.set(k, v);
+    if (k === 'soWifi' && !v) Sync.kickSoon(100);
+    Lembretes.agendar();
+    App.rerender();
+  },
+  progIr(el) { vib(); Router.go('programacao', JSON.parse(el.dataset.p), { replace: true }); },
+  progEquipe(el) {
+    if (!App.supervisor()) return;
+    const p = JSON.parse(el.dataset.p);
+    Sheet.open('<h3>Equipe</h3>' + [{ id: '', nome: 'Todas as equipes' }].concat(App._equipesLista || []).map(e => '<button class="opt" data-act="progIr" data-p="' + esc(JSON.stringify(Object.assign({}, p, { equipeId: e.id }))) + '" onclick="Sheet.close(true)">' + esc(e.nome) + '</button>').join(''));
+  },
+  escolaAbrir(el) {
+    if (el.dataset.visita && App.supervisor() && Act.visitaEditar) return Act.visitaEditar(el);
+    Sheet.close(true); Router.go('escola', { id: el.dataset.id });
+  },
+  escDre(el) { App._esc.dre = el.dataset.v; App.rerender(); },
+  escPer(el) { App._esc.periodo = el.dataset.v; App.rerender(); },
+  limparBusca() { if (App._esc && App._esc.busca) { App._esc.busca = ''; App.rerender(); } },
+  copiar(el) { const v = el.dataset.v; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast('Copiado', 'ok', 1200), () => toast(v)); },
+  mailto(el) { abrirExterno('mailto:' + el.dataset.v); },
+  verServ(el) { const l = (App._galeria || {})[el.dataset.k] || []; if (l.length) Visor.abrir(l, Number(el.dataset.i)); },
+  visorIr(el) { Visor.ir(Number(el.dataset.i)); },
+  async visorShare() {
+    const f = Visor.lista[Visor.i];
+    const src = await Visor.src(f, true);
+    try {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], 'VistAR_' + (f.rotulo || 'foto').replace(/\W+/g, '_') + '.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: f.rotulo, text: (f.escola || '') + ' · ' + (f.legenda || f.rotulo || '') }); return; }
+    } catch (e) { /* cai no download */ }
+    baixarDataUrl(src, 'VistAR_foto.jpg');
+  },
+  visorMais() { Act.visorShare(); },
+  async visorDel() {
+    const f = Visor.lista[Visor.i];
+    if (!(await confirmar({ titulo: 'Excluir esta foto?', sim: 'Excluir', perigo: true }))) { Visor.render(); return; }
+    await Fotos.remover(f.fid);
+    Visor.lista.splice(Visor.i, 1);
+    toast('Foto excluída');
+    if (!Visor.lista.length) { Sheet.close(true); App.rerender(); return; }
+    Visor.i = Math.min(Visor.i, Visor.lista.length - 1); Visor.render(); App.rerender();
+  },
+  visorRefazer() {
+    const f = Visor.lista[Visor.i];
+    const V = App.V, of = V && V.fotos[f.fid];
+    if (!of) return;
+    Sheet.close(true);
+    const alvo = { slot: of.slot, etapa: of.etapa, ref: of.ref, rotulo: f.rotulo, escola: V.d.dados.nome, sub: (ROTULO_ETAPA[of.etapa] || '') + ' · ' + f.rotulo, unico: true };
+    alvo.onFoto = async img => { await Fotos.remover(of.id); await Fotos.adicionar(Object.assign({}, alvo, { onFoto: null }), img); };
+    Camera.abrir(alvo);
+  },
+  camFechar() { Camera.fechar(); },
+  camFoto() { Camera.foto(); },
+  camSlot(el) { const o = Camera.alvo.opcoes[Number(el.dataset.i)]; Object.assign(Camera.alvo, o, { rotulo: o.rot, sub: (ROTULO_ETAPA[o.etapa] || '') + ' · ' + o.rot }); Camera.ui(); },
+  async camVirar() { Camera.parar(); Camera.frente = !Camera.frente; const a = Camera.alvo; try { await Camera.aoVivo(); Camera.alvo = a; Camera.ui(); } catch (e) { Camera.fechar(); } },
+  async camLuz(el) {
+    const t = Camera.stream && Camera.stream.getVideoTracks()[0];
+    try { Camera._luz = !Camera._luz; await t.applyConstraints({ advanced: [{ torch: Camera._luz }] }); el.style.color = Camera._luz ? '#F5C77A' : ''; }
+    catch (e) { toast('Lanterna indisponível neste aparelho.', 'warn'); }
+  },
+  sigLimparBig() { const cv = $('#sigBig canvas'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); cv._n = 0; },
+  async sigOk(el) {
+    const cv = $('#sigBig canvas');
+    if ((cv._n || 0) < 6) { toast('Faça a assinatura dentro do quadro.', 'warn'); return; }
+    const dpr = window.devicePixelRatio || 1;
+    const out = document.createElement('canvas');
+    out.width = Math.min(900, cv.width / dpr); out.height = out.width * cv.height / cv.width;
+    out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
+    const k = el.dataset.k, pos = Geo.last;
+    Form.set(k, out.toDataURL('image/png'));
+    Form.set(k + 'Em', new Date().toISOString());
+    Form.set(k + 'Geo', pos ? pos.lat + ',' + pos.lng : '');
+    Vist.tocar('revisao', true);
+    vib(20); toast('Assinatura registrada', 'ok');
+    Router.back();
+  },
+  enviarAgora() { Sync.forcar = true; Sync.fails = 0; Sync.kick(); toast('Enviando fila…'); setTimeout(() => App.rerender(), 600); },
+  fotCat(el) { App._fot.etapa = el.dataset.v; App.rerender(); },
+  fotDrop(el) {
+    const k = el.dataset.k, D = App.data || {};
+    const ops = k === 'escolaId' ? (D.escolas || []).map(e => [e.id, e.nome]) : k === 'dre' ? (D.dres || []).map(d => [d.id, 'DRE ' + d.id])
+      : k === 'periodo' ? [['semana', 'Últimos 7 dias'], ['mes', 'Últimos 30 dias']] : (App._equipesLista || []).map(e => [e.id, e.nome]);
+    Sheet.open('<h3>Filtrar</h3><button class="opt" data-act="fotSet" data-k="' + k + '" data-v="">Todos</button>' + ops.map(o => '<button class="opt" data-act="fotSet" data-k="' + k + '" data-v="' + esc(o[0]) + '">' + esc(o[1]) + '</button>').join(''));
+  },
+  fotSet(el) { Sheet.close(true); App._fot[el.dataset.k] = el.dataset.v; App.rerender(); },
+  fotFiltros() { Act.fotDrop({ dataset: { k: 'periodo' } }); },
+  pendSit(el) { App._pend.sit = el.dataset.v; App.rerender(); },
+  pendDrop(el) {
+    const k = el.dataset.k, d = App._pendDados || { itens: [] };
+    const ops = Array.from(new Set(d.itens.map(i => i[k]).filter(Boolean)));
+    Sheet.open('<h3>' + (k === 'dre' ? 'DRE' : 'Equipe') + '</h3><button class="opt" data-act="pendSet" data-k="' + k + '" data-v="">Todas</button>' + ops.map(o => '<button class="opt" data-act="pendSet" data-k="' + k + '" data-v="' + esc(o) + '">' + esc(o) + '</button>').join(''));
+  },
+  pendSet(el) { Sheet.close(true); App._pend[el.dataset.k] = el.dataset.v; App.rerender(); },
+  pendFiltros() { Act.pendDrop({ dataset: { k: 'dre' } }); },
+  reagendar(el) {
+    const id = el.dataset.id, e = App.escola(id) || {};
+    const sup = App.supervisor();
+    Sheet.open('<h3>Programar visita</h3><p class="muted" style="margin:2px 0 6px">' + esc(e.nome || '') + '</p>' +
+      F.row('<div class="fld"><span class="lbl">Data</span><input class="inp" type="date" id="rgData" min="' + hojeISO() + '" value="' + somaD(hojeISO(), 1) + '"></div>', '<div class="fld"><span class="lbl">Hora</span><input class="inp" type="time" id="rgHora" value="08:30"></div>') +
+      (sup ? '<span class="lbl">Equipe</span><select class="inp" id="rgEq">' + (App._equipesLista || [{ id: '', nome: '—' }]).map(q => '<option value="' + q.id + '">' + esc(q.nome) + '</option>').join('') + '</select>' : '') +
+      '<span class="lbl">Observação</span><input class="inp" id="rgNota" placeholder="Ex.: confirmado com a diretora">' +
+      '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="rgConf" style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span class="t">Confirmado com a unidade</span></label>' +
+      '<button class="btn btn-teal mt" id="rgOk">' + I('calendar', 20) + ' Salvar data</button>', { focus: false });
+    $('#rgOk').onclick = async () => {
+      carregando($('#rgOk'), true);
+      try {
+        await Api.run('reagendar', { escolaId: id, data: $('#rgData').value, hora: $('#rgHora').value, nota: $('#rgNota').value, confirmado: $('#rgConf').checked, equipeId: $('#rgEq') ? $('#rgEq').value : '' });
+        Sheet.close(true); toast('Visita programada para ' + dataBR($('#rgData') ? $('#rgData').value : hojeISO()), 'ok');
+        Dados.limpar('pend'); Dados.limpar('prog'); Dados.limpar('esc:'); App.refresh(); App.rerender();
+      } catch (e) { carregando($('#rgOk'), false); toast(e.net ? 'Sem conexão: reagendamento precisa de internet.' : e.message, 'err'); }
+    };
+  },
+  async cobrar(el) {
+    carregando(el, true);
+    try {
+      const r = await Api.run('cobrarDre', { escolaId: el.dataset.id });
+      carregando(el, false);
+      if (r.enviado) toast('E-mail enviado para ' + r.nome, 'ok');
+      else if (r.tel && await confirmar({ titulo: 'DRE sem e-mail cadastrado', texto: 'Ligar para ' + esc(r.nome || 'o engenheiro da DRE') + ' (' + esc(r.tel) + ')?', sim: 'Ligar' })) abrirExterno('tel:' + r.tel.replace(/[^\d+]/g, ''));
+      Dados.limpar('pend'); App.rerender();
+    } catch (e) { carregando(el, false); toast(e.message, 'err'); }
+  },
+  async verRegistro(el) {
+    Sheet.open('<h3>Registro da recusa</h3><div id="regBox"><div class="skel" style="height:120px"></div></div>');
+    try {
+      const r = await Api.run('registro', { escolaId: el.dataset.id });
+      encher('#regBox', '<p><b>' + esc(r.motivo) + '</b><br><span class="muted small">' + dataBR(r.em, true) + ' · ' + hora(r.em) + (r.por ? ' · ' + esc(r.por) : '') + '</span></p>' +
+        (r.quem ? '<div class="kh">Quem recusou</div><p style="margin:4px 0 12px">' + esc(r.quem) + '</p>' : '') + (r.descricao ? '<div class="kh">Relato</div><p style="margin:4px 0 12px">' + esc(r.descricao) + '</p>' : '') +
+        (r.foto ? '<img src="' + r.foto + '" style="width:100%;border-radius:12px" alt="Registro">' : ''));
+    } catch (e) { encher('#regBox', '<p class="muted">' + esc(e.message) + '</p>'); }
+  },
+  async retomar(el) {
+    const id = el.dataset.id, e = App.escola(id);
+    if (!e) return;
+    if (App.V && App.V.status === 'em_andamento') { toast('Finalize ou cancele a vistoria em andamento antes.', 'warn'); return; }
+    carregando(el, true, 'Carregando');
+    let base = null;
+    try { base = await Api.run('retomarDados', { escolaId: id }); } catch (x) { carregando(el, false); toast(x.net ? 'Retomar precisa de internet para trazer os dados anteriores.' : x.message, 'err', 4000); return; }
+    carregando(el, false);
+    Sheet.close(true);
+    const pos = await Geo.get(6000);
+    if (!(await confirmar({ titulo: 'Retomar ' + e.nome + '?', texto: base ? 'Os dados e fotos da visita anterior (' + esc(base.codigo) + ') serão carregados. Você completa só o que faltou; será criada uma nova versão.' : 'Não há visita anterior; será iniciada uma vistoria nova.', sim: 'Retomar' }))) return;
+    iniciarVistoria(e, pos, base);
+  },
+  async reabrir(el) {
+    Sheet.open('<h3>Reabrir para retorno</h3><p class="muted small">A escola volta para o roteiro como retorno. A versão atual fica guardada no histórico.</p><span class="lbl">Motivo</span><input class="inp" id="rbMot" placeholder="Ex.: medir o QDC do bloco B"><button class="btn btn-navy mt" id="rbOk">Reabrir</button>', { focus: true });
+    $('#rbOk').onclick = async () => {
+      carregando($('#rbOk'), true);
+      try { await Api.run('reabrir', { vistoriaId: el.dataset.id, motivo: $('#rbMot').value }); Sheet.close(true); toast('Escola marcada para retorno', 'ok'); Dados.mem = {}; App.refresh(); App.rerender(); }
+      catch (e) { carregando($('#rbOk'), false); toast(e.message, 'err'); }
+    };
+  },
+  enviarCopiaDe(el) {
+    App.route.params.vistoriaId = el.dataset.id; App.route.params.email = el.dataset.email;
+    Act.enviarCopia();
+  },
+  async validar(el) {
+    const d = el.dataset.d;
+    let nota = '';
+    if (d === 'correcao') {
+      Sheet.open('<h3>Pedir correção</h3><p class="muted small">A equipe recebe a pendência e a escola volta ao roteiro como retorno.</p><textarea class="inp" id="vlNota" placeholder="O que precisa ser corrigido?"></textarea><button class="btn btn-red mt" id="vlOk">Enviar pedido</button>', { focus: true });
+      $('#vlOk').onclick = async () => { nota = $('#vlNota').value; if (!nota) { toast('Descreva a correção.', 'warn'); return; } Sheet.close(true); await Act._validar(el.dataset.id, d, nota); };
+      return;
+    }
+    await Act._validar(el.dataset.id, d, '');
+  },
+  async _validar(id, d, nota) {
+    try { await Api.run('validar', { vistoriaId: id, decisao: d, nota: nota }); toast(d === 'aprovada' ? 'Vistoria aprovada' : 'Correção solicitada', 'ok'); Dados.mem = {}; App.rerender(); }
+    catch (e) { toast(e.message, 'err'); }
+  }
+});
+Act.checkinEscola = (orig => async function (el) {
+  if (el && el.dataset && el.dataset.retomar) return Act.retomar(el);
+  return orig(el);
+})(Act.checkinEscola);
+Views.etapa = (orig => Object.assign(function (p) { const out = orig(p); out.after = null; return out; }, { onBack: orig.onBack }))(Views.etapa);
+</script>

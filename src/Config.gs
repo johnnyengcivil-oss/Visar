@@ -21,7 +21,10 @@ const CONFIG_PADRAO = {
   RAIO_CHECKIN_M: '400',
   TOKEN_DIAS: '30',
   ENVIO_AUTOMATICO_COPIA: 'sim',
-  KW_POR_TR: '1.05'
+  KW_POR_TR: '1.05',
+  META_INICIO: '',
+  META_DATA: '',
+  NOME_APP: 'VistAR'
 };
 
 const DESCRICOES_CONFIG = {
@@ -37,29 +40,35 @@ const DESCRICOES_CONFIG = {
   RAIO_CHECKIN_M: 'Distância máxima (m) da escola para check-in sem confirmação',
   TOKEN_DIAS: 'Dias que o login permanece válido no aparelho',
   ENVIO_AUTOMATICO_COPIA: 'sim/nao · envia o relatório para a unidade ao finalizar',
-  KW_POR_TR: 'Premissa de consumo elétrico (kW por TR) no pré-dimensionamento'
+  KW_POR_TR: 'Premissa de consumo elétrico (kW por TR) no pré-dimensionamento',
+  META_INICIO: 'Início do contrato (AAAA-MM-DD) · base da linha de meta do painel',
+  META_DATA: 'Data para concluir todas as escolas (AAAA-MM-DD)',
+  NOME_APP: 'Nome exibido nos e-mails'
 };
 
 /** Abas e colunas. A primeira coluna é sempre a chave. */
 const SCHEMA = {
   Config: ['chave', 'valor', 'descricao'],
   Usuarios: ['id', 'email', 'nome', 'cargo', 'equipeId', 'rg', 'empresa', 'telefone', 'perfil', 'dres',
-    'fotoId', 'senhaHash', 'salt', 'tokenVersao', 'ativo', 'criadoEm'],
+    'fotoId', 'senhaHash', 'salt', 'tokenVersao', 'ativo', 'criadoEm', 'matricula', 'codigoAtivacao', 'codigoExpira',
+    'ultimoAcesso'],
   Equipes: ['id', 'nome', 'membros', 'supervisorNome', 'supervisorTel', 'status', 'statusDesde',
-    'vistoriaAtual', 'destinoEscolaId', 'destinoEta'],
+    'vistoriaAtual', 'destinoEscolaId', 'destinoEta', 'lat', 'lng', 'vistoEm', 'fila'],
   DREs: ['id', 'nome', 'engenheiroNome', 'engenheiroCargo', 'engenheiroTel', 'engenheiroEmail'],
   Escolas: ['id', 'nome', 'cie', 'dre', 'etapaEnsino', 'logradouro', 'numero', 'cep', 'bairro', 'complemento',
     'lat', 'lng', 'diretor', 'telefone', 'email', 'ambientesPrevistos', 'imovel', 'idadeAnos', 'fotoId',
     'status', 'nota', 'atualizadoEm'],
-  Roteiro: ['id', 'data', 'hora', 'equipeId', 'escolaId', 'ordem', 'status', 'nota', 'vistoriaId'],
+  Roteiro: ['id', 'data', 'hora', 'equipeId', 'escolaId', 'ordem', 'status', 'nota', 'vistoriaId', 'tipo', 'horaFim',
+    'confirmado', 'criadoPor'],
   Vistorias: ['id', 'codigo', 'escolaId', 'equipeId', 'usuarioId', 'status', 'checkin', 'checkout',
     'latIn', 'lngIn', 'latOut', 'lngOut', 'pastaId', 'relVistoriaId', 'relCompletoId', 'assinadoEm',
-    'copiaPara', 'copiaEnviadaEm', 'resumo', 'atualizadoEm'],
+    'copiaPara', 'copiaEnviadaEm', 'resumo', 'atualizadoEm', 'validacao', 'validadoPor', 'validadoEm', 'validacaoNota',
+    'versao', 'retomadaDe', 'historico'],
   Etapas: ['id', 'vistoriaId', 'etapa', 'atualizadoEm', 'autor', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'],
   Fotos: ['id', 'vistoriaId', 'escolaId', 'etapa', 'slot', 'ref', 'legenda', 'fileId', 'criadoEm', 'autor', 'lat', 'lng'],
   Pendencias: ['id', 'vistoriaId', 'escolaId', 'etapa', 'descricao', 'status', 'criadoEm', 'resolvidoEm', 'resolvidoPor'],
   Cancelamentos: ['id', 'vistoriaId', 'escolaId', 'motivo', 'houveRecusa', 'quemRecusou', 'descricao', 'fotoId',
-    'usuarioId', 'criadoEm'],
+    'usuarioId', 'criadoEm', 'situacao', 'cobradoEm'],
   Log: ['ts', 'usuario', 'acao', 'detalhe']
 };
 
@@ -80,6 +89,7 @@ function configPublica_(cfg) {
     consorcio: cfg.CONSORCIO,
     contrato: cfg.CONTRATO,
     raioCheckin: Number(cfg.RAIO_CHECKIN_M) || 400,
+    responsavelTecnico: cfg.RESPONSAVEL_TECNICO, responsavelCargo: cfg.RESPONSAVEL_TECNICO_CARGO, lote: cfg.LOTE,
     versao: VERSAO
   };
 }
@@ -147,12 +157,23 @@ function carregarExemplo() {
   });
 
   const emailAdmin = Session.getEffectiveUser().getEmail() || 'admin@exemplo.com';
-  criarUsuario_({ id: 'u-marcos', email: emailAdmin, nome: 'Marcos Silva', cargo: 'Técnico de campo', equipeId: 'eq02',
-    rg: '12.345.678-9', empresa: CONFIG_PADRAO.EMPRESA, telefone: '(11) 98888-0000', perfil: 'admin',
+  // Você (quem instalou) entra como coordenação/admin: vê o módulo de supervisão e pode usar o modo campo.
+  criarUsuario_({ id: 'u-admin', email: emailAdmin, nome: 'Johnny', cargo: 'Coordenação técnica', equipeId: 'eq02',
+    empresa: CONFIG_PADRAO.EMPRESA, perfil: 'admin', matricula: '1000', dres: 'Penha, Itaquera, Ermelino Matarazzo' }, 'vistar2026');
+  criarUsuario_({ id: 'u-marcos', email: 'marcos.silva@exemplo.com', nome: 'Marcos Silva', cargo: 'Técnico de campo', equipeId: 'eq02',
+    rg: '12.345.678-9', empresa: CONFIG_PADRAO.EMPRESA, telefone: '(11) 98888-0000', perfil: 'tecnico', matricula: '1001',
     dres: 'Penha, Itaquera, Ermelino Matarazzo' }, 'vistar2026');
   criarUsuario_({ id: 'u-joao', email: 'joao.souza@exemplo.com', nome: 'João Souza', cargo: 'Técnico de campo',
-    equipeId: 'eq02', rg: '23.456.789-0', empresa: CONFIG_PADRAO.EMPRESA, perfil: 'tecnico',
-    dres: 'Penha, Itaquera, Ermelino Matarazzo' }, 'vistar2026');
+    equipeId: 'eq02', rg: '23.456.789-0', empresa: CONFIG_PADRAO.EMPRESA, perfil: 'tecnico', matricula: '1002',
+    dres: 'Penha, Itaquera, Ermelino Matarazzo' });
+  const codJoao = gerarCodigo_(Db.find('Usuarios', 'u-joao'));
+  criarUsuario_({ id: 'u-roberto', email: 'roberto.lima@exemplo.com', nome: 'Roberto Lima', cargo: 'Supervisor', equipeId: '',
+    empresa: CONFIG_PADRAO.EMPRESA, perfil: 'supervisor', matricula: '2001', dres: 'Penha, Itaquera, Ermelino Matarazzo' }, 'vistar2026');
+  Db.upsert('Equipes', { id: 'eq01', nome: 'Equipe 01', membros: 'Paulo Reis, Ana Lopes', supervisorNome: 'Roberto Lima', supervisorTel: '(11) 99000-0000', status: 'em_campo', statusDesde: agora });
+  Db.upsert('Equipes', { id: 'eq03', nome: 'Equipe 03', membros: 'Lucas Prado, Rita Alves', supervisorNome: 'Roberto Lima', supervisorTel: '(11) 99000-0000', status: 'disponivel', statusDesde: agora });
+  Db.upsert('Config', { chave: 'META_INICIO', valor: dia(-30), descricao: DESCRICOES_CONFIG.META_INICIO });
+  Db.upsert('Config', { chave: 'META_DATA', valor: dia(31), descricao: DESCRICOES_CONFIG.META_DATA });
+  CacheService.getScriptCache().remove('cfg');
 
   const escolas = [
     ['e-farialima', 'EMEF Brigadeiro Faria Lima', '10183472', 'Penha', 'Rua Heloísa Helena', '29', '03660-000', 'Vila Antonieta', -23.5442, -46.5262, 13, 'agendada'],
@@ -190,10 +211,52 @@ function carregarExemplo() {
   ];
   rot.forEach(r => Db.upsert('Roteiro', { id: r[0], data: r[1], hora: r[2], equipeId: 'eq02', escolaId: r[3], ordem: r[4], status: r[5], nota: r[6] }));
 
+  // Histórico das escolas concluídas (alimenta o painel e a tela da escola).
+  rot.filter(r => r[5] === 'concluida').forEach((r, i) => {
+    const ini = r[1] + 'T' + (r[2] || '08:30') + ':00-03:00';
+    const fim = new Date(new Date(ini).getTime() + (150 + i * 9) * 60000).toISOString();
+    Db.upsert('Vistorias', {
+      id: 'v-ex' + i, codigo: 'VST-EX-' + ('00' + (i + 1)).slice(-3), escolaId: r[3], equipeId: 'eq02', usuarioId: 'u-marcos',
+      status: 'finalizada', checkin: new Date(ini).toISOString(), checkout: fim, assinadoEm: fim, validacao: i < 3 ? 'aprovada' : '',
+      resumo: JSON.stringify({ ambientes: 18 + i * 3, fotos: 35 + i * 4, pendencias: i % 3 }), versao: '1', atualizadoEm: fim
+    });
+    Db.upsert('Roteiro', { id: r[0], vistoriaId: 'v-ex' + i, horaFim: Utilities.formatDate(new Date(fim), 'America/Sao_Paulo', 'HH:mm') });
+  });
+  Db.upsert('Cancelamentos', { id: 'c-ex1', vistoriaId: '', escolaId: 'e-bilac', motivo: 'Aguardando autorização da DRE', situacao: 'aguardando_autorizacao',
+    houveRecusa: 'nao', descricao: 'Falta autorização da DRE para acesso à cobertura. A equipe concluiu o que foi possível sem subir.', usuarioId: 'u-marcos', criadoEm: agora });
+  Db.upsert('Cancelamentos', { id: 'c-ex2', vistoriaId: '', escolaId: 'e-deodoro', motivo: 'Retorno solicitado pela unidade', situacao: 'retorno_solicitado',
+    houveRecusa: 'nao', descricao: 'A diretora pediu para voltar outro dia por causa da reforma do pátio. Parte do levantamento já foi feita.', usuarioId: 'u-marcos', criadoEm: agora });
+
   Db.upsert('Pendencias', { id: 'p-ex1', vistoriaId: '', escolaId: 'e-deodoro', etapa: 'eletrica', descricao: 'Fotos e medição do QDC', status: 'aberta', criadoEm: agora });
   Db.upsert('Pendencias', { id: 'p-ex2', vistoriaId: '', escolaId: 'e-bilac', etapa: 'estrutura', descricao: 'Acesso à cobertura para fotos', status: 'aberta', criadoEm: agora });
 
-  console.log('Dados de exemplo carregados. Login: ' + emailAdmin + ' / senha: vistar2026');
+  const msg = 'Dados de exemplo carregados.\n' +
+    '• Coordenação (você): ' + emailAdmin + ' / senha vistar2026\n' +
+    '• Técnico: marcos.silva@exemplo.com (ou matrícula 1001) / senha vistar2026\n' +
+    '• Supervisor: roberto.lima@exemplo.com (ou matrícula 2001) / senha vistar2026\n' +
+    '• Primeiro acesso de teste: matrícula 1002 com o código ' + codJoao;
+  console.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* executado pelo editor */ }
+  return msg;
+}
+
+/**
+ * Cria (ou recria) o acesso de administrador para quem está executando o script
+ * e mostra um código de ativação para usar em "Primeiro acesso" no app.
+ */
+function criarAdministrador() {
+  instalarVistAR();
+  const email = Session.getEffectiveUser().getEmail();
+  if (!email) throw new Error('Não foi possível identificar seu e-mail Google.');
+  const ex = Db.all('Usuarios').find(x => String(x.email).toLowerCase() === email.toLowerCase());
+  const u = Db.upsert('Usuarios', Object.assign({ ativo: 'sim', criadoEm: agora_(), tokenVersao: '1', cargo: 'Coordenação técnica', empresa: getConfig_().EMPRESA },
+    ex || { id: 'u-admin', nome: email.split('@')[0] }, { email: email, perfil: 'admin', matricula: (ex && ex.matricula) || '1000', ativo: 'sim' }));
+  const cod = gerarCodigo_(u);
+  const msg = 'Acesso de administrador pronto.\n\nNo app, toque em "Primeiro acesso" e informe:\n• Usuário: ' + email + ' (ou matrícula ' + u.matricula + ')\n• Código: ' + cod +
+    '\n\nO código vale por 72 horas. Depois edite seu nome e equipe na aba Usuarios, se quiser.';
+  console.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* executado pelo editor: veja o registro de execução */ }
+  return msg;
 }
 
 /* ───────────────────────── Menu da planilha ───────────────────────── */
@@ -202,6 +265,7 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('VistAR')
       .addItem('Instalar / atualizar estrutura', 'instalarVistAR')
+      .addItem('Criar meu acesso de administrador', 'criarAdministrador')
       .addItem('Carregar dados de exemplo', 'carregarExemplo')
       .addSeparator()
       .addItem('Definir senha de usuário…', 'menuSenha_')

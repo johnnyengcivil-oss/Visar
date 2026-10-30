@@ -51,6 +51,7 @@ function montarBoot_(u) {
 }
 
 function parse_(s) { try { return s ? JSON.parse(s) : {}; } catch (e) { return {}; } }
+function historico_(s) { const h = parse_(s); return Array.isArray(h) ? h : []; }
 
 function vistoriaCliente_(v) {
   return {
@@ -74,11 +75,19 @@ function acaoCheckin_(p, u) {
   const escola = Db.find('Escolas', p.escolaId);
   if (!escola) throw new Error('Escola não encontrada.');
 
+  const anterior = p.retomarDe ? Db.find('Vistorias', p.retomarDe) : null;
   const v = Db.upsert('Vistorias', {
-    id: p.id, codigo: proximoCodigo_(), escolaId: escola.id, equipeId: u.equipeId, usuarioId: u.id,
-    status: 'em_andamento', checkin: p.checkin || agora_(), latIn: p.lat || '', lngIn: p.lng || '', atualizadoEm: agora_()
+    id: p.id, codigo: anterior ? anterior.codigo + '-R' + ((Number(anterior.versao) || 1) + 1) : proximoCodigo_(), escolaId: escola.id, equipeId: u.equipeId, usuarioId: u.id,
+    status: 'em_andamento', checkin: p.checkin || agora_(), latIn: p.lat || '', lngIn: p.lng || '', atualizadoEm: agora_(),
+    versao: anterior ? String((Number(anterior.versao) || 1) + 1) : '1', retomadaDe: anterior ? anterior.id : '',
+    historico: anterior ? JSON.stringify(historico_(anterior.historico).length ? historico_(anterior.historico) : [{ v: Number(anterior.versao) || 1, em: anterior.checkout || anterior.checkin, nota: anterior.status }]) : ''
   });
   pastaVistoria_(v, escola);
+  // Retomada: as fotos já enviadas continuam valendo na nova versão.
+  (p.fotosCopiar || []).forEach(c => {
+    const f = Db.find('Fotos', c.de);
+    if (f && !Db.find('Fotos', c.id)) Db.upsert('Fotos', Object.assign({}, f, { id: c.id, vistoriaId: v.id }));
+  });
 
   const hoje = hoje_();
   let rot = Db.where('Roteiro', r => r.equipeId === u.equipeId && r.escolaId === escola.id && r.status !== 'concluida')
@@ -170,11 +179,13 @@ function acaoCancelar_(p, u) {
   const escola = Db.find('Escolas', v.escolaId) || {};
   Db.upsert('Cancelamentos', {
     id: v.id, vistoriaId: v.id, escolaId: v.escolaId, motivo: p.motivo, houveRecusa: p.houveRecusa ? 'sim' : 'nao',
-    quemRecusou: p.quemRecusou || '', descricao: p.descricao || '', fotoId: p.fotoId || '', usuarioId: u.id, criadoEm: agora_()
+    quemRecusou: p.quemRecusou || '', descricao: p.descricao || '', fotoId: p.fotoId || '', usuarioId: u.id, criadoEm: agora_(),
+    situacao: p.situacao || situacaoDoMotivo_(p.motivo)
   });
   Db.upsert('Vistorias', { id: v.id, status: 'cancelada', checkout: agora_(), atualizadoEm: agora_() });
   const nota = 'Cancelada: ' + p.motivo;
-  Db.where('Roteiro', r => r.vistoriaId === v.id).forEach(r => Db.upsert('Roteiro', { id: r.id, status: 'retorno', nota: nota }));
+  Db.where('Roteiro', r => r.vistoriaId === v.id).forEach(r => Db.upsert('Roteiro', { id: r.id, status: 'retorno', tipo: 'retorno', nota: nota,
+    data: p.retornoData || '', hora: p.retornoHora || '' }));
   Db.upsert('Escolas', { id: v.escolaId, status: 'retorno', nota: nota, atualizadoEm: agora_() });
   Db.upsert('Pendencias', {
     id: 'pc-' + v.id, vistoriaId: v.id, escolaId: v.escolaId, etapa: 'cancelamento',
@@ -234,8 +245,11 @@ function acaoFinalizar_(p, u) {
     const assinado = !!(rev.assResp && rev.assEmpresa);
     Db.upsert('Vistorias', {
       id: v.id, status: 'finalizada', checkout: p.checkout || agora_(), latOut: p.lat || '', lngOut: p.lng || '',
-      assinadoEm: assinado ? agora_() : '', resumo: JSON.stringify(p.resumo || {}), atualizadoEm: agora_()
+      assinadoEm: assinado ? agora_() : '', resumo: JSON.stringify(p.resumo || {}), atualizadoEm: agora_(), validacao: 'pendente',
+      historico: JSON.stringify(historico_(v.historico).concat([{ v: Number(v.versao) || 1, em: agora_(), nota: 'gerada' }]))
     });
+    if (v.retomadaDe) Db.where('Pendencias', x => x.vistoriaId === v.retomadaDe && x.status === 'aberta')
+      .forEach(x => Db.upsert('Pendencias', { id: x.id, status: 'resolvida', resolvidoEm: agora_(), resolvidoPor: u.id }));
     Db.where('Roteiro', r => r.vistoriaId === v.id).forEach(r => Db.upsert('Roteiro', { id: r.id, status: 'concluida', nota: '' }));
   }
 
@@ -287,22 +301,6 @@ function acaoStatusEquipe_(p, u) {
 }
 
 /* ───────────────────────── Escola e pendências ───────────────────────── */
-
-function acaoEscola_(p, u) {
-  const e = Db.find('Escolas', p.escolaId);
-  if (!e) throw new Error('Escola não encontrada.');
-  const hist = Db.where('Vistorias', v => v.escolaId === e.id)
-    .sort((a, b) => a.checkin < b.checkin ? 1 : -1)
-    .map(v => {
-      let urlV = '', urlC = '';
-      try { if (v.relVistoriaId) urlV = DriveApp.getFileById(v.relVistoriaId).getUrl(); } catch (x) { /* removido */ }
-      try { if (v.relCompletoId) urlC = DriveApp.getFileById(v.relCompletoId).getUrl(); } catch (x) { /* removido */ }
-      const c = v.status === 'cancelada' ? Db.find('Cancelamentos', v.id) : null;
-      return { id: v.id, codigo: v.codigo, status: v.status, checkin: v.checkin, checkout: v.checkout, urlVistoria: urlV, urlCompleto: urlC, motivo: c ? c.motivo : '' };
-    });
-  const pend = Db.where('Pendencias', x => x.escolaId === e.id && x.status === 'aberta');
-  return { escola: e, historico: hist, pendencias: pend };
-}
 
 function acaoResolverPendencia_(p, u) {
   const x = Db.find('Pendencias', p.id);

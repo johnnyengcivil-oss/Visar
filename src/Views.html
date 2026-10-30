@@ -16,7 +16,7 @@ const Views = {
       '<div class="hdr-user"><span class="avatar">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" class="hidden" alt="">' : '') + esc(u.iniciais || '') + '</span>' +
       '<span><div class="nm">' + esc(u.nome || '') + '</div><div class="sub"><b>' + esc(eq.nome || '') + '</b>' + (eq.parceiro ? ' · com ' + esc(eq.parceiro) : '') + '</div></span>' +
       '<span class="sync hidden" data-sync style="margin-left:auto"></span>' +
-      '<button class="icon-btn" style="margin-left:6px" data-act="go" data-to="credencial" aria-label="Credencial e menu">' + I('menu', 28, 1.8) + '</button></div></header>';
+      '<button class="icon-btn" style="margin-left:6px" data-act="menu" aria-label="Menu">' + I('menu', 28, 1.8) + '</button></div></header>';
   },
   hdrSimples(t, sub, extra) {
     return '<header class="lhdr"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><span style="flex:1;min-width:0"><h1>' + esc(t) + '</h1>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</span>' + (extra || '') + '</header>';
@@ -167,7 +167,7 @@ const Views = {
     return {
       header: Views.hdrApp(),
       body: topo + Views.stats() +
-        '<div class="sec-t"><h2>Roteiro de hoje · ' + dataBR(hojeISO()) + '</h2><button class="link" data-act="tab" data-to="escolas">Ver todas</button></div>' +
+        '<div class="sec-t"><h2>Roteiro de hoje · ' + dataBR(hojeISO()) + '</h2><button class="btn btn-navy btn-sm" style="border-radius:99px;width:auto" data-act="go" data-to="programacao">' + I('calendar', 18) + ' Programação</button></div>' +
         (rot.length ? rot.map(r => {
           const prox = r.data === hojeISO() && r.status === 'agendada' && primeiroHoje && (V || (D.equipe || {}).status === 'em_transito');
           if (r.data === hojeISO() && r.status === 'agendada') primeiroHoje = false;
@@ -426,18 +426,25 @@ const Views = {
     if (!App.form || !App.form._cancel) App.form = { _cancel: true, motivo: 'Recusa da direção', recusa: true, quem: '', desc: '' };
     const f = App.form;
     const motivos = [['Recusa da direção', 'Escola não autorizou o levantamento'], ['Escola fechada ou sem acesso', 'Portaria, chave ou responsável ausente'],
-      ['Área interditada ou em obra', 'Impede medir os ambientes com segurança'], ['Problema da equipe', 'Falta de material, veículo ou integrante'], ['Outro motivo', '']];
+      ['Área interditada ou em obra', 'Impede medir os ambientes com segurança'], ['Retorno solicitado pela unidade', 'A direção pediu para voltar outro dia'],
+      ['Não houve tempo para finalizar', 'A equipe volta para completar as etapas'], ['Aguardando autorização da DRE', 'Falta liberação para alguma área'],
+      ['Problema da equipe', 'Falta de material, veículo ou integrante'], ['Outro motivo', '']];
     const foto = Vist.fotosDe('cancelamento.registro')[0];
     return {
       header: Views.hdrNavy('Cancelar vistoria', V.d.dados.nome),
       body: '<div class="danger-box"><span style="color:var(--red)">' + I('alert', 28) + '</span><span><b>Esta ação não pode ser desfeita</b><span>A vistoria será encerrada e a escola volta para o roteiro como pendente de nova visita.</span></span></div>' +
         F.card('Motivo do cancelamento', motivos.map(m => '<button class="radio' + (f.motivo === m[0] ? ' on' : '') + '" data-act="pick" data-fix="1" data-k="@motivo" data-v="' + m[0] + '"><span class="dot"></span><span><div class="t">' + m[0] + '</div>' + (m[1] ? '<div class="s">' + m[1] + '</div>' : '') + '</span></button>').join('') +
           (f.motivo === 'Outro motivo' ? F.text('@outro', '', { ph: 'Descreva o motivo' }) : '')) +
-        F.card('Recusa <small>(se a direção recusou)</small>', '<div class="seg"><button class="chip' + (f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="1">Houve recusa</button><button class="chip' + (!f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="">Não houve</button></div>' +
+        (f.motivo !== 'Recusa da direção' ? F.card('Situação encontrada', F.area('@desc', '', 'Ex.: a diretora pediu retorno por causa da reforma do pátio; faltou medir o QDC') +
+            '<div class="mt"></div><button class="ph-wide' + (foto ? ' has' : '') + '" data-act="foto" data-slot="cancelamento.registro" data-etapa="cancelamento" data-rot="Registro">' +
+            (foto ? '<img data-th="' + foto.id + '" alt="">' : I('camera', 28)) + '<span><b>Foto do registro</b><small>' + (foto ? 'Foto anexada · toque para ver' : 'Opcional · ex.: portão fechado, ofício') + '</small></span></button>') : '') +
+        (f.motivo !== 'Recusa da direção' ? '' : F.card('Recusa <small>(se a direção recusou)</small>', '<div class="seg"><button class="chip' + (f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="1">Houve recusa</button><button class="chip' + (!f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="">Não houve</button></div>' +
           (f.recusa ? F.text('@quem', 'Quem recusou', { ph: 'Nome e cargo' }) + F.area('@desc', 'Descreva o que foi dito', 'Resumo da recusa, com as palavras da pessoa') +
             '<div class="mt"></div>' + '<button class="ph-wide' + (foto ? ' has' : '') + '" data-act="foto" data-slot="cancelamento.registro" data-etapa="cancelamento" data-rot="Registro">' +
-            (foto ? '<img data-th="' + foto.id + '" alt="">' : I('camera', 28)) + '<span><b>Foto do registro</b><small>' + (foto ? 'Foto anexada · toque para ver' : 'Opcional · ex.: documento ou ofício de recusa') + '</small></span></button>' : '')) +
-        F.card('Ao cancelar', '<ul class="list-dot"><li>Os dados e fotos já coletados ficam guardados no histórico.</li><li>A escola volta ao roteiro como pendente de nova visita.</li><li>O motivo e o nome de quem recusou ficam registrados.</li></ul>'),
+            (foto ? '<img data-th="' + foto.id + '" alt="">' : I('camera', 28)) + '<span><b>Foto do registro</b><small>' + (foto ? 'Foto anexada · toque para ver' : 'Opcional · ex.: documento ou ofício de recusa') + '</small></span></button>' : ''))) +
+        F.card('Retorno combinado <small>(opcional)</small>', F.row('<div class="fld"><span class="lbl">Data</span><input class="inp" type="date" data-k="@retData" min="' + hojeISO() + '" value="' + esc(f.retData || '') + '"></div>',
+          '<div class="fld"><span class="lbl">Hora</span><input class="inp" type="time" data-k="@retHora" value="' + esc(f.retHora || '') + '"></div>')) +
+        F.card('Ao cancelar', '<ul class="list-dot"><li>Os dados e fotos já coletados ficam guardados e podem ser retomados na próxima visita.</li><li>A escola volta ao roteiro como pendente de nova visita.</li><li>O motivo e o nome de quem recusou ficam registrados.</li></ul>'),
       foot: '<button class="btn btn-out" data-act="back">Voltar</button><button class="btn btn-red" data-act="cancelarConfirmar">Confirmar cancelamento</button>'
     };
   },

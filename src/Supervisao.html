@@ -1,0 +1,227 @@
+<script>
+'use strict';
+/* ═══════════════════════ VistAR · módulo de supervisão ═══════════════════════
+   Perfis supervisor/coordenação/admin: painel do dia, equipes ao vivo,
+   validação de vistorias, programação das equipes e usuários/acessos. */
+
+const ST_EQ = {
+  em_campo: ['Em campo', 'b-blue', 'andamento'], em_transito: ['Em trânsito', 'b-amber', 'agendada'],
+  disponivel: ['Disponível', 'b-green', 'concluida'], pausa: ['Pausa', 'b-gray', 'nao_iniciada']
+};
+const PERFIS = [['tecnico', 'Técnico de campo'], ['supervisor', 'Supervisor'], ['coordenacao', 'Coordenação'], ['admin', 'Administrador']];
+const haQuanto = iso => {
+  if (!iso) return 'sem sinal';
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? 'agora' : m < 60 ? 'há ' + m + ' min' : m < 1440 ? 'há ' + Math.floor(m / 60) + ' h' : 'há ' + Math.floor(m / 1440) + ' d';
+};
+
+Views.nav = (orig => function (sel) {
+  if (!App.supervisor()) return orig(sel);
+  const n = (App._sup || {}).aValidar || 0;
+  const it = [['home', 'chart', 'Painel'], ['equipesSup', 'users', 'Equipes'], ['validar', 'shield', 'Validar'], ['pendencias', 'checksq', 'Pendências']];
+  return '<nav class="nav"><div class="nav-in">' + it.map(x => '<button class="' + (sel === x[0] ? 'on' : '') + '" data-act="tab" data-to="' + x[0] + '">' + I(x[1], 26, 1.8) + x[2] +
+    (x[0] === 'validar' && n ? '<span class="dot">' + n + '</span>' : '') + '</button>').join('') + '</div></nav>';
+})(Views.nav);
+
+Views.home = (orig => function (p) {
+  if (App.data && App.supervisor()) return Views.painelSup(p);
+  return orig(p);
+})(Views.home);
+
+Views.eqCard = (eq, completo) => {
+  const s = ST_EQ[eq.status] || ST_EQ.pausa;
+  const a = eq.atual;
+  return '<section class="eq-card ' + esc(eq.status) + '"><div class="row" style="align-items:flex-start"><span style="flex:1;min-width:0"><b style="font-size:17px">' + esc(eq.nome) + '</b><div class="muted small">' + esc(eq.membros.join(' e ')) + '</div></span><span class="badge ' + s[1] + '">' + s[0] + '</span></div>' +
+    (a ? '<button class="sum-row" style="border:0;padding:10px 0 4px" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: a.id }) + '\'><span><b>' + esc(a.escola) + '</b><small>Check-in ' + hora(a.checkin) + ' · ' + duracao(a.checkin) + ' em campo · ' + plural(a.fotos, 'foto') + '</small></span><span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>'
+      : eq.status === 'em_transito' && eq.destino ? '<div class="small" style="margin-top:8px">A caminho de <b>' + esc(eq.destino) + '</b>' + (eq.eta ? ' · chegada ' + hora(eq.eta) : '') + '</div>' : '') +
+    '<div class="row small muted" style="margin-top:8px;gap:14px;flex-wrap:wrap"><span>' + I('checksq', 15) + ' hoje ' + eq.hoje.concluidas + '/' + eq.hoje.total + '</span><span>' + I('cloud', 15) + ' ' + haQuanto(eq.vistoEm) + '</span>' +
+      (eq.fila ? '<span class="c-amber" style="font-weight:700">' + eq.fila + ' na fila</span>' : '') + '</div>' +
+    (completo ? '<div class="grid2 mt"><button class="btn btn-out btn-sm" style="width:100%" data-act="go" data-to="programacao" data-p=\'' + JSON.stringify({ modo: 'dia', equipeId: eq.id }) + '\'>' + I('calendar', 16) + ' Programação</button>' +
+      (eq.lat && eq.lng ? '<button class="btn btn-out btn-sm" style="width:100%" data-act="eqMapa" data-lat="' + eq.lat + '" data-lng="' + eq.lng + '">' + I('pin', 16) + ' Localização</button>' : '<span></span>') + '</div>' : '') + '</section>';
+};
+
+Views.painelSup = () => {
+  const u = (App.data || {}).usuario || {};
+  return {
+    header: Views.hdrApp(),
+    body: '<div class="sec-t" style="margin-top:2px"><span><h2>Supervisão</h2><div class="muted small">' + esc(['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][new Date().getDay()]) + ', ' + dataBR(hojeISO(), true) + ' · olá, ' + esc(String(u.nome || '').split(' ')[0]) + '</div></span>' +
+        '<button class="btn btn-navy btn-sm" style="border-radius:99px;width:auto" data-act="go" data-to="programacao" data-p=\'{"modo":"semana","equipeId":""}\'>' + I('calendar', 18) + ' Programação</button></div>' +
+      '<div id="supBox"><div class="skel" style="height:90px;margin-bottom:14px"></div><div class="skel" style="height:160px"></div></div>' +
+      '<div class="sec-t"><h2>Contrato</h2><button class="link" data-act="tab" data-to="escolas">Ver escolas</button></div><div id="painel">' + SKEL + '</div>',
+    nav: 'home',
+    after() {
+      Dados.obter('sup:equipes', 'equipes', {}, (r, c, e) => {
+        if (!r) return encher('#supBox', erroBox(e));
+        App._sup = r;
+        const n = st => r.equipes.filter(x => x.status === st).length;
+        encher('#supBox', '<div class="kpi4">' +
+            '<div style="border-left-color:var(--c-and)"><small>Em campo</small><b>' + n('em_campo') + '</b><span>de ' + r.equipes.length + ' equipes</span></div>' +
+            '<div style="border-left-color:var(--amber)"><small>Em trânsito</small><b>' + n('em_transito') + '</b><span>' + n('disponivel') + ' disponíveis</span></div>' +
+            '<button style="border-left:4px solid var(--teal);text-align:left;background:var(--card);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow)" data-act="tab" data-to="validar"><small class="kh">A validar</small><b style="font-size:26px;display:block">' + r.aValidar + '</b><span class="small">vistorias finalizadas</span></button>' +
+            '<div style="border-left-color:var(--red)"><small>Alertas</small><b>' + r.alertas.length + '</b><span>' + (r.alertas.length ? 'veja abaixo' : 'tudo em ordem') + '</span></div></div>' +
+          (r.alertas.length ? '<section class="card"><div class="kh">Alertas</div>' + r.alertas.map(a => '<div class="alerta"><span style="color:' + (a.tipo === 'cancelada' ? 'var(--red)' : 'var(--amber)') + '">' + I('alert', 20) + '</span><span style="flex:1">' + esc(a.texto) + '</span>' +
+            (a.escolaId ? '<button class="link small" data-act="escolaAbrir" data-id="' + a.escolaId + '">Abrir</button>' : '') + '</div>').join('') + '</section>' : '') +
+          '<div class="sec-t"><h2>Equipes agora</h2><button class="link" data-act="tab" data-to="equipesSup">Mapa</button></div>' +
+          r.equipes.map(eq => Views.eqCard(eq, false)).join(''));
+        const nav = $('.nav'); if (nav) nav.outerHTML = Views.nav('home');
+      });
+      Dados.obter('painel:contrato:', 'painel', { periodo: 'mes', dre: '' }, (d, c, e) => { encher('#painel', d ? Painel.html(d) : erroBox(e)); Graf.ligar(); });
+      clearInterval(App._supTimer);
+      App._supTimer = setInterval(() => { if (App.route && App.route.name === 'home' && App.supervisor() && !App.editando()) { Dados.limpar('sup:'); App.rerender(); } }, 120000);
+    }
+  };
+};
+
+Views.equipesSup = () => ({
+  header: Views.hdrApp(),
+  body: '<div id="eqBox">' + SKEL + '</div>',
+  nav: 'equipesSup',
+  after() {
+    Dados.obter('sup:equipes', 'equipes', {}, (r, c, e) => {
+      if (!r) return encher('#eqBox', erroBox(e));
+      App._sup = r;
+      const pts = r.equipes.filter(x => x.lat && x.lng).map(x => ({ id: x.id, nome: x.nome, lat: Number(x.lat), lng: Number(x.lng), st: (ST_EQ[x.status] || ST_EQ.pausa)[2], act: 'eqFoco' }));
+      encher('#eqBox', '<section class="card"><div class="card-h"><h3>Onde estão as equipes</h3><span class="muted small">posição do último sinal</span></div>' +
+          (pts.length ? Graf.mapa(pts, 220) : '<div class="empty small">Nenhuma equipe enviou localização ainda. A posição chega quando o app está aberto, a cada 5 minutos.</div>') +
+          '<div class="leg">' + Object.keys(ST_EQ).map(k => '<span><i style="background:' + ST_ESC[ST_EQ[k][2]][1] + '"></i>' + ST_EQ[k][0] + '</span>').join('') + '</div></section>' +
+        r.equipes.map(eq => '<div id="eq-' + eq.id + '">' + Views.eqCard(eq, true) + '</div>').join(''));
+    });
+  }
+});
+
+Views.validar = () => {
+  const f = App._valF = App._valF || 'pendente';
+  return {
+    header: Views.hdrApp(),
+    body: '<div class="segbar">' + [['pendente', 'A validar'], ['correcao', 'Correção'], ['aprovada', 'Aprovadas'], ['todas', 'Todas']].map(x => '<button class="' + (f === x[0] ? 'on' : '') + '" data-act="valF" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<div id="valBox">' + SKEL + '</div>',
+    nav: 'validar',
+    after() {
+      Dados.obter('val:' + f, 'validacoes', { filtro: f }, (l, c, e) => {
+        if (!l) return encher('#valBox', erroBox(e));
+        encher('#valBox', l.length ? l.map(v => {
+          const r = v.resumo || {};
+          const b = { aprovada: ['b-green', 'Aprovada'], correcao: ['b-red', 'Correção'], pendente: ['b-amber', 'A validar'] }[v.validacao];
+          return '<section class="card"><button class="sum-row" style="border:0;padding:0" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: v.id }) + '\'><span style="min-width:0"><b>' + esc(v.escola) + '</b><small>' + esc(v.codigo + ' · ' + (v.equipe || '') + ' · ' + dataBR(v.checkout, true)) + '</small></span><span class="badge ' + b[0] + '">' + b[1] + '</span></button>' +
+            '<div class="counts" style="margin:12px 0 6px"><div><b>' + (r.ambientes || 0) + '</b><span>ambientes</span></div><div><b>' + (r.fotos || 0) + '</b><span>fotos</span></div><div><b class="' + (r.pendencias ? 'c-amber' : '') + '">' + (r.pendencias || 0) + '</b><span>pendências</span></div></div>' +
+            '<div class="small ' + (v.assinado ? 'c-green' : 'c-amber') + '" style="font-weight:700">' + (v.assinado ? '✓ Assinada pela unidade e pela empresa' : 'Sem todas as assinaturas') + '</div>' +
+            (v.nota ? '<div class="quote small" style="background:var(--field);border-radius:10px;padding:8px 10px;margin-top:8px">' + esc(v.nota) + '</div>' : '') +
+            (v.validacao === 'pendente' ? '<div class="grid2 mt"><button class="btn btn-out-red btn-sm" style="width:100%" data-act="validar" data-id="' + v.id + '" data-d="correcao">Pedir correção</button><button class="btn btn-teal btn-sm" style="width:100%" data-act="validar" data-id="' + v.id + '" data-d="aprovada">' + I('check', 16) + ' Aprovar</button></div>' : '') + '</section>';
+        }).join('') : '<div class="empty">' + I('shield', 40) + '<div>Nada aqui.</div></div>');
+      });
+    }
+  };
+};
+
+Views.usuarios = () => {
+  const q = (App._uq || '').toLowerCase();
+  return {
+    header: Views.hdrNavy('Supervisão', 'Usuários e acessos'),
+    body: '<div class="search">' + I('search', 20) + '<input class="inp" id="uBusca" placeholder="Buscar por nome, e-mail ou matrícula" value="' + esc(App._uq || '') + '"></div><div id="uBox">' + SKEL + '</div>',
+    fab: '<button class="fab" data-act="usuarioNovo">' + I('plus', 22) + ' Novo usuário</button>',
+    after() {
+      const b = $('#uBusca');
+      b.oninput = () => { App._uq = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.usuariosRender(), 150); };
+      Dados.obter('usuarios', 'usuarios', {}, (r, c, e) => { App._usr = r; if (!r) return encher('#uBox', erroBox(e)); App._equipesLista = r.equipes; Views.usuariosRender(); }, { semLS: true });
+    }
+  };
+};
+Views.usuariosRender = () => {
+  const r = App._usr; if (!r) return;
+  const q = (App._uq || '').toLowerCase();
+  const eq = id => (r.equipes.find(e => e.id === id) || {}).nome || 'Sem equipe';
+  const l = r.usuarios.filter(x => !q || (x.nome + ' ' + x.email + ' ' + x.matricula).toLowerCase().indexOf(q) >= 0);
+  encher('#uBox', '<div class="muted small" style="margin:0 4px 10px">' + plural(l.length, 'usuário') + ' · ' + r.usuarios.filter(x => x.codigoPendente && !x.ativado).length + ' aguardando primeiro acesso</div>' +
+    l.map(x => '<button class="sch" data-act="usuarioEditar" data-id="' + x.id + '"><span class="avatar" style="' + (x.ativo ? '' : 'background:var(--muted-2)') + '">' + esc(String(x.nome).split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()) + '</span>' +
+      '<span style="flex:1;min-width:0"><b style="font-size:16px">' + esc(x.nome) + '</b><div class="muted small">' + esc([x.matricula ? 'Mat. ' + x.matricula : '', x.email].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="tags" style="margin-top:6px"><span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc((PERFIS.find(p => p[0] === x.perfil) || [0, x.perfil])[1]) + '</span><span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc(eq(x.equipeId)) + '</span>' +
+      (!x.ativo ? '<span class="tag b-red" style="font-size:12px;padding:3px 9px">Desativado</span>' : x.ativado ? '<span class="tag b-green" style="font-size:12px;padding:3px 9px">Ativo' + (x.ultimoAcesso ? ' · ' + haQuanto(x.ultimoAcesso) : '') + '</span>' : '<span class="tag b-amber" style="font-size:12px;padding:3px 9px">Aguardando 1º acesso</span>') + '</div></span>' +
+      '<span class="chev">' + I('right') + '</span></button>').join(''));
+};
+
+Views.formUsuario = x => {
+  const r = App._usr || { equipes: [], dres: [] };
+  x = x || { perfil: 'tecnico', ativo: true, dres: (r.dres || []).join(', ') };
+  const dres = String(x.dres || '').split(',').map(s => s.trim()).filter(Boolean);
+  Sheet.open('<h3>' + (x.id ? 'Editar usuário' : 'Novo usuário') + '</h3>' +
+    '<span class="lbl">Nome completo</span><input class="inp" id="usNome" value="' + esc(x.nome || '') + '">' +
+    F.row('<div class="fld"><span class="lbl">Matrícula</span><input class="inp" id="usMat" inputmode="numeric" value="' + esc(x.matricula || '') + '"></div>', '<div class="fld"><span class="lbl">RG</span><input class="inp" id="usRg" value="' + esc(x.rg || '') + '"></div>') +
+    '<span class="lbl">E-mail (recebe o código de acesso)</span><input class="inp" id="usEmail" type="email" inputmode="email" value="' + esc(x.email || '') + '">' +
+    F.row('<div class="fld"><span class="lbl">Cargo</span><input class="inp" id="usCargo" value="' + esc(x.cargo || 'Técnico de campo') + '"></div>', '<div class="fld"><span class="lbl">Telefone</span><input class="inp" id="usTel" type="tel" value="' + esc(x.telefone || '') + '"></div>') +
+    F.row('<div class="fld"><span class="lbl">Perfil</span><select class="inp" id="usPerfil">' + PERFIS.map(p => '<option value="' + p[0] + '"' + (x.perfil === p[0] ? ' selected' : '') + '>' + p[1] + '</option>').join('') + '</select></div>',
+      '<div class="fld"><span class="lbl">Equipe</span><select class="inp" id="usEq"><option value="">Sem equipe</option>' + r.equipes.map(e => '<option value="' + e.id + '"' + (x.equipeId === e.id ? ' selected' : '') + '>' + esc(e.nome) + '</option>').join('') + '</select></div>') +
+    '<span class="lbl">DREs autorizadas</span><div class="chips" id="usDres">' + (r.dres || []).map(d => '<button class="chip' + (dres.indexOf(d) >= 0 ? ' on' : '') + '" data-v="' + esc(d) + '" onclick="this.classList.toggle(\'on\')">' + esc(d) + '</button>').join('') + '</div>' +
+    (x.id ? '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="usAtivo"' + (x.ativo ? ' checked' : '') + ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span class="t">Acesso ativo</span></label>' : '') +
+    '<button class="btn btn-navy mt" id="usOk">' + (x.id ? 'Salvar' : 'Criar e enviar código') + '</button>' +
+    (x.id ? '<button class="btn btn-out mt" id="usCod">' + I('lock', 18) + ' ' + (x.ativado ? 'Redefinir acesso (novo código)' : 'Reenviar código de acesso') + '</button>' : '') +
+    '<p class="muted small" style="margin-top:10px">O usuário entra em <b>Primeiro acesso</b> com a matrícula ou e-mail e o código de 6 dígitos (válido por 72 h) e cria a própria senha.</p>');
+  $('#usOk').onclick = async () => {
+    const b = $('#usOk'); carregando(b, true);
+    try {
+      const res = await Api.run('salvarUsuario', {
+        id: x.id || '', nome: $('#usNome').value.trim(), matricula: $('#usMat').value.trim(), email: $('#usEmail').value.trim(), rg: $('#usRg').value.trim(),
+        cargo: $('#usCargo').value.trim(), telefone: $('#usTel').value.trim(), perfil: $('#usPerfil').value, equipeId: $('#usEq').value,
+        dres: $$('#usDres .chip.on').map(c => c.dataset.v), ativo: $('#usAtivo') ? $('#usAtivo').checked : true
+      });
+      const nome = $('#usNome').value.trim();
+      Sheet.close(true);
+      Dados.limpar('usuarios'); App.rerender();
+      if (res.codigo) Views.mostrarCodigo(nome, res.codigo); else toast('Usuário salvo', 'ok');
+    } catch (e) { carregando(b, false); toast(e.message, 'err', 4000); }
+  };
+  if ($('#usCod')) $('#usCod').onclick = async () => {
+    if (x.ativado && !(await confirmar({ titulo: 'Redefinir o acesso de ' + x.nome + '?', texto: 'A senha atual deixa de valer e o usuário cria outra com o novo código.', sim: 'Redefinir', perigo: true }))) return;
+    try { const r2 = await Api.run('novoCodigo', { id: x.id, bloquearSenha: !!x.ativado }); Dados.limpar('usuarios'); App.rerender(); Views.mostrarCodigo(x.nome, r2.codigo); }
+    catch (e) { toast(e.message, 'err'); }
+  };
+};
+Views.mostrarCodigo = (nome, cod) => {
+  if (!cod) return;
+  Sheet.open('<h3>Código de acesso</h3><p class="muted">' + esc(nome || '') + ' recebeu este código por e-mail (se tiver e-mail cadastrado). Você também pode passar pessoalmente:</p>' +
+    '<div style="font-size:40px;font-weight:800;letter-spacing:10px;text-align:center;margin:16px 0;color:var(--navy)">' + esc(cod) + '</div>' +
+    '<p class="muted small" style="text-align:center">Válido por 72 horas · usar em "Primeiro acesso"</p><div class="grid2"><button class="btn btn-out" data-act="copiar" data-v="' + esc(cod) + '">' + I('copy', 18) + ' Copiar</button><button class="btn btn-navy" data-act="sheetClose">Pronto</button></div>');
+};
+
+/* ───── Visitas (programação feita pela supervisão) ───── */
+Views.formVisita = (x, p) => {
+  const D = App.data || {};
+  x = x || { data: (p && p.ref) || somaD(hojeISO(), 1), hora: '08:30', tipo: 'visita', equipeId: (p && p.equipeId) || ((App._equipesLista || [])[0] || {}).id };
+  const eqs = App._equipesLista || [];
+  Sheet.open('<h3>' + (x.id ? 'Editar visita' : 'Nova visita') + '</h3>' +
+    '<span class="lbl">Tipo</span><div class="seg" id="vsTipo">' + [['visita', 'Vistoria'], ['retorno', 'Retorno'], ['escritorio', 'Escritório']].map(t => '<button class="chip' + (x.tipo === t[0] ? ' on' : '') + '" data-v="' + t[0] + '" onclick="$$(\'#vsTipo .chip\').forEach(c=>c.classList.remove(\'on\'));this.classList.add(\'on\');$(\'#vsEscBox\').classList.toggle(\'hidden\',this.dataset.v===\'escritorio\')">' + t[1] + '</button>').join('') + '</div>' +
+    '<div id="vsEscBox" class="' + (x.tipo === 'escritorio' ? 'hidden' : '') + '"><span class="lbl">Escola</span><select class="inp" id="vsEsc">' + (D.escolas || []).slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(e => '<option value="' + e.id + '"' + (x.escolaId === e.id ? ' selected' : '') + '>' + esc(e.nome) + ' · ' + esc(e.dre) + '</option>').join('') + '</select></div>' +
+    '<span class="lbl">Equipe</span><select class="inp" id="vsEq">' + eqs.map(e => '<option value="' + e.id + '"' + (x.equipeId === e.id ? ' selected' : '') + '>' + esc(e.nome) + '</option>').join('') + '</select>' +
+    '<div class="grid3" style="align-items:end"><div><span class="lbl">Data</span><input class="inp" type="date" id="vsData" value="' + esc(x.data) + '"></div><div><span class="lbl">Início</span><input class="inp" type="time" id="vsHora" value="' + esc(x.hora || '') + '"></div><div><span class="lbl">Fim</span><input class="inp" type="time" id="vsFim" value="' + esc(x.horaFim || '') + '"></div></div>' +
+    '<span class="lbl">Observação</span><input class="inp" id="vsNota" value="' + esc(x.nota || '') + '" placeholder="Ex.: diretora confirmou presença">' +
+    '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="vsConf"' + (x.confirmado ? ' checked' : '') + ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span class="t">Confirmado com a unidade</span></label>' +
+    '<button class="btn btn-navy mt" id="vsOk">Salvar visita</button>' + (x.id ? '<button class="btn btn-out-red mt" id="vsDel">Excluir</button>' : ''));
+  $('#vsOk').onclick = async () => {
+    carregando($('#vsOk'), true);
+    try {
+      await Api.run('salvarVisita', { id: x.id || '', tipo: ($('#vsTipo .chip.on') || {}).dataset.v, escolaId: $('#vsEsc').value, equipeId: $('#vsEq').value, data: $('#vsData').value,
+        hora: $('#vsHora').value, horaFim: $('#vsFim').value, nota: $('#vsNota').value, confirmado: $('#vsConf').checked });
+      Sheet.close(true); toast('Visita salva', 'ok'); Dados.limpar('prog'); App.refresh(); App.rerender();
+    } catch (e) { carregando($('#vsOk'), false); toast(e.message, 'err', 4000); }
+  };
+  if ($('#vsDel')) $('#vsDel').onclick = async () => {
+    try { await Api.run('excluirVisita', { id: x.id }); Sheet.close(true); toast('Visita excluída'); Dados.limpar('prog'); App.rerender(); } catch (e) { toast(e.message, 'err'); }
+  };
+};
+
+Object.assign(Act, {
+  valF(el) { App._valF = el.dataset.v; App.rerender(); },
+  usuarioNovo() { Views.formUsuario(null); },
+  usuarioEditar(el) { Views.formUsuario((App._usr.usuarios || []).find(u => u.id === el.dataset.id)); },
+  visitaNova(el) { Views.formVisita(null, JSON.parse(el.dataset.p || '{}')); },
+  visitaEditar(el) {
+    const k = Object.keys(Dados.mem).filter(x => x.indexOf('prog:') === 0);
+    let it = null;
+    k.forEach(x => { it = it || (Dados.mem[x].itens || []).find(i => i.id === el.dataset.visita); });
+    if (!it) return Router.go('escola', { id: el.dataset.id });
+    if (it.status === 'concluida' || it.status === 'em_andamento') return Router.go('escola', { id: it.escolaId });
+    Views.formVisita(it);
+  },
+  eqFoco(el) { const c = $('#eq-' + el.dataset.id); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+  eqMapa(el) { abrirExterno('https://www.google.com/maps/search/?api=1&query=' + el.dataset.lat + ',' + el.dataset.lng); }
+});
+</script>

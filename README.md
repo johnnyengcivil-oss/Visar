@@ -9,7 +9,11 @@ App da Web para as equipes de campo do **Consórcio Climatiza São Paulo**: chec
 3. **Cancelar vistoria** com motivo, recusa e foto do registro.
 4. **Relatório de vistoria** (folha única no formato SME) e **Relatório completo** (capa, resumo executivo, dados, entrada, estrutura, elétrica, ambientes, equipamentos, pré-dimensionamento de climatização, fotos, termo).
 5. **Vistoria finalizada**: check-out, status da equipe, envio e documentos, rota para a próxima escola.
-6. **Escolas**, **Fotos**, **Pendências** e **Credencial** (crachá com foto, supervisor, engenheiros das DREs, alterar senha, sair).
+6. **Escolas** (painel do contrato: avanço, meta, evolução diária, DREs, equipes, mapa) › detalhe da escola › detalhe da vistoria (somente leitura, com resultado de carga e histórico de versões).
+7. **Fotos** (galeria por escola com filtros, fila de envio e visualizador com legenda, local, autor, compartilhar) e **câmera própria** com guia, carimbo e atalhos dos itens da etapa.
+8. **Pendências de retorno** por situação (retorno solicitado, não concluída, sem acesso, recusa, aguardando DRE) com progresso das etapas, Retomar (continua de onde parou, nova versão), Reagendar, Cobrar DRE e Ver registro.
+9. **Programação** em dia, semana e mês. **Login** (e-mail ou matrícula, manter conectado, esqueci a senha), **Primeiro acesso** com código, **Configurações** (texto, tema escuro, qualidade das fotos, só Wi-Fi, notificações, permissões, biometria), **Credencial** e **assinatura em tela cheia**.
+10. **Módulo de supervisão** (perfis supervisor, coordenação e admin): painel do dia com alertas, equipes ao vivo (status, posição, fila de envio), validação de vistorias (aprovar ou pedir correção), programação das equipes e usuários/códigos de acesso.
 
 ## Recursos do Google usados
 
@@ -38,13 +42,11 @@ App da Web para as equipes de campo do **Consórcio Climatiza São Paulo**: chec
 
 ## Instalação
 
-1. Crie um projeto em <https://script.google.com> (ou, para usar o menu, abra uma planilha nova › Extensões › Apps Script).
-2. Copie os arquivos de `src/` para o projeto (mesmos nomes; `.gs` como Script e `.html` como HTML), incluindo `appsscript.json` (Configurações do projeto › mostrar o arquivo de manifesto).
-   - Com o [clasp](https://github.com/google/clasp): `cp .clasp.json.example .clasp.json`, preencha o `scriptId` e rode `clasp push`.
-3. No editor, execute **`instalarVistAR`** e autorize. Isso cria a planilha (ou usa a vinculada), as abas, a pasta `VistAR` no Drive e o gatilho diário.
-4. Opcional: execute **`carregarExemplo`** para criar os dados dos protótipos. O login é o seu e-mail Google com a senha `vistar2026` (troque em Credencial › Alterar senha).
-5. **Implantar › Nova implantação › App da Web**: executar como *Eu*; acesso *Qualquer pessoa com conta Google* (ou *Qualquer pessoa*, se os técnicos não tiverem conta Google; o login do app continua obrigatório).
-6. Abra a URL no celular e use "Adicionar à tela inicial".
+**Guia completo para leigos:** [`docs/GUIA_DE_IMPLANTACAO.md`](docs/GUIA_DE_IMPLANTACAO.md) (também em PDF: `docs/Guia_de_Implantacao_VistAR.pdf`).
+
+Resumo: crie uma planilha › Extensões › Apps Script › cole os **5 arquivos da pasta `dist/`** (`appsscript.json`, `Codigo.gs`, `Index`, `RelatorioVistoria`, `RelatorioCompleto`) › execute `instalarVistAR` › execute `criarAdministrador` (ou `carregarExemplo`) › Implantar › App da Web (executar como *Eu*).
+
+Com o [clasp](https://github.com/google/clasp), dá para usar `src/` direto: `cp .clasp.json.example .clasp.json`, preencha o `scriptId` e rode `clasp push`.
 
 ### Cadastro
 
@@ -60,8 +62,12 @@ Carga = área × fator do uso (ex.: sala de aula 650 BTU/h·m², informática 80
 ## Desenvolvimento local
 
 ```bash
-node dev/build-preview.js   # gera dev/preview.html com servidor simulado (dev/mock.js)
-node dev/smoke.js           # percorre o fluxo inteiro no Chromium e salva screenshots em dev/shots
+node dev/gas-sim.js          # testa o servidor (.gs) com Planilha/Drive/e-mail simulados
+node dev/build-preview.js    # gera dev/preview.html com servidor simulado (dev/mock.js)
+node dev/smoke.js            # percorre todas as telas no Chromium e salva screenshots em dev/shots
+node dev/build-dist.js       # gera dist/ (5 arquivos para colar no Apps Script)
+node dev/gas-sim.js --dist   # testa o pacote dist/
+python3 dev/build-guia.py    # gera o PDF do guia de implantação
 ```
 
 ## Estrutura
@@ -81,6 +87,11 @@ src/
   Styles.html            visual
   App.html               núcleo: estado, fila offline, câmera, GPS, roteador
   Vistoria.html          formulários e regras das 6 etapas
-  Views.html             telas
+  Views.html             telas principais
+  Telas.html             login, primeiro acesso, configurações, programação, painel, galeria, detalhes
+  Supervisao.html        módulo de supervisão (cliente)
+  Supervisao.gs          painel, equipes, validação, programação, pendências, galeria, usuários
+dist/                    pacote de instalação (5 arquivos)
+docs/                    guia de implantação (Markdown e PDF)
 dev/                     preview local e teste de fumaça
 ```

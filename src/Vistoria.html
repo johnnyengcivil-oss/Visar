@@ -139,7 +139,8 @@ const Fotos = {
     if (!V) return;
     const id = uid();
     const pos = Geo.last;
-    const f = { id: id, etapa: alvo.etapa, slot: alvo.slot, ref: alvo.ref || '', criadoEm: new Date().toISOString(), st: 'pend' };
+    const f = { id: id, etapa: alvo.etapa, slot: alvo.slot, ref: alvo.ref || '', criadoEm: new Date().toISOString(), st: 'pend',
+      legenda: alvo.rotulo || '', lat: pos ? pos.lat : '', lng: pos ? pos.lng : '' };
     V.fotos[id] = f;
     Thumbs.put(id, img.thumb);
     Vist.salvar(true);
@@ -160,11 +161,18 @@ const Fotos = {
     Vist.salvar(true);
   },
   /** Abre a câmera para um slot; se já houver foto, abre o visualizador. */
+  /** Alvo da câmera: o item tocado + os demais itens do mesmo cartão (atalhos na câmera). */
   alvo(el) {
     const V = App.V;
+    const etapa = el.dataset.etapa || el.dataset.slot.split('.')[0];
+    const card = el.closest('.card');
+    const opcoes = card ? $$('[data-act=foto]:not([data-add])', card).map(b => ({ slot: b.dataset.slot, rot: b.dataset.rot || 'Foto', etapa: b.dataset.etapa || etapa, ref: b.dataset.ref || '' })) : [];
+    const bloco = /\.b(\d+)\./.exec(el.dataset.slot);
+    const rot = el.dataset.rot || 'Foto';
     return {
-      slot: el.dataset.slot, etapa: el.dataset.etapa || el.dataset.slot.split('.')[0], ref: el.dataset.ref || '',
-      rotulo: el.dataset.rot || '', carimbo: V ? curto((App.escola(V.escolaId) || {}).nome || V.d.dados.nome) + (V.codigo ? ' · ' + V.codigo : '') : ''
+      slot: el.dataset.slot, etapa: etapa, ref: el.dataset.ref || '', rotulo: rot, opcoes: opcoes.length > 1 ? opcoes : [],
+      escola: V ? V.d.dados.nome : '', sub: (ROTULO_ETAPA[etapa] || '') + ' · ' + rot + (bloco ? ' · Bloco ' + BLOCO(bloco[1]) : ''),
+      dica: { eletrica: 'Enquadre o quadro inteiro e a identificação dos circuitos', entrada: 'Enquadre a caixa inteira, o medidor e o disjuntor', dados: 'Fotos padrão, enquadrando o prédio inteiro', estrutura: 'Mostre a cobertura ou a área inteira', ambientes: 'Do canto da sala, mostrando janelas e teto', equipamentos: 'Chapa legível, sem reflexo' }[etapa]
     };
   },
   ver(id, lista) {
@@ -409,13 +417,13 @@ Object.assign(Act, {
     const f = App.form;
     if (!f.motivo) { toast('Escolha o motivo.', 'warn'); return; }
     if (f.motivo === 'Outro motivo' && !f.outro) { toast('Descreva o motivo.', 'warn'); return; }
-    if (f.recusa && !f.quem) { toast('Informe quem recusou.', 'warn'); return; }
+    if (f.recusa && f.motivo === 'Recusa da direção' && !f.quem) { toast('Informe quem recusou.', 'warn'); return; }
     if (!(await confirmar({ titulo: 'Confirmar cancelamento?', texto: 'Esta ação não pode ser desfeita.', sim: 'Cancelar vistoria', nao: 'Voltar', perigo: true }))) return;
     const V = App.V;
     const foto = Vist.fotosDe('cancelamento.registro')[0];
     await Sync.add('cancelar', {
-      vistoriaId: V.id, motivo: f.motivo === 'Outro motivo' ? f.outro : f.motivo, houveRecusa: !!f.recusa,
-      quemRecusou: f.quem || '', descricao: f.desc || '', fotoId: foto ? foto.id : ''
+      vistoriaId: V.id, motivo: f.motivo === 'Outro motivo' ? f.outro : f.motivo, houveRecusa: f.motivo === 'Recusa da direção' && !!f.recusa,
+      quemRecusou: f.quem || '', descricao: f.desc || '', fotoId: foto ? foto.id : '', retornoData: f.retData || '', retornoHora: f.retHora || ''
     });
     // Reflete na tela já, sem esperar o servidor.
     const rot = (App.data.roteiro || []).find(r => r.escolaId === V.escolaId && r.status !== 'concluida');

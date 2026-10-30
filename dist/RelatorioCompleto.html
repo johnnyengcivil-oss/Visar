@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<?
+  var et = R.et, en = et.entrada || {}, es = et.estrutura || {}, el = et.eletrica || {}, am = et.ambientes || {}, eq = et.equipamentos || {};
+  var blocos = es.blocos || [];
+  var nBlocos = Math.max(1, Number(es.nBlocos) || blocos.length || 1);
+  var itens = am.itens || [];
+  var internos = itens.filter(function (a) { return !a.externo; });
+  var externos = itens.filter(function (a) { return a.externo; });
+  var equips = eq.itens || [];
+  var porPagina = 12;
+  var pagFotos = Math.max(1, Math.ceil(fotosRel.length / porPagina));
+  var total = 10 + pagFotos;
+  var pg = 0;
+  var F = R.fmt;
+  var C = R.calc;
+?>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #0F1E36; font-size: 10px; margin: 0; line-height: 1.45; }
+  .pg { width: 100%; padding: 26px 38px 22px; page-break-after: always; position: relative; background: #fff; }
+  .pg:last-child { page-break-after: auto; }
+  .topo { font-size: 7px; color: #6B7A90; border-bottom: 1px solid #E3E8EF; padding-bottom: 6px; margin-bottom: 18px; }
+  .topo span { float: right; }
+  .rodape { font-size: 7px; color: #6B7A90; border-top: 1px solid #E3E8EF; padding-top: 6px; margin-top: 20px; }
+  .rodape span { float: right; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: #0F2140; }
+  h3 { font-size: 11px; margin: 16px 0 6px; color: #1F8F86; text-transform: uppercase; letter-spacing: .4px; }
+  table { border-collapse: collapse; width: 100%; }
+  table.kv th { text-align: left; font-weight: normal; color: #6B7A90; width: 20%; padding: 5px 6px; border-bottom: 1px solid #EEF1F5; font-size: 9px; }
+  table.kv td { width: 30%; padding: 5px 6px; border-bottom: 1px solid #EEF1F5; font-weight: bold; }
+  table.grid th { background: #F1F4F8; text-align: left; padding: 5px 6px; font-size: 8.5px; color: #43536B; border-bottom: 1px solid #DCE2EA; }
+  table.grid td { padding: 5px 6px; border-bottom: 1px solid #EEF1F5; }
+  table.grid td.n, table.grid th.n { text-align: right; }
+  .kpis td { width: 25%; border: 1px solid #E3E8EF; padding: 10px; text-align: center; }
+  .kpis b { display: block; font-size: 17px; color: #0F2140; }
+  .kpis span { font-size: 8px; color: #6B7A90; }
+  ul { margin: 4px 0 0 14px; padding: 0; }
+  li { margin-bottom: 4px; }
+  .alerta { background: #FFF1DB; border-left: 3px solid #E08A00; padding: 8px 10px; margin-top: 10px; }
+  .ok { color: #1E9E55; font-weight: bold; }
+  .ruim { color: #D93C3C; font-weight: bold; }
+  .capa { background: #0F2140; color: #fff; padding: 70px 50px 40px; min-height: 900px; }
+  .capa .linha th { color: #7FA3C8; font-size: 8px; font-weight: normal; text-align: left; padding: 4px 0; width: 32%; letter-spacing: .4px; }
+  .capa .linha td { color: #fff; font-size: 9.5px; padding: 4px 0; }
+  .foto { width: 33.33%; padding: 4px; vertical-align: top; }
+  .foto img { width: 100%; height: 150px; object-fit: cover; border-radius: 4px; display: block; }
+  .foto .sem { height: 150px; background: #F1F4F8; border-radius: 4px; }
+  .foto div.leg { font-size: 7.5px; color: #43536B; margin-top: 3px; }
+  .ass { width: 50%; text-align: center; padding: 20px; vertical-align: bottom; }
+  .ass img { height: 60px; }
+  .ass .l { border-top: 1px solid #333; padding-top: 4px; font-size: 8px; }
+  <? if (modo === 'tela') { ?>
+  html, body { background: transparent; }
+  body { white-space: nowrap; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding: 0 24px; }
+  .pg { display: inline-block; vertical-align: top; white-space: normal; width: 794px; min-height: 1123px; margin: 0 14px 30px 0; box-shadow: 0 10px 30px rgba(15,33,64,.18); scroll-snap-align: center; }
+  <? } ?>
+</style>
+</head>
+<body>
+
+<!-- 1 · Capa -->
+<div class="pg" style="padding:0">
+  <div class="topo" style="padding:14px 38px 8px;margin:0;border:0"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <div class="capa">
+    <div style="font-size:8.5px;letter-spacing:.6px;color:#C9D6E6"><?= String(R.cfg.CONSORCIO).toUpperCase() ?> · CONTRATO <?= R.cfg.CONTRATO ?> – <?= String(R.cfg.LOTE).toUpperCase() ?></div>
+    <div style="font-size:25px;font-weight:bold;margin-top:80px;line-height:1.25">Relatório Técnico de Vistoria<br>e Pré-dimensionamento de Climatização</div>
+    <div style="font-size:11px;color:#C9D6E6;margin-top:10px"><?= R.d.nome ?> · DRE <?= R.d.dre ?></div>
+    <table class="linha" style="margin-top:60px">
+      <tr><th>VISTORIA Nº</th><td><?= R.v.codigo ?></td></tr>
+      <tr><th>DATA</th><td><?= R.dataLonga ?> · <?= R.horario ?></td></tr>
+      <tr><th>EQUIPE DE CAMPO</th><td><?= R.equipe.nome ?> – <?= R.equipe.membros ?></td></tr>
+      <tr><th>RESPONSÁVEL TÉCNICO</th><td><?= R.cfg.RESPONSAVEL_TECNICO ?> – <?= R.cfg.RESPONSAVEL_TECNICO_CARGO ?></td></tr>
+      <tr><th>RESPONSÁVEL PELA UNIDADE</th><td><?= R.rev.respNome || '—' ?><?= R.rev.respCargo ? ' – ' + R.rev.respCargo : '' ?><?= R.rev.respRF ? ' · RF ' + R.rev.respRF : '' ?></td></tr>
+      <tr><th>SISTEMA PREVISTO</th><td><?= R.cfg.SISTEMA_PREVISTO ?></td></tr>
+    </table>
+    <div style="margin-top:220px;border-top:1px solid #33496E;padding-top:10px;font-size:8px;color:#C9D6E6">Documento gerado automaticamente pelo VistAR a partir dos dados coletados em campo. Os índices de pré-dimensionamento são premissas para orçamento e não substituem o projeto executivo de climatização e elétrica.</div>
+  </div>
+  <div class="rodape" style="padding:8px 38px">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 2 · Resumo executivo -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>1. Resumo executivo</h2>
+  <table class="kpis"><tr>
+    <td><b><?= F(C.areaClim) ?> m²</b><span>área climatizável</span></td>
+    <td><b><?= C.ambientes ?></b><span>ambientes internos</span></td>
+    <td><b><?= F(C.tr, 1) ?> TR</b><span>carga térmica estimada</span></td>
+    <td><b><?= F(C.kwAc, 1) ?> kW</b><span>potência elétrica do AC</span></td>
+  </tr></table>
+  <p style="margin-top:14px"><b>Objeto.</b> Levantamento das condições físicas e de instalações elétricas da unidade para implantação do sistema de climatização (<?= R.cfg.SISTEMA_PREVISTO ?>) nos ambientes de permanência prolongada (salas de aula, leitura, informática e administrativos).</p>
+  <h3>Conclusões</h3>
+  <ul>
+    <li>A entrada de energia é <b><?= en.padrao === 'MT' ? 'em média tensão' : 'em baixa tensão' ?></b><?= en.padrao === 'MT' ? '' : ' (' + (en.tensao || 'tensão não informada') + ')' ?><? if (C.kwEntrada) { ?>, com capacidade estimada de <b><?= F(C.kwEntrada, 1) ?> kW</b><?= C.kwMedido ? ' e demanda medida de ' + F(C.kwMedido, 1) + ' kW' : '' ?><? } ?>.</li>
+    <? if (C.entradaSuporta === true) { ?><li class="ok">Pela premissa adotada, a entrada atual comporta a carga adicional de climatização (<?= F(C.kwAc, 1) ?> kW).</li><? } ?>
+    <? if (C.entradaSuporta === false) { ?><li class="ruim">Pela premissa adotada, a entrada atual NÃO comporta a carga adicional de climatização (<?= F(C.kwAc, 1) ?> kW): prever aumento de carga junto à concessionária.</li><? } ?>
+    <li>Aterramento da entrada: <b><?= en.aterr || 'não informado' ?></b><?= en.neutro ? '; neutro ' + String(en.neutro).toLowerCase() : '' ?>.</li>
+    <li>Estrutura com <b><?= nBlocos ?> bloco(s)</b>; cobertura predominante: <b><?= (blocos[0] || {}).cobTipo || '—' ?></b>; condensadoras previstas em <b><?= (es.vrfLocal || []).join(', ') || '—' ?></b>.</li>
+    <li>Ambientes levantados: <b><?= C.ambientes ?> internos</b> e <b><?= C.externos ?> externos</b>, totalizando <?= F(C.area) ?> m².</li>
+    <? equips.filter(function (x) { return x.desc; }).forEach(function (x) { ?><li>Potência de <b><?= x.nome ?></b> não identificada (chapa inacessível).</li><? }); ?>
+  </ul>
+  <? if (R.pend.length) { ?>
+  <div class="alerta"><b>Pendências registradas (<?= R.pend.length ?>)</b>
+    <ul><? R.pend.forEach(function (p) { ?><li><?= H.rotulo(p.etapa) ?> — <?= p.descricao ?></li><? }); ?></ul>
+  </div>
+  <? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?> · dados coletados em campo<span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 3 · Dados da unidade -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>2. Dados da unidade e da vistoria</h2>
+  <?!= H.kv([
+    ['Unidade', R.d.nome], ['Código CIE', R.d.cie], ['DRE', R.d.dre], ['Etapa de ensino', R.d.etapaEnsino],
+    ['Endereço', [R.d.logradouro, R.d.numero].filter(String).join(', ')], ['CEP', R.d.cep], ['Bairro', R.d.bairro], ['Complemento', R.d.complemento],
+    ['Imóvel', R.d.imovel], ['Idade aprox.', R.d.idadeAnos, 'anos'], ['Diretor(a)', R.d.diretor], ['Telefone', R.d.telefone],
+    ['E-mail', R.d.email], ['Acesso ao local', R.d.acesso]
+  ]) ?>
+  <h3>Vistoria</h3>
+  <?!= H.kv([
+    ['Nº', R.v.codigo], ['Data', R.dataLonga], ['Horário', R.horario], ['Duração', R.duracao],
+    ['Equipe', R.equipe.nome], ['Integrantes', R.equipe.membros], ['Acompanhamento', R.rev.respNome], ['Cargo', R.rev.respCargo],
+    ['RF', R.rev.respRF], ['Contato', R.rev.respTel], ['Fotos', R.fotos.length], ['Status', R.v.status.replace('_', ' ')]
+  ]) ?>
+  <? if (R.d.obs) { ?><h3>Observações iniciais</h3><p><?= R.d.obs ?></p><? } ?>
+  <? if (R.rev.obsGerais) { ?><h3>Observações gerais</h3><p><?= R.rev.obsGerais ?></p><? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 4 · Entrada de energia -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>3. Entrada de energia</h2>
+  <? if (en.padrao === 'MT') { var tr = en.trafo || {}; ?>
+    <?!= H.kv([
+      ['Padrão', 'MT · Média tensão'], ['Tipo de entrada', en.tipoEntrada], ['Cabine', en.cabine === 'Outro' ? en.cabineOutro : en.cabine], ['Tensão nominal', en.tensaoMT],
+      ['Nº do medidor', en.medidor], ['Transformadores', tr.n], ['Potência', tr.kva, 'kVA'], ['Tipo', tr.tipo],
+      ['Neutro do secundário', tr.neutro], ['Medição', en.medicao], ['Relação TC', en.tc], ['Relação TP', en.tp],
+      ['Proteção', en.protecaoMT], ['Corrente nominal', en.correnteNom, 'A']
+    ]) ?>
+  <? } else { var c1 = en.cx1 || {}, c2 = en.cx2 || {}; ?>
+    <?!= H.kv([
+      ['Padrão', en.padrao ? 'BT · Baixa tensão' : ''], ['Tipo de entrada', en.tipoEntrada], ['Poste', en.poste], ['Tensão nominal', en.tensao === 'Outro' ? en.tensaoOutro : en.tensao],
+      ['Caixa 1 · medição', c1.tipo], ['Nº do medidor', c1.medidor], ['Caixa 2 · proteção', c2.tipo], ['Dispositivo', c2.protecao],
+      ['Disjuntor geral', c2.disjuntor, 'A']
+    ]) ?>
+  <? } ?>
+  <h3>Aterramento e cabos</h3>
+  <? var cb = en.cabos || {}; var dm = en.caboModo !== 'bitola'; ?>
+  <?!= H.kv([
+    ['Aterramento', en.aterr], ['Resistência de terra', en.resist, 'Ω'], ['Neutro', en.neutro], ['Tensão N-T', en.tensaoNT, 'V'],
+    ['Cabo fase', dm ? (cb.fase ? 'Ø ' + cb.fase + ' mm ≈ ' + H.secao(cb.fase) : '') : (cb.fase ? cb.fase + ' mm²' : '')],
+    ['Cabo neutro', dm ? (cb.neutro ? 'Ø ' + cb.neutro + ' mm ≈ ' + H.secao(cb.neutro) : '') : (cb.neutro ? cb.neutro + ' mm²' : '')],
+    ['Cabo terra', dm ? (cb.terra ? 'Ø ' + cb.terra + ' mm ≈ ' + H.secao(cb.terra) : '') : (cb.terra ? cb.terra + ' mm²' : '')],
+    ['Material', en.material]
+  ]) ?>
+  <h3>Medições elétricas</h3>
+  <? var m = en.med || {}; var u = en.padrao === 'MT' ? 'kV' : 'V'; ?>
+  <table class="grid">
+    <tr><th>Tensão fase-fase (<?= u ?>)</th><th class="n">R–S</th><th class="n">S–T</th><th class="n">T–R</th></tr>
+    <tr><td></td><td class="n"><?!= H.val(m.rs) ?></td><td class="n"><?!= H.val(m.st) ?></td><td class="n"><?!= H.val(m.tr) ?></td></tr>
+    <? if (en.padrao !== 'MT') { ?>
+    <tr><th>Tensão fase-neutro (V)</th><th class="n">R–N</th><th class="n">S–N</th><th class="n">T–N</th></tr>
+    <tr><td></td><td class="n"><?!= H.val(m.rn) ?></td><td class="n"><?!= H.val(m.sn) ?></td><td class="n"><?!= H.val(m.tn) ?></td></tr>
+    <? } ?>
+    <tr><th>Corrente por fase (A)</th><th class="n">R</th><th class="n">S</th><th class="n">T</th></tr>
+    <tr><td></td><td class="n"><?!= H.val(m.ir) ?></td><td class="n"><?!= H.val(m.is) ?></td><td class="n"><?!= H.val(m.it) ?></td></tr>
+  </table>
+  <h3>Estado de conservação</h3>
+  <?!= en.padrao === 'MT'
+    ? H.cons(en.consMT, [['porta', 'Porta'], ['lacre', 'Lacre'], ['isoladores', 'Isoladores'], ['limpeza', 'Limpeza'], ['base', 'Base']])
+    : H.cons(en.cons, [['tampa', 'Tampa'], ['lacre', 'Lacre'], ['visor', 'Visor'], ['limpeza', 'Limpeza'], ['fundo', 'Fundo']]) ?>
+  <? if (en.obs) { ?><p><b>Observações:</b> <?= en.obs ?></p><? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 5 · Estrutura -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>4. Estrutura</h2>
+  <?!= H.kv([
+    ['Blocos', nBlocos], ['Setores externos', es.setores], ['Condensadoras VRF', es.vrfLocal], ['Base', es.vrfBase],
+    ['Tubulação', es.tubulacao], ['Norte verdadeiro', (es.norte || 0) + '°']
+  ]) ?>
+  <table class="grid" style="margin-top:12px">
+    <tr><th>Bloco</th><th>Pav.</th><th>Cobertura</th><th>Acesso</th><th>Estado</th><th>Brises / beirais</th><th>Paredes</th><th>Pé-direito</th></tr>
+    <? for (var b = 0; b < nBlocos; b++) { var bl = blocos[b] || {}; ?>
+    <tr><td><b><?= R.letra(b) ?></b></td><td><?= bl.pav || 1 ?></td><td><?!= H.val(bl.cobTipo) ?></td><td><?!= H.val(bl.cobAcesso) ?></td><td><?!= H.val(bl.cobEstado) ?></td>
+      <td><?!= H.val([bl.brises, bl.beirais ? 'beiral ' + String(bl.beirais).toLowerCase() + (bl.beiralLarg ? ' ' + bl.beiralLarg + ' cm' : '') : ''].filter(String)) ?></td>
+      <td><?!= H.val(bl.paredes) ?></td><td><?!= H.val(bl.peDireito, 'm') ?></td></tr>
+    <? } ?>
+  </table>
+  <h3>Orientação das fachadas</h3>
+  <table class="grid">
+    <tr><th>Bloco</th><th>Norte</th><th>Sul</th><th>Leste</th><th>Oeste</th></tr>
+    <? for (var b2 = 0; b2 < nBlocos; b2++) { var fa = (blocos[b2] || {}).fachadas || {}; ?>
+    <tr><td><b><?= R.letra(b2) ?></b></td><td><?!= H.val(fa.N) ?></td><td><?!= H.val(fa.S) ?></td><td><?!= H.val(fa.L) ?></td><td><?!= H.val(fa.O) ?></td></tr>
+    <? } ?>
+  </table>
+  <h3>Estado de conservação</h3>
+  <?!= H.cons(es.cons, [['cobertura', 'Cobertura'], ['paredes', 'Paredes'], ['forro', 'Forro'], ['imperm', 'Impermeabilização'], ['fixacoes', 'Fixações']]) ?>
+  <? if (es.obs) { ?><p><b>Observações:</b> <?= es.obs ?></p><? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 6 · Elétrica -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>5. Instalações elétricas por bloco</h2>
+  <? for (var b3 = 0; b3 < nBlocos; b3++) { var q = (el.blocos || [])[b3] || {}; ?>
+    <h3>Bloco <?= R.letra(b3) ?></h3>
+    <?!= H.kv([
+      ['Quadros no bloco', q.quadros], ['Tipo de quadro', q.tipo], ['Tensão', q.tensao], ['Vagas livres', q.vagas],
+      ['Estado do quadro', q.estado], ['DR instalado', q.dr], ['Circuito dedicado AC', q.circuito], ['Ponto de força', q.pontoForca],
+      ['Eletroduto', q.eletroduto], ['Aterramento', q.aterr]
+    ]) ?>
+    <?!= H.cons(q.cons, [['quadro', 'Quadro'], ['disjuntores', 'Disjuntores'], ['fiacao', 'Fiação'], ['tomadas', 'Tomadas'], ['eletrodutos', 'Eletrodutos']]) ?>
+    <? if (q.obs) { ?><p><b>Observações:</b> <?= q.obs ?></p><? } ?>
+  <? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 7 · Ambientes internos -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>6. Ambientes internos</h2>
+  <table class="grid">
+    <tr><th>Local</th><th>Ambiente</th><th class="n">Qtd</th><th class="n">C × L × PD (m)</th><th class="n">Área total</th><th>Fachadas</th><th>Janelas</th><th class="n">TUG</th><th class="n">Ilum.</th></tr>
+    <? internos.sort(function (a, b) { return (a.bloco - b.bloco) || (a.pav - b.pav); }).forEach(function (a) {
+         var area = (Number(String(a.c).replace(',', '.')) || 0) * (Number(String(a.l).replace(',', '.')) || 0);
+         var j = a.jan || {}; var il = (a.lum || []).reduce(function (s, l) { return s + (Number(l.qtd) || 0); }, 0); ?>
+    <tr><td><?= R.letra(a.bloco) ?> · <?= R.pav(a.pav) ?></td><td><b><?= a.tipo === 'Outro' ? a.tipoOutro : a.tipo ?></b><?= a.nome ? ' · ' + a.nome : '' ?></td><td class="n"><?= a.qtd || 1 ?></td>
+      <td class="n"><?= a.c || '—' ?> × <?= a.l || '—' ?> × <?= a.pd || '—' ?></td><td class="n"><?= F(area * (Number(a.qtd) || 1), 1) ?> m²</td>
+      <td><?= (a.fachadas || []).join(', ') || '—' ?></td><td><?= j.qtd ? j.qtd + '× ' + (j.tipo || '') : '—' ?></td><td class="n"><?= a.tug || 0 ?></td><td class="n"><?= il ?></td></tr>
+    <? }); ?>
+    <? if (!internos.length) { ?><tr><td colspan="9" style="color:#9AA6B6">Nenhum ambiente interno registrado.</td></tr><? } ?>
+  </table>
+  <h3>Totais</h3>
+  <?!= H.kv([['Ambientes internos', C.ambientes], ['Pontos TUG', C.pontosTug], ['Pontos de iluminação', C.pontosIlum], ['Área total', F(C.area, 1) + ' m²']]) ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 8 · Áreas externas e equipamentos -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>7. Áreas externas</h2>
+  <table class="grid">
+    <tr><th>Área</th><th class="n">Qtd</th><th class="n">C × L (m)</th><th class="n">Área total</th><th class="n">TUG</th><th>Iluminação</th></tr>
+    <? externos.forEach(function (a) { var area = (Number(String(a.c).replace(',', '.')) || 0) * (Number(String(a.l).replace(',', '.')) || 0); ?>
+    <tr><td><b><?= a.tipo === 'Outro' ? a.tipoOutro : a.tipo ?></b><?= a.nome ? ' · ' + a.nome : '' ?></td><td class="n"><?= a.qtd || 1 ?></td><td class="n"><?= a.c || '—' ?> × <?= a.l || '—' ?></td>
+      <td class="n"><?= F(area * (Number(a.qtd) || 1), 1) ?> m²</td><td class="n"><?= a.tug || 0 ?></td>
+      <td><?= (a.lum || []).map(function (l) { return (l.qtd || 0) + '× ' + (l.nome || 'luminária'); }).join(', ') || '—' ?></td></tr>
+    <? }); ?>
+    <? if (!externos.length) { ?><tr><td colspan="6" style="color:#9AA6B6">Nenhuma área externa registrada.</td></tr><? } ?>
+  </table>
+  <h2 style="margin-top:22px">8. Equipamentos com carga</h2>
+  <table class="grid">
+    <tr><th>Equipamento</th><th class="n">Qtd</th><th class="n">Potência nominal</th><th class="n">Potência (W)</th><th>Observação</th></tr>
+    <? equips.forEach(function (x) { ?>
+    <tr><td><b><?= x.nome ?></b></td><td class="n"><?= x.qtd || 1 ?></td><td class="n"><?= x.desc ? '—' : (x.pot ? x.pot + ' ' + (x.un || 'W') : '—') ?></td>
+      <td class="n"><?= x.desc || !x.pot ? '—' : F(R.cvParaW(x.pot, x.un) * (Number(x.qtd) || 1)) ?></td><td><?= x.desc ? 'Desconhecido / inacessível' : '' ?></td></tr>
+    <? }); ?>
+    <? if (!equips.length) { ?><tr><td colspan="5" style="color:#9AA6B6">Nenhum equipamento registrado.</td></tr><? } ?>
+  </table>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 9 · Pré-dimensionamento -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>9. Pré-dimensionamento de climatização</h2>
+  <table class="grid">
+    <tr><th>Local</th><th>Ambiente</th><th class="n">Qtd</th><th class="n">Área un.</th><th class="n">BTU/h·m²</th><th>Ajustes</th><th class="n">Carga un.</th><th class="n">Capacidade</th><th class="n">TR total</th></tr>
+    <? C.linhas.forEach(function (l) { ?>
+    <tr><td><?= l.local ?></td><td><?= l.nome ?></td><td class="n"><?= l.qtd ?></td><td class="n"><?= F(l.areaUn, 1) ?> m²</td><td class="n"><?= l.fator ?></td>
+      <td><?= l.ajustes || '—' ?></td><td class="n"><?= F(l.btuUn) ?></td><td class="n"><?= F(l.cap) ?> BTU/h</td><td class="n"><?= F(l.tr, 2) ?></td></tr>
+    <? }); ?>
+    <tr><td colspan="8"><b>Total</b></td><td class="n"><b><?= F(C.tr, 1) ?> TR</b></td></tr>
+  </table>
+  <h3>Resumo</h3>
+  <?!= H.kv([
+    ['Carga total', F(C.btu) + ' BTU/h'], ['Carga total', F(C.tr, 1) + ' TR'],
+    ['Potência estimada do AC', F(C.kwAc, 1) + ' kW'], ['Premissa', F(C.kwPorTr, 2) + ' kW/TR'],
+    ['Capacidade da entrada', C.kwEntrada ? F(C.kwEntrada, 1) + ' kW' : 'não informada'], ['Demanda medida', C.kwMedido ? F(C.kwMedido, 1) + ' kW' : 'não medida']
+  ]) ?>
+  <p style="color:#6B7A90;font-size:8.5px;margin-top:12px">Premissas: fatores de carga por m² conforme o uso do ambiente; +10% para fachadas Norte/Oeste e para o último pavimento; equipamentos de uso específico somados à carga (W × 3,412); capacidades arredondadas para o modelo comercial imediatamente superior. Capacidade da entrada estimada com fator de potência 0,92. Valores para orçamento — não substituem o projeto executivo.</p>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+<!-- 10+ · Registro fotográfico -->
+<? for (var fp = 0; fp < pagFotos; fp++) { var lote = fotosRel.slice(fp * porPagina, (fp + 1) * porPagina); ?>
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>10. Registro fotográfico<?= pagFotos > 1 ? ' (' + (fp + 1) + '/' + pagFotos + ')' : '' ?></h2>
+  <? if (!lote.length) { ?><p style="color:#9AA6B6">Nenhuma foto sincronizada.</p><? } ?>
+  <table>
+    <? for (var i = 0; i < lote.length; i += 3) { ?>
+    <tr>
+      <? for (var k = i; k < i + 3; k++) { var f = lote[k]; ?>
+      <td class="foto"><? if (f) { ?>
+        <? if (thumbs[f.fileId]) { ?><img src="<?= thumbs[f.fileId] ?>"><? } else { ?><div class="sem"></div><? } ?>
+        <div class="leg"><b><?= fp * porPagina + k + 1 ?>.</b> <?= H.rotulo(f.etapa) ?> · <?= String(f.slot || '').split('.').pop().replace(/^b\d+$/, '') ?></div>
+      <? } ?></td>
+      <? } ?>
+    </tr>
+    <? } ?>
+  </table>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+<? } ?>
+
+<!-- Última · Termo e assinaturas -->
+<div class="pg">
+  <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
+  <h2>11. Termo de acompanhamento</h2>
+  <p>Declaramos que a vistoria técnica descrita neste relatório foi realizada em <b><?= R.dataLonga ?></b>, das <?= R.horario ?>, na <b><?= R.d.nome ?></b>, com acompanhamento do responsável pela unidade indicado abaixo. As informações refletem as condições encontradas na data da visita.</p>
+  <table style="margin-top:80px">
+    <tr>
+      <td class="ass"><? if (R.rev.assEmpresa) { ?><img src="<?= R.rev.assEmpresa ?>"><? } ?>
+        <div class="l"><b><?= R.cfg.RESPONSAVEL_TECNICO ?></b><br><?= R.cfg.RESPONSAVEL_TECNICO_CARGO ?> · <?= R.cfg.CONSORCIO ?></div></td>
+      <td class="ass"><? if (R.rev.assResp) { ?><img src="<?= R.rev.assResp ?>"><? } ?>
+        <div class="l"><b><?= R.rev.respNome || '—' ?></b><br><?= R.rev.respCargo || '' ?><?= R.rev.respRF ? ' · RF ' + R.rev.respRF : '' ?></div></td>
+    </tr>
+  </table>
+  <? if (!R.assinado) { ?><p class="ruim" style="text-align:center;margin-top:30px">Versão preliminar · assinaturas pendentes</p><? } ?>
+  <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
+</div>
+
+</body>
+</html>
