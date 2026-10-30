@@ -104,8 +104,13 @@ const Db = (function () {
 
 const FATIA_ = 45000;
 
-function salvarEtapaDb_(vistoriaId, etapa, dados, autor) {
-  const json = JSON.stringify(dados || {});
+/**
+ * Grava a etapa. O JSON fica num envelope { __v: 2, d: dados, m: { caminho: carimbo } }:
+ * "m" guarda quando cada campo (ou registro de coleção) foi alterado, para mesclar
+ * edições de vários técnicos sem que um sobrescreva o outro.
+ */
+function salvarEtapaDb_(vistoriaId, etapa, dados, autor, meta) {
+  const json = JSON.stringify({ __v: 2, d: dados || {}, m: meta || {} });
   if (json.length > FATIA_ * 6) throw new Error('Os dados da etapa ' + etapa + ' ficaram grandes demais.');
   const reg = { id: vistoriaId + ':' + etapa, vistoriaId: vistoriaId, etapa: etapa, atualizadoEm: agora_(), autor: autor || '' };
   for (let i = 0; i < 6; i++) {
@@ -115,14 +120,77 @@ function salvarEtapaDb_(vistoriaId, etapa, dados, autor) {
   return Db.upsert('Etapas', reg);
 }
 
+function lerEnvelope_(r) {
+  let json = '';
+  for (let i = 1; i <= 6; i++) json += String(r['p' + i] || '').replace(/^~/, '');
+  try {
+    const o = JSON.parse(json || '{}');
+    return o && o.__v === 2 ? { dados: o.d || {}, m: o.m || {}, ts: r.atualizadoEm, autor: r.autor } : { dados: o || {}, m: {}, ts: r.atualizadoEm, autor: r.autor };
+  } catch (e) { return { dados: {}, m: {}, ts: '', autor: '' }; }
+}
+
+/** Todas as etapas da vistoria: { etapa: { dados, ts } } (sem os carimbos internos). */
 function lerEtapas_(vistoriaId) {
   const out = {};
   Db.where('Etapas', r => r.vistoriaId === vistoriaId).forEach(r => {
-    let json = '';
-    for (let i = 1; i <= 6; i++) json += String(r['p' + i] || '').replace(/^~/, '');
-    try { out[r.etapa] = { dados: JSON.parse(json || '{}'), ts: r.atualizadoEm }; } catch (e) { out[r.etapa] = { dados: {}, ts: '' }; }
+    const e = lerEnvelope_(r);
+    out[r.etapa] = { dados: e.dados, ts: e.ts, autor: e.autor };
   });
   return out;
+}
+
+/* ───────────── Mesclagem por campo (vários técnicos na mesma vistoria) ───────────── */
+
+function partes_(caminho) { return String(caminho).split('.').filter(String); }
+function definirCaminho_(o, ks, v) {
+  let x = o;
+  ks.slice(0, -1).forEach((k, i) => {
+    if (x[k] === null || x[k] === undefined || typeof x[k] !== 'object') x[k] = /^\d+$/.test(ks[i + 1]) ? [] : {};
+    x = x[k];
+  });
+  x[ks[ks.length - 1]] = v;
+}
+function lerCaminho_(o, ks) { return ks.reduce((x, k) => (x === null || x === undefined ? undefined : x[k]), o); }
+/** Completa em "alvo" só as chaves que não existem (não sobrescreve nada). */
+function completar_(alvo, fonte) {
+  Object.keys(fonte || {}).forEach(k => {
+    if (alvo[k] === undefined) alvo[k] = fonte[k];
+    else if (alvo[k] && fonte[k] && typeof alvo[k] === 'object' && typeof fonte[k] === 'object' && !Array.isArray(alvo[k])) completar_(alvo[k], fonte[k]);
+  });
+  return alvo;
+}
+
+/**
+ * Aplica operações { p, v, ts, init? } sobre a etapa:
+ *  - "etapa.campo.sub"        → define o campo (vence o carimbo mais recente);
+ *  - "etapa.colecao#id"       → cria/substitui o registro com aquele id (v = null apaga);
+ *  - init (p = "etapa")       → só completa o que ainda não existe (criação/retomada).
+ * Operação mais antiga que a última gravada para o mesmo caminho é ignorada.
+ */
+function aplicarOps_(dados, meta, etapa, ops) {
+  let aplicadas = 0;
+  (ops || []).forEach(op => {
+    const ts = String(op.ts || '');
+    const p = String(op.p || '');
+    if (p.split(/[.#]/)[0] !== etapa) return;
+    if (op.init) { completar_(dados, op.v || {}); aplicadas++; return; }
+    const chave = p.slice(etapa.length + 1);
+    if (!chave) return;
+    if (meta[chave] && meta[chave] > ts) return;
+    if (chave.indexOf('#') >= 0) {
+      const col = chave.split('#')[0], id = chave.split('#')[1];
+      let arr = lerCaminho_(dados, partes_(col));
+      if (!Array.isArray(arr)) { arr = []; definirCaminho_(dados, partes_(col), arr); }
+      const i = arr.findIndex(r => r && r.id === id);
+      if (op.v === null || op.v === undefined) { if (i >= 0) arr.splice(i, 1); }
+      else if (i >= 0) arr[i] = op.v; else arr.push(op.v);
+    } else {
+      definirCaminho_(dados, partes_(chave), op.v === undefined ? '' : op.v);
+    }
+    meta[chave] = ts;
+    aplicadas++;
+  });
+  return aplicadas;
 }
 
 /* ───────────── Utilitários ───────────── */

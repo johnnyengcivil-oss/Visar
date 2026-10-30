@@ -96,8 +96,9 @@ svg { flex: none; }
 .card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .card-h h3 { margin: 0; font-size: 16px; font-weight: 700; }
 .card-h h3 small { font-weight: 500; color: var(--muted); font-size: 13px; }
-.sec-t { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 4px 12px; }
-.sec-t h2 { margin: 0; font-size: 20px; }
+.sec-t { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 4px 12px; }
+.sec-t h2 { margin: 0; font-size: clamp(17px, 5vw, 20px); min-width: 0; }
+.sec-t > button { flex: none; white-space: nowrap; }
 .intro { font-size: 14px; color: var(--muted); margin: 0 4px 14px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }

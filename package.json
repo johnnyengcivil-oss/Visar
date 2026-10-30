@@ -1,0 +1,18 @@
+{
+  "name": "vistar",
+  "version": "1.1.0",
+  "private": true,
+  "description": "VistAR · vistorias de climatização em Google Apps Script",
+  "scripts": {
+    "test": "npm run test:servidor && npm run test:dist && npm run test:telas",
+    "test:servidor": "node dev/gas-sim.js",
+    "test:dist": "node dev/build-dist.js && node dev/gas-sim.js --dist",
+    "test:telas": "node dev/build-preview.js && node dev/smoke.js",
+    "build": "node dev/build-dist.js",
+    "preview": "node dev/build-preview.js",
+    "guia": "python3 dev/build-guia.py"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

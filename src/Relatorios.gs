@@ -13,6 +13,48 @@ const FATOR_BTU_M2_ = {
 };
 /** Potência típica (W) dos equipamentos de uso específico; somada à carga térmica. */
 const POT_TUE_W_ = { 'Computador': 250, 'Projetor': 300, 'Lousa digital': 200, 'TV': 150, 'Impressora': 300, 'Geladeira': 150, 'Micro-ondas': 1200, 'Ventilador': 0 };
+/** Ganho solar pelo vidro (BTU/h por m² de vidro) conforme a fachada — valores de referência para o hemisfério sul. */
+const GANHO_SOLAR_VIDRO_ = { Norte: 520, Leste: 600, Oeste: 700, Sul: 160, Interna: 0 };
+/** Redução do ganho solar pela proteção da abertura. */
+const PROTECAO_SOLAR_ = { 'Nenhuma': 1, 'Cortina ou persiana': 0.7, 'Película': 0.7, 'Brise ou marquise': 0.5 };
+const ABERTURA_VIDRO_ = { 'Janela': 1, 'Porta de vidro': 1, 'Porta': 0 };
+
+/** Fatores por tipo, com os ajustes opcionais da aba Config (FATORES_BTU_M2, em JSON). */
+function fatoresBtu_(cfg) {
+  const f = Object.assign({}, FATOR_BTU_M2_);
+  try { if (cfg && cfg.FATORES_BTU_M2) Object.assign(f, JSON.parse(cfg.FATORES_BTU_M2)); } catch (e) { console.warn('FATORES_BTU_M2 inválido'); }
+  return f;
+}
+
+/** Aberturas do ambiente (formato novo) ou a janela única do formato antigo. */
+function aberturas_(a) {
+  if (a.aberturas && a.aberturas.length) return a.aberturas;
+  const j = a.jan || {};
+  if (!j.qtd) return [];
+  return [{ tipo: 'Janela', larg: j.larg || '', alt: j.alt, qtd: j.qtd, fachada: (a.fachadas || [])[0] || '', protecao: 'Nenhuma' }];
+}
+
+/** Ganho solar das aberturas envidraçadas (BTU/h), ou null se não houver medidas. */
+function ganhoSolar_(a) {
+  let g = 0, medidas = false;
+  aberturas_(a).forEach(x => {
+    const area = dec_(x.larg) * dec_(x.alt) * (Number(x.qtd) || 1);
+    if (!area || !ABERTURA_VIDRO_[x.tipo || 'Janela']) return;
+    medidas = true;
+    g += area * (GANHO_SOLAR_VIDRO_[x.fachada] || 0) * (PROTECAO_SOLAR_[x.protecao] || 1);
+  });
+  return medidas ? g : null;
+}
+
+/** Potência (kVA) de uma corrente conforme o fornecimento: mono (F-N), bi (F-F) ou trifásico. */
+function kvaFornecimento_(en, corrente) {
+  const vll = /380/.test(en.tensao) ? 380 : 220;
+  const vfn = vll / Math.sqrt(3);
+  const f = en.fases || 'Trifásico';
+  const v = f === 'Monofásico' ? vfn : f === 'Bifásico' ? vll : Math.sqrt(3) * vll;
+  return v * dec_(corrente) / 1000;
+}
+
 const CAPACIDADES_BTU_ = [9000, 12000, 18000, 24000, 30000, 36000, 48000, 58000, 60000];
 
 function capacidadeComercial_(btu) {
@@ -22,12 +64,15 @@ function capacidadeComercial_(btu) {
 
 function nomePav_(p) { return Number(p) === 0 ? 'Térreo' : p + 'º pav.'; }
 function letraBloco_(b) { return String.fromCharCode(65 + Number(b || 0)); }
+/** Nome do bloco/setor: o nome dado em campo ou "Bloco A, B…". */
+function nomeBloco_(blocos, b) { const x = (blocos || [])[Number(b) || 0] || {}; return x.nome || 'Bloco ' + letraBloco_(b); }
 function cvParaW_(pot, un) { const n = dec_(pot); return un === 'CV' ? n * 735.5 : n; }
 
 function preDimensionamento_(et, cfg) {
   const estr = et.estrutura || {};
   const blocos = estr.blocos || [];
   const itens = ((et.ambientes || {}).itens || []);
+  const fatores = fatoresBtu_(cfg);
   const linhas = [];
   let area = 0, areaClim = 0, btu = 0, ambientes = 0, externos = 0, pontosTug = 0, pontosIlum = 0;
   itens.forEach(a => {
@@ -38,21 +83,23 @@ function preDimensionamento_(et, cfg) {
     pontosTug += (Number(a.tug) || 0) * qtd;
     pontosIlum += (a.lum || []).reduce((s, l) => s + (Number(l.qtd) || 0), 0) * qtd;
     const tipo = a.tipo === 'Outro' ? (a.tipoOutro || 'Outro') : a.tipo;
-    const fator = a.externo ? 0 : FATOR_BTU_M2_[tipo];
+    const fator = a.externo ? 0 : fatores[tipo];
     if (!fator || !areaUn) return;
     const bl = blocos[Number(a.bloco) || 0] || {};
     const ultimo = Number(a.pav) === (Number(bl.pav) || 1) - 1;
     const fach = a.fachadas || [];
-    const sol = fach.indexOf('Norte') >= 0 || fach.indexOf('Oeste') >= 0;
+    // Com aberturas medidas, usa o ganho solar do vidro; sem elas, a regra simples (+10% para Norte/Oeste).
+    const solar = ganhoSolar_(a);
+    const sol = solar === null && (fach.indexOf('Norte') >= 0 || fach.indexOf('Oeste') >= 0);
     const mult = 1 + (sol ? 0.1 : 0) + (ultimo ? 0.1 : 0);
     const equipW = (a.tue || []).reduce((s, t) => s + (Number(t.qtd) || 0) * (POT_TUE_W_[t.nome] !== undefined ? POT_TUE_W_[t.nome] : 150), 0);
-    const btuUn = areaUn * fator * mult + equipW * 3.412;
+    const btuUn = areaUn * fator * mult + (solar || 0) + equipW * 3.412;
     const cap = capacidadeComercial_(btuUn);
     areaClim += areaUn * qtd;
     btu += cap * qtd;
     linhas.push({
-      local: 'Bloco ' + letraBloco_(a.bloco) + ' · ' + nomePav_(a.pav), nome: a.nome || tipo, tipo: tipo, qtd: qtd,
-      areaUn: areaUn, fator: fator, ajustes: [sol ? 'insolação N/O +10%' : '', ultimo ? 'último pav. +10%' : ''].filter(String).join(', '),
+      local: nomeBloco_(blocos, a.bloco) + ' · ' + nomePav_(a.pav), nome: a.nome || tipo, tipo: tipo, qtd: qtd,
+      areaUn: areaUn, fator: fator, ajustes: [sol ? 'insolação N/O +10%' : '', solar ? 'vidro +' + fmtNum_(solar) + ' BTU/h' : '', ultimo ? 'último pav. +10%' : ''].filter(String).join(', '),
       btuUn: Math.round(btuUn), cap: cap, tr: cap / 12000 * qtd
     });
   });
@@ -67,11 +114,10 @@ function preDimensionamento_(et, cfg) {
     kwEntrada = (Number((en.trafo || {}).n) || 1) * dec_((en.trafo || {}).kva) * 0.92;
   } else {
     vll = /380/.test(en.tensao) ? 380 : 220;
-    const disj = dec_((en.cx2 || {}).disjuntor);
-    kwEntrada = Math.sqrt(3) * vll * disj * 0.92 / 1000;
+    kwEntrada = kvaFornecimento_(en, (en.cx2 || {}).disjuntor) * 0.92;
     const m = en.med || {};
     const imax = Math.max(dec_(m.ir), dec_(m.is), dec_(m.it));
-    kwMedido = Math.sqrt(3) * vll * imax * 0.92 / 1000;
+    kwMedido = kvaFornecimento_(en, imax) * 0.92;
   }
   const folga = kwEntrada ? kwEntrada - kwMedido : 0;
   return {
@@ -121,7 +167,8 @@ function dadosRelatorio_(vistoriaId) {
     duracao: dur ? Math.floor(dur / 60) + 'h' + ('0' + dur % 60).slice(-2) : '',
     geradoEm: Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm'),
     assinado: !!(rev.assResp && rev.assEmpresa),
-    fmt: fmtNum_, letra: letraBloco_, pav: nomePav_, cvParaW: cvParaW_
+    fmt: fmtNum_, letra: letraBloco_, pav: nomePav_, cvParaW: cvParaW_,
+    bloco: b => nomeBloco_((et.estrutura || {}).blocos, b)
   };
 }
 
@@ -149,8 +196,8 @@ function htmlRelatorio_(R, tipo, modo) {
 /* ───────────────────────── Ações ───────────────────────── */
 
 function acaoRelatorio_(p, u) {
-  exigirVistoria_(p.vistoriaId, u);
-  const R = dadosRelatorio_(p.vistoriaId);
+  const v = exigirVistoria_(p.vistoriaId, u);
+  const R = dadosRelatorio_(v.id);
   const html = htmlRelatorio_(R, p.tipo, 'tela');
   return {
     html: html, assinado: R.assinado, codigo: R.v.codigo, geradoEm: R.geradoEm,
@@ -159,8 +206,8 @@ function acaoRelatorio_(p, u) {
 }
 
 function acaoPdf_(p, u) {
-  exigirVistoria_(p.vistoriaId, u);
-  const r = gerarPdf_(p.vistoriaId, p.tipo);
+  const v = exigirVistoria_(p.vistoriaId, u);
+  const r = gerarPdf_(v.id, p.tipo);
   const arq = DriveApp.getFileById(r.fileId);
   r.base64 = p.semArquivo ? '' : Utilities.base64Encode(arq.getBlob().getBytes());
   return r;
@@ -296,5 +343,8 @@ function secaoCabo_(d) {
 
 const HREL_ = {
   esc: esc_, val: val_, kv: tabelaKV_, cons: tabelaConservacao_, secao: secaoCabo_,
-  rotulo: function (e) { return rotuloEtapa_(e); }
+  rotulo: function (e) { return rotuloEtapa_(e); },
+  aberturas: function (a) {
+    return aberturas_(a).map(x => (x.qtd || 1) + '× ' + (x.tipo || 'Janela') + (x.larg && x.alt ? ' ' + x.larg + '×' + x.alt + ' m' : '') + (x.fachada ? ' (' + x.fachada + ')' : '')).join(', ');
+  }
 };

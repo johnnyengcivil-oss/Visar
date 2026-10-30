@@ -30,9 +30,10 @@ Views.home = (orig => function (p) {
 
 Views.eqCard = (eq, completo) => {
   const s = ST_EQ[eq.status] || ST_EQ.pausa;
-  const a = eq.atual;
+  const atuais = eq.atuais || (eq.atual ? [eq.atual] : []);
   return '<section class="eq-card ' + esc(eq.status) + '"><div class="row" style="align-items:flex-start"><span style="flex:1;min-width:0"><b style="font-size:17px">' + esc(eq.nome) + '</b><div class="muted small">' + esc(eq.membros.join(' e ')) + '</div></span><span class="badge ' + s[1] + '">' + s[0] + '</span></div>' +
-    (a ? '<button class="sum-row" style="border:0;padding:10px 0 4px" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: a.id }) + '\'><span><b>' + esc(a.escola) + '</b><small>Check-in ' + hora(a.checkin) + ' · ' + duracao(a.checkin) + ' em campo · ' + plural(a.fotos, 'foto') + '</small></span><span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>'
+    (atuais.length ? atuais.map(a => '<button class="sum-row" style="border:0;padding:10px 0 4px" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: a.id }) + '\'><span><b>' + esc(a.escola) + '</b><small>' +
+        (a.participantes && a.participantes.length ? esc(a.participantes.join(' e ')) + ' · ' : '') + 'check-in ' + hora(a.checkin) + ' · ' + duracao(a.checkin) + ' em campo · ' + plural(a.fotos, 'foto') + '</small></span><span style="margin-left:auto;color:var(--muted)">' + I('right') + '</span></button>').join('')
       : eq.status === 'em_transito' && eq.destino ? '<div class="small" style="margin-top:8px">A caminho de <b>' + esc(eq.destino) + '</b>' + (eq.eta ? ' · chegada ' + hora(eq.eta) : '') + '</div>' : '') +
     '<div class="row small muted" style="margin-top:8px;gap:14px;flex-wrap:wrap"><span>' + I('checksq', 15) + ' hoje ' + eq.hoje.concluidas + '/' + eq.hoje.total + '</span><span>' + I('cloud', 15) + ' ' + haQuanto(eq.vistoEm) + '</span>' +
       (eq.fila ? '<span class="c-amber" style="font-weight:700">' + eq.fila + ' na fila</span>' : '') + '</div>' +
@@ -80,7 +81,13 @@ Views.equipesSup = () => ({
     Dados.obter('sup:equipes', 'equipes', {}, (r, c, e) => {
       if (!r) return encher('#eqBox', erroBox(e));
       App._sup = r;
-      const pts = r.equipes.filter(x => x.lat && x.lng).map(x => ({ id: x.id, nome: x.nome, lat: Number(x.lat), lng: Number(x.lng), st: (ST_EQ[x.status] || ST_EQ.pausa)[2], act: 'eqFoco' }));
+      // Um ponto por técnico (quando a equipe se divide em escolas diferentes); senão, a posição da equipe.
+      const pts = [];
+      r.equipes.forEach(x => {
+        const ps = (x.pessoas || []).filter(q => q.lat && q.lng);
+        if (ps.length) ps.forEach(q => pts.push({ id: x.id, nome: q.nome + ' · ' + x.nome + (q.escola ? ' · ' + q.escola : ''), lat: Number(q.lat), lng: Number(q.lng), st: q.escola ? 'andamento' : (ST_EQ[x.status] || ST_EQ.pausa)[2], act: 'eqFoco' }));
+        else if (x.lat && x.lng) pts.push({ id: x.id, nome: x.nome, lat: Number(x.lat), lng: Number(x.lng), st: (ST_EQ[x.status] || ST_EQ.pausa)[2], act: 'eqFoco' });
+      });
       encher('#eqBox', '<section class="card"><div class="card-h"><h3>Onde estão as equipes</h3><span class="muted small">posição do último sinal</span></div>' +
           (pts.length ? Graf.mapa(pts, 220) : '<div class="empty small">Nenhuma equipe enviou localização ainda. A posição chega quando o app está aberto, a cada 5 minutos.</div>') +
           '<div class="leg">' + Object.keys(ST_EQ).map(k => '<span><i style="background:' + ST_ESC[ST_EQ[k][2]][1] + '"></i>' + ST_EQ[k][0] + '</span>').join('') + '</div></section>' +

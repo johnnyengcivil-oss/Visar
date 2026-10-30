@@ -15,8 +15,12 @@ function montarBoot_(u) {
   const idsEscolas = {};
   escolas.forEach(e => { idsEscolas[e.id] = true; });
   const roteiro = Db.where('Roteiro', r => r.equipeId === u.equipeId);
-  const vistorias = Db.where('Vistorias', v => v.equipeId === u.equipeId);
-  const ativa = vistorias.filter(v => v.status === 'em_andamento').sort((a, b) => a.checkin < b.checkin ? 1 : -1)[0];
+  const vistorias = Db.where('Vistorias', v => v.equipeId === u.equipeId && v.status !== 'mesclada');
+  const abertas = vistorias.filter(v => v.status === 'em_andamento').sort((a, b) => a.checkin < b.checkin ? 1 : -1);
+  // Cada técnico tem a sua vistoria ativa; a equipe pode ter várias abertas (escolas diferentes).
+  const ativa = abertas.find(v => lista_(v.participantes).indexOf(u.id) >= 0) || (abertas.length === 1 && !lista_(abertas[0].participantes).length ? abertas[0] : null);
+  const nomes = {};
+  Db.all('Usuarios').forEach(x => { nomes[x.id] = x.nome; });
   const ultimas = vistorias.filter(v => v.status === 'finalizada')
     .sort((a, b) => a.checkout < b.checkout ? 1 : -1).slice(0, 10)
     .map(v => ({ id: v.id, codigo: v.codigo, escolaId: v.escolaId, checkin: v.checkin, checkout: v.checkout, resumo: parse_(v.resumo) }));
@@ -43,6 +47,8 @@ function montarBoot_(u) {
       pendentes: roteiro.filter(r => r.status === 'retorno').length
     },
     vistoriaAtiva: ativa ? vistoriaCliente_(ativa) : null,
+    emAndamento: abertas.map(v => ({ id: v.id, codigo: v.codigo, escolaId: v.escolaId, checkin: v.checkin,
+      participantes: participantes_(v).map(id => nomes[id] || id), souParticipante: participantes_(v).indexOf(u.id) >= 0 })),
     ultimas: ultimas,
     pendencias: pendencias,
     hoje: hoje_(),
@@ -53,32 +59,65 @@ function montarBoot_(u) {
 function parse_(s) { try { return s ? JSON.parse(s) : {}; } catch (e) { return {}; } }
 function historico_(s) { const h = parse_(s); return Array.isArray(h) ? h : []; }
 
+function participantes_(v) { const l = lista_(v.participantes); return l.length ? l : (v.usuarioId ? [v.usuarioId] : []); }
+
 function vistoriaCliente_(v) {
+  const nomes = {};
+  Db.all('Usuarios').forEach(x => { nomes[x.id] = x.nome; });
   return {
     id: v.id, codigo: v.codigo, escolaId: v.escolaId, status: v.status, checkin: v.checkin, checkout: v.checkout,
+    participantes: participantes_(v).map(id => nomes[id] || id),
     etapas: lerEtapas_(v.id),
     fotos: Db.where('Fotos', f => f.vistoriaId === v.id).map(f => ({
-      id: f.id, etapa: f.etapa, slot: f.slot, ref: f.ref, fileId: f.fileId, criadoEm: f.criadoEm
+      id: f.id, etapa: f.etapa, slot: f.slot, ref: f.ref, fileId: f.fileId, criadoEm: f.criadoEm, legenda: f.legenda, lat: f.lat, lng: f.lng, autor: nomes[f.autor] || ''
     }))
   };
+}
+
+/* ───────────────────────── Permissões ───────────────────────── */
+
+/** A escola precisa estar numa DRE autorizada para o usuário (sem DREs = todas). */
+function exigirEscola_(id, u) {
+  const e = Db.find('Escolas', id);
+  if (!e) throw new Error('Escola não encontrada.');
+  const dres = lista_(u.dres);
+  if (dres.length && dres.indexOf(e.dre) < 0) throw new Error('Esta escola não pertence às suas DREs autorizadas.');
+  return e;
+}
+
+/** Segue vistorias "mescladas" (check-in duplicado offline) até a vistoria real. */
+function resolverVistoria_(id) {
+  let v = Db.find('Vistorias', id);
+  for (let i = 0; v && v.mescladaEm && i < 5; i++) v = Db.find('Vistorias', v.mescladaEm);
+  return v;
 }
 
 /* ───────────────────────── Check-in ───────────────────────── */
 
 function acaoCheckin_(p, u) {
   const existente = Db.find('Vistorias', p.id);
-  if (existente) return { id: existente.id, codigo: existente.codigo, pastaId: existente.pastaId };
+  if (existente) {
+    const real = resolverVistoria_(p.id);
+    return { id: existente.id, codigo: real.codigo, pastaId: real.pastaId, mescladaEm: existente.mescladaEm || '' };
+  }
+  const escola = exigirEscola_(p.escolaId, u);
 
-  const outra = Db.where('Vistorias', v => v.equipeId === u.equipeId && v.status === 'em_andamento')[0];
-  if (outra) throw new Error('A equipe já tem uma vistoria em andamento (' + outra.codigo + ').');
-
-  const escola = Db.find('Escolas', p.escolaId);
-  if (!escola) throw new Error('Escola não encontrada.');
+  // A equipe pode estar em várias escolas ao mesmo tempo, mas cada escola tem uma vistoria aberta.
+  // Se o colega já abriu esta escola (ex.: os dois fizeram check-in sem sinal), as duas viram uma só.
+  const mesma = Db.where('Vistorias', v => v.escolaId === escola.id && v.status === 'em_andamento')[0];
+  if (mesma) {
+    if (mesma.equipeId !== u.equipeId && !ehSupervisor_(u)) throw new Error('Outra equipe já está vistoriando esta escola (' + mesma.codigo + ').');
+    Db.upsert('Vistorias', { id: p.id, codigo: mesma.codigo, escolaId: escola.id, equipeId: mesma.equipeId, usuarioId: u.id, status: 'mesclada',
+      mescladaEm: mesma.id, checkin: p.checkin || agora_(), atualizadoEm: agora_() });
+    adicionarParticipante_(mesma, u);
+    log_(u.id, 'checkin', { vistoria: mesma.codigo, escola: escola.nome, juntou: true });
+    return { id: p.id, codigo: mesma.codigo, pastaId: mesma.pastaId, mescladaEm: mesma.id };
+  }
 
   const anterior = p.retomarDe ? Db.find('Vistorias', p.retomarDe) : null;
   const v = Db.upsert('Vistorias', {
     id: p.id, codigo: anterior ? anterior.codigo + '-R' + ((Number(anterior.versao) || 1) + 1) : proximoCodigo_(), escolaId: escola.id, equipeId: u.equipeId, usuarioId: u.id,
-    status: 'em_andamento', checkin: p.checkin || agora_(), latIn: p.lat || '', lngIn: p.lng || '', atualizadoEm: agora_(),
+    status: 'em_andamento', checkin: p.checkin || agora_(), latIn: p.lat || '', lngIn: p.lng || '', atualizadoEm: agora_(), participantes: u.id,
     versao: anterior ? String((Number(anterior.versao) || 1) + 1) : '1', retomadaDe: anterior ? anterior.id : '',
     historico: anterior ? JSON.stringify(historico_(anterior.historico).length ? historico_(anterior.historico) : [{ v: Number(anterior.versao) || 1, em: anterior.checkout || anterior.checkin, nota: anterior.status }]) : ''
   });
@@ -96,8 +135,54 @@ function acaoCheckin_(p, u) {
   Db.upsert('Roteiro', Object.assign(rot, { status: 'em_andamento', vistoriaId: v.id }));
 
   Db.upsert('Equipes', { id: u.equipeId, status: 'em_campo', statusDesde: agora_(), vistoriaAtual: v.id, destinoEscolaId: '', destinoEta: '' });
+  Db.upsert('Usuarios', { id: u.id, vistoriaAtual: v.id });
   log_(u.id, 'checkin', { vistoria: v.codigo, escola: escola.nome });
   return { id: v.id, codigo: v.codigo, pastaId: v.pastaId };
+}
+
+function adicionarParticipante_(v, u) {
+  const l = participantes_(v);
+  if (l.indexOf(u.id) < 0) Db.upsert('Vistorias', { id: v.id, participantes: l.concat(u.id).join(',') });
+  Db.upsert('Usuarios', { id: u.id, vistoriaAtual: v.id });
+  Db.upsert('Equipes', { id: v.equipeId, status: 'em_campo', statusDesde: agora_(), destinoEscolaId: '' });
+}
+
+/** Entrar na vistoria que o colega já abriu (mesma escola). */
+function acaoEntrarVistoria_(p, u) {
+  const v = exigirVistoria_(p.vistoriaId, u);
+  if (v.status !== 'em_andamento') throw new Error('Esta vistoria já foi ' + (v.status === 'cancelada' ? 'cancelada.' : 'finalizada.'));
+  adicionarParticipante_(v, u);
+  log_(u.id, 'entrar', { vistoria: v.codigo });
+  return vistoriaCliente_(Db.find('Vistorias', v.id));
+}
+
+/** Sair da vistoria sem encerrá-la (o colega continua). */
+function acaoSairVistoria_(p, u) {
+  const v = resolverVistoria_(p.vistoriaId);
+  if (!v) return { ok: true };
+  Db.upsert('Vistorias', { id: v.id, participantes: participantes_(v).filter(x => x !== u.id).join(',') });
+  Db.upsert('Usuarios', { id: u.id, vistoriaAtual: '' });
+  return { ok: true };
+}
+
+/** Atualizações da vistoria feitas pelos colegas (o app consulta de tempos em tempos). */
+function acaoPuxarVistoria_(p, u) {
+  const v = exigirVistoria_(p.vistoriaId, u);
+  const r = vistoriaCliente_(v);
+  if (v.status !== 'em_andamento') {
+    const quem = Db.where('Log', l => /finalizar|cancelar/.test(l.acao) && String(l.detalhe).indexOf(v.codigo) >= 0).pop();
+    r.encerradaPor = quem ? (Db.find('Usuarios', quem.usuario) || {}).nome || '' : '';
+  }
+  return r;
+}
+
+/** Cópia de segurança, no Drive, de um envio que o servidor recusou (nada se perde). */
+function acaoGuardarFalha_(p, u) {
+  const pasta = subpasta_(pastaRaiz_(), 'Falhas de sincronização');
+  const nome = [fmtData_(agora_(), 'yyyyMMdd-HHmmss'), u.nome, p.acao].join('_').replace(/[^\w.-]+/g, '_') + '.json';
+  const arq = pasta.createFile(Utilities.newBlob(JSON.stringify({ usuario: u.nome, acao: p.acao, erro: p.erro, em: agora_(), payload: p.payload }, null, 1), 'application/json', nome));
+  log_(u.id, 'falha', { acao: p.acao, erro: p.erro, arquivo: arq.getId() });
+  return { fileId: arq.getId() };
 }
 
 function proximoCodigo_() {
@@ -109,10 +194,12 @@ function proximoCodigo_() {
   return 'VST-' + ano + '-' + ('000' + n).slice(-4);
 }
 
+/** Vistoria acessível: da própria equipe (ou supervisão) e de escola nas DREs do usuário. */
 function exigirVistoria_(id, u) {
-  const v = Db.find('Vistorias', id);
+  const v = resolverVistoria_(id);
   if (!v) throw new Error('Vistoria não encontrada.');
-  if (v.equipeId !== u.equipeId && u.perfil !== 'admin') throw new Error('Esta vistoria pertence a outra equipe.');
+  if (v.equipeId !== u.equipeId && !ehSupervisor_(u)) throw new Error('Esta vistoria pertence a outra equipe.');
+  exigirEscola_(v.escolaId, u);
   return v;
 }
 
@@ -124,9 +211,15 @@ function acaoSalvarEtapa_(p, u) {
   const v = exigirVistoria_(p.vistoriaId, u);
   if (ETAPAS_VALIDAS_.indexOf(p.etapa) < 0) throw new Error('Etapa inválida: ' + p.etapa);
   if (v.status !== 'em_andamento') return { ignorado: true, status: v.status };
-  salvarEtapaDb_(v.id, p.etapa, p.dados, u.id);
+  const atual = Db.find('Etapas', v.id + ':' + p.etapa);
+  const env = atual ? lerEnvelope_(atual) : { dados: {}, m: {} };
+  // Formato antigo (etapa inteira) vira uma operação de inicialização.
+  const ops = p.ops || [{ p: p.etapa, v: p.dados || {}, ts: agora_(), init: !!atual }];
+  if (!p.ops && !atual) env.dados = p.dados || {};
+  else aplicarOps_(env.dados, env.m, p.etapa, ops);
+  salvarEtapaDb_(v.id, p.etapa, env.dados, u.id, env.m);
   Db.upsert('Vistorias', { id: v.id, atualizadoEm: agora_() });
-  return { ts: agora_() };
+  return { ts: agora_(), etapa: p.etapa, vistoriaId: v.id, dados: env.dados };
 }
 
 function acaoUploadFoto_(p, u) {
@@ -165,9 +258,16 @@ function acaoFotoPerfil_(p, u) {
 }
 
 /** Miniaturas (data URLs) de arquivos do Drive para galerias e credencial. */
-function acaoThumbs_(p) {
-  const ids = (p.ids || []).slice(0, 40);
-  return miniaturas_(ids, Number(p.tamanho) || 360);
+function acaoThumbs_(p, u) {
+  const pedidos = (p.ids || []).slice(0, 40);
+  // Só arquivos que o usuário pode ver: fotos de escolas das suas DREs (supervisão vê todas) e fotos de credencial.
+  const dres = lista_(u.dres);
+  const esc = {};
+  Db.all('Escolas').forEach(e => { if (!dres.length || dres.indexOf(e.dre) >= 0) esc[e.id] = true; });
+  const ok = {};
+  Db.all('Fotos').forEach(f => { if (esc[f.escolaId]) ok[f.fileId] = true; });
+  Db.all('Usuarios').forEach(x => { if (x.fotoId && (x.id === u.id || ehSupervisor_(u))) ok[x.fotoId] = true; });
+  return miniaturas_(pedidos.filter(id => ok[id]), Number(p.tamanho) || 360);
 }
 
 /* ───────────────────────── Cancelamento ───────────────────────── */
@@ -191,7 +291,7 @@ function acaoCancelar_(p, u) {
     id: 'pc-' + v.id, vistoriaId: v.id, escolaId: v.escolaId, etapa: 'cancelamento',
     descricao: 'Nova visita necessária · ' + p.motivo + (p.quemRecusou ? ' (' + p.quemRecusou + ')' : ''), status: 'aberta', criadoEm: agora_()
   });
-  Db.upsert('Equipes', { id: u.equipeId, status: 'disponivel', statusDesde: agora_(), vistoriaAtual: '' });
+  statusEquipeAposEncerrar_(v.equipeId, v.id, null);
   log_(u.id, 'cancelar', { vistoria: v.codigo, escola: escola.nome, motivo: p.motivo });
 
   const cfg = getConfig_();
@@ -254,11 +354,8 @@ function acaoFinalizar_(p, u) {
   }
 
   const vf = Db.find('Vistorias', v.id);
-  const prox = proximaEscola_(u.equipeId, v.escolaId);
-  Db.upsert('Equipes', {
-    id: u.equipeId, status: prox ? 'em_transito' : 'disponivel', statusDesde: agora_(), vistoriaAtual: '',
-    destinoEscolaId: prox ? prox.escola.id : ''
-  });
+  const prox = proximaEscola_(v.equipeId, v.escolaId);
+  const st = statusEquipeAposEncerrar_(v.equipeId, v.id, prox);
 
   // Relatórios em PDF no Drive.
   const docs = {};
@@ -279,9 +376,18 @@ function acaoFinalizar_(p, u) {
     id: v.id, codigo: vf.codigo, escolaId: v.escolaId, checkin: vf.checkin, checkout: vf.checkout,
     assinado: !!vf.assinadoEm, assinantes: [cfg.RESPONSAVEL_TECNICO, rev.respNome].filter(String),
     resumo: parse_(vf.resumo), docs: docs, copia: copia,
-    equipeStatus: prox ? 'em_transito' : 'disponivel',
+    equipeStatus: st,
     proxima: prox ? { escolaId: prox.escola.id, hora: prox.rot.hora } : null
   };
+}
+
+/** Depois de encerrar: se a equipe ainda tem outra escola aberta, continua em campo. */
+function statusEquipeAposEncerrar_(equipeId, vistoriaId, prox) {
+  const outra = Db.where('Vistorias', x => x.equipeId === equipeId && x.status === 'em_andamento' && x.id !== vistoriaId)[0];
+  const st = outra ? 'em_campo' : prox ? 'em_transito' : 'disponivel';
+  Db.upsert('Equipes', { id: equipeId, status: st, statusDesde: agora_(), vistoriaAtual: outra ? outra.id : '', destinoEscolaId: !outra && prox ? prox.escola.id : '' });
+  Db.where('Usuarios', x => x.vistoriaAtual === vistoriaId).forEach(x => Db.upsert('Usuarios', { id: x.id, vistoriaAtual: '' }));
+  return st;
 }
 
 function proximaEscola_(equipeId, exceto) {
@@ -305,6 +411,7 @@ function acaoStatusEquipe_(p, u) {
 function acaoResolverPendencia_(p, u) {
   const x = Db.find('Pendencias', p.id);
   if (!x) throw new Error('Pendência não encontrada.');
+  exigirEscola_(x.escolaId, u);
   Db.upsert('Pendencias', { id: x.id, status: 'resolvida', resolvidoEm: agora_(), resolvidoPor: u.id });
   log_(u.id, 'pendencia', { id: x.id, descricao: x.descricao });
   return { ok: true };
@@ -313,8 +420,7 @@ function acaoResolverPendencia_(p, u) {
 /* ───────────────────────── Rotas (serviço Maps) ───────────────────────── */
 
 function acaoRota_(p, u) {
-  const e = Db.find('Escolas', p.escolaId);
-  if (!e) throw new Error('Escola não encontrada.');
+  const e = exigirEscola_(p.escolaId, u);
   const destino = e.lat && e.lng ? [Number(e.lat), Number(e.lng)] : null;
   const endereco = [e.logradouro, e.numero, e.bairro, 'São Paulo - SP'].filter(String).join(', ');
   const out = { escolaId: e.id, destino: destino, endereco: endereco, min: null, km: null, chegada: null, mapa: null };

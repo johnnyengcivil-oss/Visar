@@ -145,7 +145,7 @@
     ]) ?>
   <? } else { var c1 = en.cx1 || {}, c2 = en.cx2 || {}; ?>
     <?!= H.kv([
-      ['Padrão', en.padrao ? 'BT · Baixa tensão' : ''], ['Tipo de entrada', en.tipoEntrada], ['Poste', en.poste], ['Tensão nominal', en.tensao === 'Outro' ? en.tensaoOutro : en.tensao],
+      ['Padrão', en.padrao ? 'BT · Baixa tensão' : ''], ['Tipo de entrada', en.tipoEntrada], ['Poste', en.poste], ['Tensão nominal', en.tensao === 'Outro' ? en.tensaoOutro : en.tensao], ['Fornecimento', en.fases],
       ['Caixa 1 · medição', c1.tipo], ['Nº do medidor', c1.medidor], ['Caixa 2 · proteção', c2.tipo], ['Dispositivo', c2.protecao],
       ['Disjuntor geral', c2.disjuntor, 'A']
     ]) ?>
@@ -190,7 +190,7 @@
   <table class="grid" style="margin-top:12px">
     <tr><th>Bloco</th><th>Pav.</th><th>Cobertura</th><th>Acesso</th><th>Estado</th><th>Brises / beirais</th><th>Paredes</th><th>Pé-direito</th></tr>
     <? for (var b = 0; b < nBlocos; b++) { var bl = blocos[b] || {}; ?>
-    <tr><td><b><?= R.letra(b) ?></b></td><td><?= bl.pav || 1 ?></td><td><?!= H.val(bl.cobTipo) ?></td><td><?!= H.val(bl.cobAcesso) ?></td><td><?!= H.val(bl.cobEstado) ?></td>
+    <tr><td><b><?= R.bloco(b) ?></b></td><td><?= bl.pav || 1 ?></td><td><?!= H.val(bl.cobTipo) ?></td><td><?!= H.val(bl.cobAcesso) ?></td><td><?!= H.val(bl.cobEstado) ?></td>
       <td><?!= H.val([bl.brises, bl.beirais ? 'beiral ' + String(bl.beirais).toLowerCase() + (bl.beiralLarg ? ' ' + bl.beiralLarg + ' cm' : '') : ''].filter(String)) ?></td>
       <td><?!= H.val(bl.paredes) ?></td><td><?!= H.val(bl.peDireito, 'm') ?></td></tr>
     <? } ?>
@@ -199,7 +199,7 @@
   <table class="grid">
     <tr><th>Bloco</th><th>Norte</th><th>Sul</th><th>Leste</th><th>Oeste</th></tr>
     <? for (var b2 = 0; b2 < nBlocos; b2++) { var fa = (blocos[b2] || {}).fachadas || {}; ?>
-    <tr><td><b><?= R.letra(b2) ?></b></td><td><?!= H.val(fa.N) ?></td><td><?!= H.val(fa.S) ?></td><td><?!= H.val(fa.L) ?></td><td><?!= H.val(fa.O) ?></td></tr>
+    <tr><td><b><?= R.bloco(b2) ?></b></td><td><?!= H.val(fa.N) ?></td><td><?!= H.val(fa.S) ?></td><td><?!= H.val(fa.L) ?></td><td><?!= H.val(fa.O) ?></td></tr>
     <? } ?>
   </table>
   <h3>Estado de conservação</h3>
@@ -213,7 +213,7 @@
   <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
   <h2>5. Instalações elétricas por bloco</h2>
   <? for (var b3 = 0; b3 < nBlocos; b3++) { var q = (el.blocos || [])[b3] || {}; ?>
-    <h3>Bloco <?= R.letra(b3) ?></h3>
+    <h3><?= R.bloco(b3) ?></h3>
     <?!= H.kv([
       ['Quadros no bloco', q.quadros], ['Tipo de quadro', q.tipo], ['Tensão', q.tensao], ['Vagas livres', q.vagas],
       ['Estado do quadro', q.estado], ['DR instalado', q.dr], ['Circuito dedicado AC', q.circuito], ['Ponto de força', q.pontoForca],
@@ -230,13 +230,13 @@
   <div class="topo"><?= R.cfg.CONSORCIO ?> · Relatório Técnico de Vistoria <?= R.v.codigo ?><span><?= R.d.nome ?> · DRE <?= R.d.dre ?></span></div>
   <h2>6. Ambientes internos</h2>
   <table class="grid">
-    <tr><th>Local</th><th>Ambiente</th><th class="n">Qtd</th><th class="n">C × L × PD (m)</th><th class="n">Área total</th><th>Fachadas</th><th>Janelas</th><th class="n">TUG</th><th class="n">Ilum.</th></tr>
+    <tr><th>Local</th><th>Ambiente</th><th class="n">Qtd</th><th class="n">C × L × PD (m)</th><th class="n">Área total</th><th>Fachadas</th><th>Aberturas</th><th class="n">TUG</th><th class="n">Ilum.</th></tr>
     <? internos.sort(function (a, b) { return (a.bloco - b.bloco) || (a.pav - b.pav); }).forEach(function (a) {
          var area = (Number(String(a.c).replace(',', '.')) || 0) * (Number(String(a.l).replace(',', '.')) || 0);
          var j = a.jan || {}; var il = (a.lum || []).reduce(function (s, l) { return s + (Number(l.qtd) || 0); }, 0); ?>
-    <tr><td><?= R.letra(a.bloco) ?> · <?= R.pav(a.pav) ?></td><td><b><?= a.tipo === 'Outro' ? a.tipoOutro : a.tipo ?></b><?= a.nome ? ' · ' + a.nome : '' ?></td><td class="n"><?= a.qtd || 1 ?></td>
+    <tr><td><?= R.bloco(a.bloco) ?> · <?= R.pav(a.pav) ?></td><td><b><?= a.tipo === 'Outro' ? a.tipoOutro : a.tipo ?></b><?= a.nome ? ' · ' + a.nome : '' ?></td><td class="n"><?= a.qtd || 1 ?></td>
       <td class="n"><?= a.c || '—' ?> × <?= a.l || '—' ?> × <?= a.pd || '—' ?></td><td class="n"><?= F(area * (Number(a.qtd) || 1), 1) ?> m²</td>
-      <td><?= (a.fachadas || []).join(', ') || '—' ?></td><td><?= j.qtd ? j.qtd + '× ' + (j.tipo || '') : '—' ?></td><td class="n"><?= a.tug || 0 ?></td><td class="n"><?= il ?></td></tr>
+      <td><?= (a.fachadas || []).join(', ') || '—' ?></td><td><?= H.aberturas(a) || '—' ?></td><td class="n"><?= a.tug || 0 ?></td><td class="n"><?= il ?></td></tr>
     <? }); ?>
     <? if (!internos.length) { ?><tr><td colspan="9" style="color:#9AA6B6">Nenhum ambiente interno registrado.</td></tr><? } ?>
   </table>
@@ -288,7 +288,7 @@
     ['Potência estimada do AC', F(C.kwAc, 1) + ' kW'], ['Premissa', F(C.kwPorTr, 2) + ' kW/TR'],
     ['Capacidade da entrada', C.kwEntrada ? F(C.kwEntrada, 1) + ' kW' : 'não informada'], ['Demanda medida', C.kwMedido ? F(C.kwMedido, 1) + ' kW' : 'não medida']
   ]) ?>
-  <p style="color:#6B7A90;font-size:8.5px;margin-top:12px">Premissas: fatores de carga por m² conforme o uso do ambiente; +10% para fachadas Norte/Oeste e para o último pavimento; equipamentos de uso específico somados à carga (W × 3,412); capacidades arredondadas para o modelo comercial imediatamente superior. Capacidade da entrada estimada com fator de potência 0,92. Valores para orçamento — não substituem o projeto executivo.</p>
+  <p style="color:#6B7A90;font-size:8.5px;margin-top:12px">Premissas: fatores de carga por m² conforme o uso do ambiente; +10% para o último pavimento e, quando as aberturas não foram medidas, +10% para fachadas Norte/Oeste; equipamentos de uso específico somados à carga (W × 3,412); capacidades arredondadas para o modelo comercial imediatamente superior. Ganho solar pelo vidro das aberturas medidas (BTU/h·m²: Norte 520, Leste 600, Oeste 700, Sul 160), reduzido por cortina/película (×0,7) ou brise (×0,5). Capacidade da entrada estimada pelo fornecimento (mono, bi ou trifásico) com fator de potência 0,92. Valores para orçamento — não substituem o projeto executivo.</p>
   <div class="rodape">Gerado pelo VistAR em <?= R.geradoEm ?><span>Página <?= ++pg ?> de <?= total ?></span></div>
 </div>
 

@@ -26,6 +26,8 @@ const TUE_PADRAO = {
 };
 const BLOCO = i => String.fromCharCode(65 + Number(i || 0));
 const PAV = p => Number(p) === 0 ? 'Térreo' : p + 'º';
+/** Nome do bloco/setor: o nome dado em campo (ex.: "Anexo") ou "Bloco A". */
+const NB = b => (((App.V && App.V.d.estrutura.blocos) || [])[Number(b) || 0] || {}).nome || 'Bloco ' + BLOCO(b);
 
 /* ───── Estado da vistoria ───── */
 const Vist = {
@@ -57,47 +59,165 @@ const Vist = {
   },
   doServidor(s) {
     const e = App.escola(s.escolaId) || { id: s.escolaId };
-    const V = { id: s.id, codigo: s.codigo, escolaId: s.escolaId, status: s.status, checkin: s.checkin, srv: true, etapa: 'dados', ts: {}, fotos: {}, ui: { bloco: 0, pav: 0 }, d: this.padrao(e) };
+    const V = { id: s.id, codigo: s.codigo, escolaId: s.escolaId, status: s.status, checkin: s.checkin, srv: true, etapa: 'dados', ts: {}, fotos: {}, pend: {},
+      ui: { bloco: 0, pav: 0 }, d: this.padrao(e), participantes: s.participantes || [] };
     Object.keys(s.etapas || {}).forEach(k => { V.d[k] = Object.assign(V.d[k] || {}, s.etapas[k].dados || {}); V.ts[k] = s.etapas[k].ts; });
     (s.fotos || []).forEach(f => { V.fotos[f.id] = Object.assign({}, f, { st: 'ok' }); });
     return V;
   },
-  /** Junta o que veio do servidor com o rascunho local (vence o mais recente por etapa). */
+  /** Junta o que veio do servidor com o que está no aparelho (por campo; ver aplicarServidor). */
   mesclar(s) {
     const L = App.V;
     const pendente = id => Sync.has(i => i.payload && (i.payload.vistoriaId === id || i.payload.id === id));
     if (s) {
+      if (L && L.alias === s.id) { L.alias = L.id; L.id = s.id; }
       if (!L || L.id !== s.id) {
-        if (L && L.status !== 'cancelada' && pendente(L.id)) return;
+        if (L && L.status !== 'cancelada' && (pendente(L.id) || !L.srv)) return;
         App.V = this.doServidor(s);
-      } else {
-        Object.keys(s.etapas || {}).forEach(k => {
-          const lt = L.ts[k];
-          const naFila = Sync.has(i => i.key === 'etapa:' + L.id + ':' + k);
-          if (!naFila && (!lt || (s.etapas[k].ts && s.etapas[k].ts > lt))) { L.d[k] = Object.assign(L.d[k] || {}, s.etapas[k].dados || {}); L.ts[k] = s.etapas[k].ts; }
-        });
-        (s.fotos || []).forEach(f => { L.fotos[f.id] = Object.assign(L.fotos[f.id] || {}, f, { st: 'ok' }); });
-        L.codigo = s.codigo; L.srv = true;
-      }
+      } else this.atualizar(s);
     } else if (L && L.status === 'em_andamento' && L.srv && !pendente(L.id)) {
       App.V = null; // encerrada em outro aparelho
     }
     this.salvar(true);
+  },
+  /** Aplica uma leitura do servidor (puxar/bootstrap) na vistoria aberta. Devolve true se algo mudou. */
+  atualizar(s) {
+    const L = App.V;
+    if (!L) return false;
+    const antes = JSON.stringify([L.d, Object.keys(L.fotos).length]);
+    Object.keys(s.etapas || {}).forEach(k => this.aplicarServidor(k, s.etapas[k].dados || {}));
+    (s.fotos || []).forEach(f => { if (!L.fotos[f.id] || L.fotos[f.id].st !== 'pend') L.fotos[f.id] = Object.assign(L.fotos[f.id] || {}, f, { st: 'ok' }); });
+    if (s.codigo) L.codigo = s.codigo;
+    if (s.participantes) L.participantes = s.participantes;
+    L.srv = true;
+    this.salvar();
+    return antes !== JSON.stringify([L.d, Object.keys(L.fotos).length]);
   },
   salvar(ja) {
     clearTimeout(this._t);
     const f = () => { if (App.V) LS.set('v', App.V); else LS.del('v'); };
     if (ja) f(); else this._t = setTimeout(f, 250);
   },
-  /** Marca a etapa como alterada: salva no aparelho e agenda o envio. */
-  tocar(etapa, ja) {
+
+  /* ── Edição colaborativa ──────────────────────────────────────────────
+     Cada alteração vira uma operação { p: caminho, v: valor, ts }. Itens de coleção
+     (ambientes, equipamentos) vão inteiros como "etapa.itens#id". O servidor mescla
+     por campo/registro e o mais recente vence; assim dois técnicos editam a mesma
+     vistoria sem um apagar o trabalho do outro. */
+  carimbo() {
+    const t = Date.now();
+    this._seq = t === this._ult ? (this._seq || 0) + 1 : 0;
+    this._ult = t;
+    return new Date(t).toISOString() + String(this._seq).padStart(3, '0');
+  },
+  chave(path) {
+    if (path.indexOf('#') >= 0) return path;
+    const m = /^(ambientes|equipamentos)\.itens\.(\d+)/.exec(path);
+    if (m && App.V) { const it = (App.V.d[m[1]].itens || [])[+m[2]]; if (it && it.id) return m[1] + '.itens#' + it.id; }
+    return path;
+  },
+  /** Registra a mudança de um campo (ou registro "colecao#id"; apagado = exclusão). */
+  mudou(path, apagado, init) {
     const V = App.V;
-    if (!V || !V.d[etapa]) return;
+    if (!V) return;
+    const etapa = path.split(/[.#]/)[0];
+    if (!V.d[etapa]) return;
+    V.pend = V.pend || {};
+    (V.pend[etapa] = V.pend[etapa] || {})[init ? etapa : this.chave(path)] = { ts: this.carimbo(), del: !!apagado, init: !!init };
     V.ts[etapa] = new Date().toISOString();
     this.salvar();
+    this.agendar(etapa);
+  },
+  /** Envia já (ou daqui a pouco) as mudanças pendentes da etapa. */
+  tocar(etapa, ja) { this.agendar(etapa, ja); },
+  agendar(etapa, ja) {
     clearTimeout((this._e = this._e || {})[etapa]);
-    const envia = () => Sync.add('salvarEtapa', { vistoriaId: V.id, etapa: etapa, dados: V.d[etapa] }, 'etapa:' + V.id + ':' + etapa);
-    if (ja) envia(); else this._e[etapa] = setTimeout(envia, 1800);
+    if (ja) this.enviar(etapa); else this._e[etapa] = setTimeout(() => this.enviar(etapa), 1500);
+  },
+  valorDe(etapa, chave, x) {
+    const V = App.V;
+    if (x.init) return JSON.parse(JSON.stringify(V.d[etapa]));
+    if (chave.indexOf('#') >= 0) {
+      const col = chave.split('#')[0], id = chave.split('#')[1];
+      const rec = (Form.get(col) || []).find(r => r.id === id);
+      return x.del || !rec ? null : JSON.parse(JSON.stringify(rec));
+    }
+    const v = Form.get(chave);
+    return v === undefined ? '' : JSON.parse(JSON.stringify(v));
+  },
+  enviar(etapa) {
+    const V = App.V;
+    const pend = V && V.pend && V.pend[etapa];
+    if (!pend || !Object.keys(pend).length) return;
+    const ops = Object.keys(pend).map(k => ({ p: k, v: this.valorDe(etapa, k, pend[k]), ts: pend[k].ts, init: pend[k].init || undefined }));
+    V.pend[etapa] = {};
+    this.salvar(true);
+    Sync.add('salvarEtapa', { vistoriaId: V.id, etapa: etapa, ops: ops }, 'etapa:' + V.id + ':' + etapa, Vist.juntarOps);
+  },
+  juntarOps(antigo, novo) {
+    const m = {};
+    (antigo.ops || []).concat(novo.ops || []).forEach(o => { if (!m[o.p] || m[o.p].ts <= o.ts) m[o.p] = o; });
+    return Object.assign({}, novo, { ops: Object.keys(m).map(k => m[k]) });
+  },
+  /** Caminhos ainda não confirmados pelo servidor (pendentes no aparelho ou na fila). */
+  pendentes(etapa) {
+    const V = App.V, out = {};
+    Object.keys((V.pend || {})[etapa] || {}).forEach(k => { out[k] = V.pend[etapa][k]; });
+    const ids = [V.id, V.alias];
+    Sync.q.forEach(i => { if (i.acao === 'salvarEtapa' && ids.indexOf(i.payload.vistoriaId) >= 0 && i.payload.etapa === etapa) (i.payload.ops || []).forEach(o => { out[o.p] = out[o.p] || { del: o.v === null, init: o.init }; }); });
+    return out;
+  },
+  /** Versão do servidor + o que ainda não foi enviado deste aparelho por cima. */
+  aplicarServidor(etapa, srv) {
+    const V = App.V;
+    if (!V || !V.d[etapa]) return;
+    const local = V.d[etapa];
+    const novo = JSON.parse(JSON.stringify(srv || {}));
+    const pend = this.pendentes(etapa);
+    Object.keys(pend).forEach(k => {
+      if (pend[k].init) return;
+      const rel = k.slice(etapa.length + 1);
+      if (k.indexOf('#') >= 0) {
+        const col = rel.split('#')[0], id = rel.split('#')[1];
+        const ks = col.split('.');
+        let arr = ks.reduce((o, x) => (o ? o[x] : undefined), novo);
+        if (!Array.isArray(arr)) { arr = []; ks.reduce((o, x, i) => (i === ks.length - 1 ? (o[x] = arr) : (o[x] = o[x] || {})), novo); }
+        const i = arr.findIndex(r => r && r.id === id);
+        const rec = (ks.reduce((o, x) => (o ? o[x] : undefined), local) || []).find(r => r && r.id === id);
+        if (pend[k].del || !rec) { if (i >= 0) arr.splice(i, 1); } else if (i >= 0) arr[i] = rec; else arr.push(rec);
+      } else {
+        const ks = rel.split('.');
+        let o = novo;
+        ks.slice(0, -1).forEach((x, i) => { if (o[x] === null || o[x] === undefined || typeof o[x] !== 'object') o[x] = /^\d+$/.test(ks[i + 1]) ? [] : {}; o = o[x]; });
+        o[ks[ks.length - 1]] = ks.reduce((a, x) => (a ? a[x] : undefined), local);
+      }
+    });
+    // Campos que só existem no aparelho (valores padrão ainda não enviados) continuam.
+    const completar = (a, b) => { Object.keys(b || {}).forEach(x => { if (a[x] === undefined) a[x] = b[x]; else if (a[x] && b[x] && typeof a[x] === 'object' && !Array.isArray(a[x]) && typeof b[x] === 'object') completar(a[x], b[x]); }); };
+    completar(novo, local);
+    V.d[etapa] = novo;
+  },
+  /** Busca o que os colegas mudaram nesta vistoria. */
+  async puxar(silencioso) {
+    const V = App.V;
+    if (!V || !V.srv || V.status !== 'em_andamento' || navigator.onLine === false || this._puxando) return;
+    if (Sync.has(i => i.acao === 'checkin' && i.payload.id === V.id)) return;
+    this._puxando = true;
+    try {
+      const r = await Api.run('puxarVistoria', { vistoriaId: V.id });
+      if (!App.V || App.V.id !== V.id) return;
+      if (r.status !== 'em_andamento') {
+        if (Sync.has(i => i.payload && i.payload.vistoriaId === V.id && /finalizar|cancelar/.test(i.acao))) return;
+        App.V = null; this.salvar(true);
+        toast('A vistoria de ' + curto((App.escola(V.escolaId) || {}).nome) + ' foi ' + (r.status === 'cancelada' ? 'cancelada' : 'finalizada') + (r.encerradaPor ? ' por ' + r.encerradaPor : ' por um colega') + '.', 'warn', 6000);
+        Router.reset('home'); App.refresh();
+        return;
+      }
+      if (r.id !== V.id) { V.alias = V.id; V.id = r.id; }
+      const mudou = this.atualizar(r);
+      const rota = App.route && App.route.name;
+      if (mudou && !silencioso && ['etapa', 'home', 'fotos', 'pendencias'].indexOf(rota) >= 0 && !App.editando() && !$('#layer').innerHTML) App.rerender();
+    } catch (e) { /* tenta na próxima */ } finally { this._puxando = false; }
   },
   fotosDe(slot) {
     const V = App.V;
@@ -117,14 +237,26 @@ const Vist = {
 };
 
 Sync.on('checkin', (r, p) => {
-  if (App.V && App.V.id === p.id) { App.V.codigo = r.codigo; App.V.srv = true; Vist.salvar(true); }
+  if (App.V && (App.V.id === p.id || App.V.alias === p.id)) {
+    App.V.codigo = r.codigo; App.V.srv = true;
+    if (r.mescladaEm) { App.V.alias = App.V.id; App.V.id = r.mescladaEm; }
+    Vist.salvar(true);
+    // O colega já tinha aberto esta escola: as duas vistorias viraram uma só. Traz o que ele fez.
+    if (r.mescladaEm) { toast('Seu colega já estava nesta escola: os dados de vocês foram juntados.', 'ok', 5000); Vist.puxar(); }
+  }
 });
-Sync.on('checkin:erro', (e, p) => {
+Sync.on('checkin:erro', async (e, p) => {
+  // Nada se perde: o que estava na fila desta vistoria vai para "Itens com erro".
+  const presos = Sync.q.filter(i => i.payload && i.payload.vistoriaId === p.id && !i.running);
+  Sync.q = Sync.q.filter(i => presos.indexOf(i) < 0);
+  for (const i of presos) { await IDB.del('outbox', i.id); await Sync.arquivarFalha(i, 'Check-in recusado: ' + e.message); }
   if (App.V && App.V.id === p.id) {
     toast('Check-in recusado: ' + e.message, 'err', 7000);
-    Sync.q = Sync.q.filter(i => !(i.payload && i.payload.vistoriaId === p.id));
     App.V = null; Vist.salvar(true); Router.reset('home'); App.refresh();
   }
+});
+Sync.on('salvarEtapa', (r, p) => {
+  if (r && r.dados && App.V && (App.V.id === p.vistoriaId || App.V.alias === p.vistoriaId)) { Vist.aplicarServidor(r.etapa, r.dados); Vist.salvar(); }
 });
 Sync.on('uploadFoto', (r, p) => {
   const V = App.V;
@@ -171,7 +303,7 @@ const Fotos = {
     const rot = el.dataset.rot || 'Foto';
     return {
       slot: el.dataset.slot, etapa: etapa, ref: el.dataset.ref || '', rotulo: rot, opcoes: opcoes.length > 1 ? opcoes : [],
-      escola: V ? V.d.dados.nome : '', sub: (ROTULO_ETAPA[etapa] || '') + ' · ' + rot + (bloco ? ' · Bloco ' + BLOCO(bloco[1]) : ''),
+      escola: V ? V.d.dados.nome : '', sub: (ROTULO_ETAPA[etapa] || '') + ' · ' + rot + (bloco ? ' · ' + NB(bloco[1]) : ''),
       dica: { eletrica: 'Enquadre o quadro inteiro e a identificação dos circuitos', entrada: 'Enquadre a caixa inteira, o medidor e o disjuntor', dados: 'Fotos padrão, enquadrando o prédio inteiro', estrutura: 'Mostre a cobertura ou a área inteira', ambientes: 'Do canto da sala, mostrando janelas e teto', equipamentos: 'Chapa legível, sem reflexo' }[etapa]
     };
   },
@@ -217,7 +349,7 @@ const Form = {
       o = o[k];
     });
     o[ks[ks.length - 1]] = v;
-    if (path[0] !== '@') Vist.tocar(path.split('.')[0]);
+    if (path[0] !== '@') Vist.mudou(path);
   },
   input(el) {
     this.set(el.dataset.k, el.type === 'checkbox' ? el.checked : el.value);
@@ -306,6 +438,7 @@ Object.assign(Act, {
     const limpo = JSON.parse(JSON.stringify(a));
     delete limpo._novo; delete limpo._tocouTue;
     if (i >= 0) it[i] = limpo; else it.push(limpo);
+    Vist.mudou('ambientes.itens#' + limpo.id);
     Vist.tocar('ambientes', true);
     vib(14);
     toast((a.externo ? 'Área externa' : 'Ambiente') + ' salvo', 'ok', 1400);
@@ -317,6 +450,7 @@ Object.assign(Act, {
     if (!(await confirmar({ titulo: 'Excluir ' + (a.nome || a.tipo) + '?', texto: 'As fotos deste ambiente também serão excluídas.', sim: 'Excluir', perigo: true }))) return;
     App.V.d.ambientes.itens = App.V.d.ambientes.itens.filter(x => x.id !== a.id);
     Object.values(App.V.fotos).filter(f => f.ref === a.id).forEach(f => Fotos.remover(f.id));
+    Vist.mudou('ambientes.itens#' + a.id, true);
     Vist.tocar('ambientes', true);
     App.form = null;
     Router.back();
@@ -325,7 +459,7 @@ Object.assign(Act, {
     const V = App.V;
     const key = V.ui.bloco + '-' + V.ui.pav;
     V.d.ambientes.pavOk[key] = !V.d.ambientes.pavOk[key];
-    Vist.tocar('ambientes');
+    Vist.mudou('ambientes.pavOk.' + key);
     if (V.d.ambientes.pavOk[key]) {
       const pavs = Number(((V.d.estrutura.blocos || [])[V.ui.bloco] || {}).pav) || 1;
       if (V.ui.pav < pavs - 1) V.ui.pav++;
@@ -349,8 +483,9 @@ Object.assign(Act, {
   },
   eqAddTipo(el) {
     const n = el.dataset.n;
-    App.V.d.equipamentos.itens.push({ id: uid(), nome: n === 'Outro' ? '' : n, qtd: 1, pot: '', un: n === 'Chuveiro elétrico' || n === 'Forno elétrico' ? 'W' : 'CV', desc: false });
-    Vist.tocar('equipamentos');
+    const novo = { id: uid(), nome: n === 'Outro' ? '' : n, qtd: 1, pot: '', un: n === 'Chuveiro elétrico' || n === 'Forno elétrico' ? 'W' : 'CV', desc: false };
+    App.V.d.equipamentos.itens.push(novo);
+    Vist.mudou('equipamentos.itens#' + novo.id);
     Sheet.close(true);
     App.rerender();
     setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 50);
@@ -359,7 +494,7 @@ Object.assign(Act, {
     const it = App.V.d.equipamentos.itens.find(x => x.id === el.dataset.id);
     if (!(await confirmar({ titulo: 'Remover ' + (it.nome || 'equipamento') + '?', texto: 'Use quando o equipamento não existe na unidade.', sim: 'Remover', perigo: true }))) return;
     App.V.d.equipamentos.itens = App.V.d.equipamentos.itens.filter(x => x.id !== el.dataset.id);
-    Vist.tocar('equipamentos');
+    Vist.mudou('equipamentos.itens#' + el.dataset.id, true);
     App.rerender();
   },
   sigLimpar(el) { Form.set(el.dataset.k, ''); App.rerender(); },
@@ -372,8 +507,8 @@ Object.assign(Act, {
       ['doc', 'doc.documento', 'Documento', 'Planta, conta de energia, ofício…', 'doc'],
       ['dados', 'dados.fachada', 'Fachada', 'Dados da escola', 'school'],
       ['entrada', 'entrada.medidor', 'Medidor / entrada', 'Entrada de energia', 'pin'],
-      ['eletrica', 'eletrica.b' + V.ui.bloco + '.quadro', 'Quadro elétrico', 'Elétrica · Bloco ' + BLOCO(V.ui.bloco), 'checksq'],
-      ['estrutura', 'estrutura.b' + V.ui.bloco + '.cobertura', 'Cobertura', 'Estrutura · Bloco ' + BLOCO(V.ui.bloco), 'home']
+      ['eletrica', 'eletrica.b' + V.ui.bloco + '.quadro', 'Quadro elétrico', 'Elétrica · ' + NB(V.ui.bloco), 'checksq'],
+      ['estrutura', 'estrutura.b' + V.ui.bloco + '.cobertura', 'Cobertura', 'Estrutura · ' + NB(V.ui.bloco), 'home']
     ];
     Sheet.open('<h3>Foto rápida · ' + esc(curto(V.d.dados.nome)) + '</h3><p class="muted small" style="margin:0 0 6px">A foto já vai para a etapa certa.</p>' +
       opts.map(o => '<button class="opt" data-act="quickTipo" data-etapa="' + o[0] + '" data-slot="' + o[1] + '" data-rot="' + esc(o[2]) + '"><span class="ic">' + I(o[4], 20) + '</span><span>' + o[2] + '<small>' + o[3] + '</small></span></button>').join('') +
@@ -442,12 +577,12 @@ const Hooks = {
   nBlocos(n) {
     const e = App.V.d.estrutura, el = App.V.d.eletrica;
     e.blocos = e.blocos || []; el.blocos = el.blocos || [];
-    while (e.blocos.length < n) e.blocos.push({ pav: 1, fachadas: {} });
-    e.blocos.length = n;
-    while (el.blocos.length < n) el.blocos.push({ quadros: 1, cons: {} });
-    el.blocos.length = n;
+    // Blocos a mais não são apagados (um colega pode ter preenchido); o número de blocos manda.
+    for (let i = 0; i < n; i++) {
+      if (!e.blocos[i]) { e.blocos[i] = { pav: 1, fachadas: {} }; Vist.mudou('estrutura.blocos.' + i + '.pav'); }
+      if (!el.blocos[i]) { el.blocos[i] = { quadros: 1, cons: {} }; Vist.mudou('eletrica.blocos.' + i + '.quadros'); }
+    }
     if (App.V.ui.bloco >= n) App.V.ui.bloco = 0;
-    Vist.tocar('eletrica');
   }
 };
 
@@ -618,11 +753,12 @@ const Amb = {
   novo(tipo, ext, bloco, pav) {
     return {
       id: uid(), bloco: ext ? 0 : bloco, pav: ext ? 0 : pav, externo: ext, nome: '', tipo: tipo, qtd: 1, c: '', l: '', pd: '',
-      fachadas: [], jan: {}, ventCruz: false, tug: '',
+      fachadas: [], aberturas: ext ? [] : [Amb.abertura()], ventCruz: false, tug: '',
       lum: [{ id: uid(), nome: ext ? 'Refletor LED 100 W' : 'LED tubular 18 W', lamp: ext ? 1 : 2, qtd: '' }],
       tue: ext ? [] : (TUE_PADRAO[tipo] || []).map(n => ({ id: uid(), nome: n, qtd: '' }))
     };
   },
+  abertura: () => ({ id: uid(), tipo: 'Janela', modelo: '', vidro: '', larg: '', alt: '', peit: '', qtd: '', abert: '', fachada: '', protecao: 'Nenhuma' }),
   area: a => num(a.c) * num(a.l),
   nome: a => a.tipo === 'Outro' ? (a.tipoOutro || 'Outro') : a.tipo,
   semFoto: a => !Vist.fotosDe('ambientes.' + a.id + '.vista').length,
@@ -656,7 +792,7 @@ const Pend = {
         if (!e.padrao) return ['padrão de entrada (BT/MT)'];
         const conservacao = (obj, itens) => itens.filter(i => !(obj || {})[i]).length ? ['estado de conservação'] : [];
         if (e.padrao === 'BT') {
-          return this.campos([['entrada.tipoEntrada', 'tipo de entrada'], ['entrada.tensao', 'tensão nominal'], ['entrada.cx1.tipo', 'tipo da caixa de medição'],
+          return this.campos([['entrada.tipoEntrada', 'tipo de entrada'], ['entrada.tensao', 'tensão nominal'], ['entrada.fases', 'fornecimento (mono, bi ou trifásico)'], ['entrada.cx1.tipo', 'tipo da caixa de medição'],
             ['entrada.cx2.disjuntor', 'disjuntor geral'], ['entrada.aterr', 'aterramento'], ['entrada.cabos.fase', 'cabo fase'], ['entrada.med.rs', 'medição de tensão']])
             .concat(this.fotos([['entrada.medidor', 'medidor'], ['entrada.quadro', 'quadro geral'], ['entrada.aterramento', 'aterramento']]))
             .concat(conservacao(e.cons, ['tampa', 'lacre', 'visor', 'limpeza', 'fundo']));
@@ -669,7 +805,7 @@ const Pend = {
       case 'estrutura': {
         let out = [];
         for (let b = 0; b < nb; b++) {
-          const pre = nb > 1 ? 'Bloco ' + BLOCO(b) + ': ' : '';
+          const pre = nb > 1 ? NB(b) + ': ' : '';
           out = out.concat(this.campos([['estrutura.blocos.' + b + '.cobTipo', 'tipo de cobertura'], ['estrutura.blocos.' + b + '.cobEstado', 'estado da cobertura'],
             ['estrutura.blocos.' + b + '.paredes', 'tipo de parede']]).map(x => pre + x));
           const fa = ((d.estrutura.blocos || [])[b] || {}).fachadas || {};
@@ -682,7 +818,7 @@ const Pend = {
       case 'eletrica': {
         let out = [];
         for (let b = 0; b < nb; b++) {
-          const pre = nb > 1 ? 'Bloco ' + BLOCO(b) + ': ' : '';
+          const pre = nb > 1 ? NB(b) + ': ' : '';
           const p = 'eletrica.blocos.' + b + '.';
           out = out.concat(this.campos([[p + 'tipo', 'tipo de quadro'], [p + 'tensao', 'tensão do quadro'], [p + 'estado', 'estado do quadro'],
             [p + 'circuito', 'circuito dedicado'], [p + 'pontoForca', 'ponto de força'], [p + 'aterr', 'aterramento do quadro']]).map(x => pre + x));
@@ -694,7 +830,7 @@ const Pend = {
         const out = [];
         for (let b = 0; b < nb; b++) {
           const pavs = Number(((d.estrutura.blocos || [])[b] || {}).pav) || 1;
-          for (let p = 0; p < pavs; p++) if (!Amb.lista(b, p).length) out.push('Bloco ' + BLOCO(b) + ' · ' + PAV(p) + (p ? ' pavimento' : '') + ' sem ambientes');
+          for (let p = 0; p < pavs; p++) if (!Amb.lista(b, p).length) out.push(NB(b) + ' · ' + PAV(p) + (p ? ' pavimento' : '') + ' sem ambientes');
         }
         const it = d.ambientes.itens || [];
         const semMed = it.filter(a => !Amb.area(a)).length;
@@ -722,7 +858,7 @@ const Etapas = {
     const nb = Number(V.d.estrutura.nBlocos) || 1;
     if (nb < 2) return '';
     return F.card('', '<span class="lbl" style="text-transform:uppercase;letter-spacing:.6px;font-size:11.5px;font-weight:700">' + (lbl || 'Dados do bloco') + '</span><div class="chips">' +
-      Array.from({ length: nb }, (x, b) => '<button class="chip' + (V.ui.bloco === b ? ' on' : '') + '" data-act="bloco" data-b="' + b + '">Bloco ' + BLOCO(b) + ' · ' + (Number(V.d.estrutura.blocos[b].pav) || 1) + ' pav.</button>').join('') + '</div>');
+      Array.from({ length: nb }, (x, b) => '<button class="chip' + (V.ui.bloco === b ? ' on' : '') + '" data-act="bloco" data-b="' + b + '">' + esc(NB(b)) + ' · ' + (Number(V.d.estrutura.blocos[b].pav) || 1) + ' pav.</button>').join('') + '</div>');
   },
 
   dados() {
@@ -790,6 +926,7 @@ const Etapas = {
           F.seg('entrada.tipoEntrada', 'Tipo de entrada', ['Aérea', 'Subterrânea']) +
           (e.tipoEntrada !== 'Subterrânea' ? F.chips('entrada.poste', 'Tipo de poste', ['Metálico', 'Circular de concreto', 'Duplo T de concreto']) : '') +
           F.chips('entrada.tensao', 'Tensão nominal · BT', ['127 V', '220 V', '380 V', 'Outro']) +
+          F.seg('entrada.fases', 'Fornecimento', ['Monofásico', 'Bifásico', 'Trifásico']) +
           F.lbl('Padrão BT · duas caixas lado a lado') +
           '<div class="box-n"><div class="h"><i>1</i><span><b>Caixa de entrada e medição</b><small>Escolha o tipo ou Outro</small></span></div>' +
           F.chips('entrada.cx1.tipo', '', tiposCx) + F.text('entrada.cx1.medidor', 'Nº do medidor', { ph: 'Número gravado no medidor', im: 'numeric' }) + '</div>' +
@@ -821,13 +958,13 @@ const Etapas = {
     const fach = [['N', 'Norte'], ['S', 'Sul'], ['L', 'Leste'], ['O', 'Oeste']];
     return Etapas.blocoSel() +
       F.card('Edificações', F.lbl('Número de prédios ou blocos') + F.stepper('estrutura.nBlocos', '', { min: 1, max: 12, fn: 'nBlocos' }) +
-        F.lbl('Pavimentos de cada bloco (inclui térreo)') +
-        Array.from({ length: nb }, (x, i) => '<div class="box-n" style="display:flex;align-items:center;gap:12px;margin-top:8px"><span class="avatar" style="background:var(--navy);width:34px;height:34px;border-radius:9px">' + BLOCO(i) + '</span><span style="flex:1"><b>Bloco ' + BLOCO(i) + '</b><br><small class="muted">Pavimentos, inclui térreo</small></span>' +
-          F.stepper('estrutura.blocos.' + i + '.pav', '', { min: 1, max: 20, sm: true }) + '</div>').join(''),
+        F.lbl('Nome e pavimentos de cada bloco ou setor (inclui térreo)') +
+        Array.from({ length: nb }, (x, i) => '<div class="box-n" style="margin-top:8px"><div style="display:flex;align-items:center;gap:12px"><span class="avatar" style="background:var(--navy);width:34px;height:34px;border-radius:9px">' + BLOCO(i) + '</span><span style="flex:1"><b>' + esc(NB(i)) + '</b><br><small class="muted">Pavimentos, inclui térreo</small></span>' +
+          F.stepper('estrutura.blocos.' + i + '.pav', '', { min: 1, max: 20, sm: true }) + '</div><div class="mt">' + F.input('estrutura.blocos.' + i + '.nome', { ph: 'Nome opcional · ex.: Prédio principal, Anexo, Ginásio' }) + '</div></div>').join(''),
         { badge: F.req(['estrutura.nBlocos']) }) +
       F.card('Setores externos', F.chips('estrutura.setores', '', ['Entrada', 'Estacionamento', 'Pátio', 'Quadra coberta', 'Anexo', 'Edícula', 'Playground', 'Outro'], { multi: true }) +
         '<div class="ph-hint">Marque os setores que existem na escola. Eles aparecem como atalhos em Ambientes.</div>') +
-      F.card('Cobertura' + (nb > 1 ? ' <small>· Bloco ' + BLOCO(b) + '</small>' : ''), F.chips(P + 'cobTipo', 'Tipo de cobertura', ['Laje', 'Telha cerâmica', 'Telha metálica', 'Telha termoacústica', 'Fibrocimento', 'Outro']) +
+      F.card('Cobertura' + (nb > 1 ? ' <small>· ' + esc(NB(b)) + '</small>' : ''), F.chips(P + 'cobTipo', 'Tipo de cobertura', ['Laje', 'Telha cerâmica', 'Telha metálica', 'Telha termoacústica', 'Fibrocimento', 'Outro']) +
         F.chips(P + 'cobAcesso', 'Acesso à cobertura', ['Escada interna', 'Escada externa', 'Sem acesso']) +
         F.seg(P + 'cobEstado', 'Estado da cobertura', ['Boa', 'Regular', 'Ruim']), { badge: nb > 1 ? '<span class="badge b-amber">Por bloco</span>' : F.req([P + 'cobTipo', P + 'cobEstado']) }) +
       F.card('Brises e beirais', F.chips(P + 'brises', 'Brises', ['Não há', 'Horizontais', 'Verticais', 'Mistos']) +
@@ -884,12 +1021,12 @@ const Etapas = {
     const ok = d.ambientes.pavOk || {};
     const ext = Amb.externos();
     const setores = (d.estrutura.setores || []).map(s => SETOR_PARA_EXT[s]).filter(Boolean).filter(t => !ext.some(a => a.tipo === t));
-    return F.card('', F.lbl('Bloco') + '<div class="chips">' + Array.from({ length: nb }, (x, i) => '<button class="chip' + (b === i ? ' on' : '') + '" data-act="bloco" data-b="' + i + '">Bloco ' + BLOCO(i) + '</button>').join('') + '</div>' +
+    return F.card('', F.lbl('Bloco') + '<div class="chips">' + Array.from({ length: nb }, (x, i) => '<button class="chip' + (b === i ? ' on' : '') + '" data-act="bloco" data-b="' + i + '">' + esc(NB(i)) + '</button>').join('') + '</div>' +
         F.lbl('Pavimento') + '<div class="pav-tabs">' + Array.from({ length: pavs }, (x, i) => {
           const st = ok[b + '-' + i] ? 'ok' : Amb.lista(b, i).length ? 'and' : 'pend';
           return '<button class="' + st + (p === i ? ' on' : '') + '" data-act="pav" data-p="' + i + '">' + PAV(i) + (st === 'ok' ? ' ✓' : p === i ? '<br><small>em andamento</small>' : st === 'pend' ? ' · pendente' : '') + '</button>';
         }).join('') + '</div>') +
-      '<section class="card"><div class="pav-head"><span><b>Bloco ' + BLOCO(b) + ' · ' + (p === 0 ? 'Térreo' : PAV(p) + ' pavimento') + '</b><small>Ambientes deste pavimento</small></span><span class="badge">' + totalUn + ' un.</span></div>' +
+      '<section class="card"><div class="pav-head"><span><b>' + esc(NB(b)) + ' · ' + (p === 0 ? 'Térreo' : PAV(p) + ' pavimento') + '</b><small>Ambientes deste pavimento</small></span><span class="badge">' + totalUn + ' un.</span></div>' +
         (lista.length ? lista.map(a => Amb.linha(a)).join('') + '<div class="tot"><span>Área do pavimento</span><b>' + fmt(areaPav, areaPav % 1 ? 1 : 0) + ' m²</b></div>'
           : '<div class="empty" style="padding:24px 10px">Nenhum ambiente neste pavimento ainda.</div>') +
         '<button class="btn btn-dash" data-act="ambNovo">' + I('plus', 20) + ' Adicionar tipo neste pavimento</button>' +

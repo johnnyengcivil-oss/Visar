@@ -5,7 +5,7 @@
  * Rode `instalarVistAR()` uma vez no editor (ou pelo menu VistAR da planilha).
  */
 
-const VERSAO = '1.0.0';
+const VERSAO = '1.1.0';
 
 /** Valores padrão. Podem ser sobrescritos na aba "Config" da planilha. */
 const CONFIG_PADRAO = {
@@ -22,6 +22,7 @@ const CONFIG_PADRAO = {
   TOKEN_DIAS: '30',
   ENVIO_AUTOMATICO_COPIA: 'sim',
   KW_POR_TR: '1.05',
+  FATORES_BTU_M2: '',
   META_INICIO: '',
   META_DATA: '',
   NOME_APP: 'VistAR'
@@ -41,6 +42,7 @@ const DESCRICOES_CONFIG = {
   TOKEN_DIAS: 'Dias que o login permanece válido no aparelho',
   ENVIO_AUTOMATICO_COPIA: 'sim/nao · envia o relatório para a unidade ao finalizar',
   KW_POR_TR: 'Premissa de consumo elétrico (kW por TR) no pré-dimensionamento',
+  FATORES_BTU_M2: 'Opcional · ajusta fatores de carga por tipo, em JSON. Ex.: {"Sala de aula": 700, "Biblioteca": 650}',
   META_INICIO: 'Início do contrato (AAAA-MM-DD) · base da linha de meta do painel',
   META_DATA: 'Data para concluir todas as escolas (AAAA-MM-DD)',
   NOME_APP: 'Nome exibido nos e-mails'
@@ -51,7 +53,7 @@ const SCHEMA = {
   Config: ['chave', 'valor', 'descricao'],
   Usuarios: ['id', 'email', 'nome', 'cargo', 'equipeId', 'rg', 'empresa', 'telefone', 'perfil', 'dres',
     'fotoId', 'senhaHash', 'salt', 'tokenVersao', 'ativo', 'criadoEm', 'matricula', 'codigoAtivacao', 'codigoExpira',
-    'ultimoAcesso'],
+    'ultimoAcesso', 'lat', 'lng', 'vistoEm', 'fila', 'vistoriaAtual'],
   Equipes: ['id', 'nome', 'membros', 'supervisorNome', 'supervisorTel', 'status', 'statusDesde',
     'vistoriaAtual', 'destinoEscolaId', 'destinoEta', 'lat', 'lng', 'vistoEm', 'fila'],
   DREs: ['id', 'nome', 'engenheiroNome', 'engenheiroCargo', 'engenheiroTel', 'engenheiroEmail'],
@@ -63,7 +65,7 @@ const SCHEMA = {
   Vistorias: ['id', 'codigo', 'escolaId', 'equipeId', 'usuarioId', 'status', 'checkin', 'checkout',
     'latIn', 'lngIn', 'latOut', 'lngOut', 'pastaId', 'relVistoriaId', 'relCompletoId', 'assinadoEm',
     'copiaPara', 'copiaEnviadaEm', 'resumo', 'atualizadoEm', 'validacao', 'validadoPor', 'validadoEm', 'validacaoNota',
-    'versao', 'retomadaDe', 'historico'],
+    'versao', 'retomadaDe', 'historico', 'participantes', 'mescladaEm'],
   Etapas: ['id', 'vistoriaId', 'etapa', 'atualizadoEm', 'autor', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'],
   Fotos: ['id', 'vistoriaId', 'escolaId', 'etapa', 'slot', 'ref', 'legenda', 'fileId', 'criadoEm', 'autor', 'lat', 'lng'],
   Pendencias: ['id', 'vistoriaId', 'escolaId', 'etapa', 'descricao', 'status', 'criadoEm', 'resolvidoEm', 'resolvidoPor'],

@@ -125,10 +125,9 @@ function acaoPainel_(p, u) {
 /* ───────────────────────── Equipes ao vivo ───────────────────────── */
 
 function acaoPing_(p, u) {
-  if (!u.equipeId) return { ok: true };
-  const upd = { id: u.equipeId, vistoEm: agora_(), fila: String(p.fila || 0) };
-  if (p.lat && p.lng) { upd.lat = p.lat; upd.lng = p.lng; }
-  Db.upsert('Equipes', upd);
+  const pos = p.lat && p.lng ? { lat: p.lat, lng: p.lng } : {};
+  Db.upsert('Usuarios', Object.assign({ id: u.id, vistoEm: agora_(), fila: String(p.fila || 0) }, pos));
+  if (u.equipeId) Db.upsert('Equipes', Object.assign({ id: u.equipeId, vistoEm: agora_(), fila: String(p.fila || 0) }, pos));
   return { ok: true };
 }
 
@@ -141,14 +140,25 @@ function acaoEquipes_(p, u) {
   const fotos = Db.all('Fotos');
   const rot = Db.where('Roteiro', r => r.data === hoje);
   const canc = Db.where('Cancelamentos', c => String(c.criadoEm).slice(0, 10) === hoje);
+  const usuarios = Db.all('Usuarios');
+  const nomes = {};
+  usuarios.forEach(x => { nomes[x.id] = x.nome; });
   const equipes = Db.all('Equipes').map(eq => {
-    const atual = vist.find(v => v.equipeId === eq.id && v.status === 'em_andamento');
+    const abertas = vist.filter(v => v.equipeId === eq.id && v.status === 'em_andamento');
     const r = rot.filter(x => x.equipeId === eq.id);
+    const resumo = v => ({ id: v.id, codigo: v.codigo, escola: (esc[v.escolaId] || {}).nome, escolaId: v.escolaId, checkin: v.checkin,
+      fotos: fotos.filter(f => f.vistoriaId === v.id).length, participantes: participantes_(v).map(id => nomes[id] || id) });
+    const membros = usuarios.filter(x => x.equipeId === eq.id && x.ativo !== 'nao' && (x.perfil || 'tecnico') === 'tecnico');
+    // Fila e último sinal: pior caso entre os membros (cada técnico tem a sua fila no celular).
+    const visto = membros.map(x => x.vistoEm).filter(String).sort().pop() || eq.vistoEm;
+    const fila = membros.reduce((s, x) => s + (Number(x.fila) || 0), 0) || Number(eq.fila) || 0;
     return {
-      id: eq.id, nome: eq.nome, membros: lista_(eq.membros), status: eq.status || 'disponivel', statusDesde: eq.statusDesde,
-      lat: eq.lat, lng: eq.lng, vistoEm: eq.vistoEm, fila: Number(eq.fila) || 0,
-      atual: atual ? { id: atual.id, codigo: atual.codigo, escola: (esc[atual.escolaId] || {}).nome, escolaId: atual.escolaId, checkin: atual.checkin,
-        fotos: fotos.filter(f => f.vistoriaId === atual.id).length } : null,
+      id: eq.id, nome: eq.nome, membros: lista_(eq.membros), status: abertas.length ? 'em_campo' : (eq.status || 'disponivel'), statusDesde: eq.statusDesde,
+      lat: eq.lat, lng: eq.lng, vistoEm: visto, fila: fila,
+      pessoas: membros.map(x => ({ nome: x.nome, lat: x.lat, lng: x.lng, vistoEm: x.vistoEm, fila: Number(x.fila) || 0,
+        escola: x.vistoriaAtual ? (esc[(vist.find(v => v.id === x.vistoriaAtual) || {}).escolaId] || {}).nome || '' : '' })),
+      atuais: abertas.map(resumo),
+      atual: abertas[0] ? resumo(abertas[0]) : null,
       destino: eq.destinoEscolaId ? (esc[eq.destinoEscolaId] || {}).nome : '', eta: eq.destinoEta,
       hoje: { total: r.length, concluidas: r.filter(x => x.status === 'concluida').length }
     };
@@ -157,7 +167,7 @@ function acaoEquipes_(p, u) {
   equipes.forEach(eq => {
     if (eq.atual && eq.vistoEm && Date.now() - new Date(eq.vistoEm) > 3600e3) alertas.push({ tipo: 'sync', texto: eq.nome + ' sem sincronizar há mais de 1 h', equipeId: eq.id });
     if (eq.fila > 10) alertas.push({ tipo: 'fila', texto: eq.nome + ' com ' + eq.fila + ' itens na fila de envio', equipeId: eq.id });
-    if (eq.atual && Date.now() - new Date(eq.atual.checkin) > 5 * 3600e3) alertas.push({ tipo: 'tempo', texto: eq.nome + ' em campo há mais de 5 h em ' + eq.atual.escola, equipeId: eq.id });
+    eq.atuais.forEach(a => { if (Date.now() - new Date(a.checkin) > 5 * 3600e3) alertas.push({ tipo: 'tempo', texto: eq.nome + ' em campo há mais de 5 h em ' + a.escola, equipeId: eq.id }); });
   });
   canc.forEach(c => alertas.push({ tipo: 'cancelada', texto: 'Cancelada hoje: ' + (esc[c.escolaId] || {}).nome + ' · ' + c.motivo, escolaId: c.escolaId }));
   const aValidar = vist.filter(v => v.status === 'finalizada' && (!v.validacao || v.validacao === 'pendente')).length;
@@ -179,7 +189,7 @@ function acaoValidacoes_(p, u) {
 
 function acaoValidar_(p, u) {
   exigirSupervisor_(u);
-  const v = Db.find('Vistorias', p.vistoriaId);
+  const v = exigirVistoria_(p.vistoriaId, u);
   if (!v || v.status !== 'finalizada') throw new Error('Vistoria não encontrada ou não finalizada.');
   if (['aprovada', 'correcao'].indexOf(p.decisao) < 0) throw new Error('Decisão inválida.');
   if (p.decisao === 'correcao' && !p.nota) throw new Error('Descreva o que precisa ser corrigido.');
@@ -203,10 +213,9 @@ function marcarRetorno_(escolaId, equipeId, nota, u) {
 /* ───────────────────────── Detalhe da escola ───────────────────────── */
 
 function acaoEscola_(p, u) {
-  const e = Db.find('Escolas', p.escolaId);
-  if (!e) throw new Error('Escola não encontrada.');
+  const e = exigirEscola_(p.escolaId, u);
   const eqs = {}; Db.all('Equipes').forEach(x => { eqs[x.id] = x; });
-  const vist = Db.where('Vistorias', v => v.escolaId === e.id).sort((a, b) => a.checkin < b.checkin ? 1 : -1);
+  const vist = Db.where('Vistorias', v => v.escolaId === e.id && v.status !== 'mesclada').sort((a, b) => a.checkin < b.checkin ? 1 : -1);
   const ultFin = vist.find(v => v.status === 'finalizada');
   let resumo = null, contato = null;
   if (ultFin) {
@@ -248,9 +257,7 @@ function acaoEscola_(p, u) {
 function potenciaLuminaria_(nome) { const m = String(nome || '').match(/(\d+[.,]?\d*)\s*W/i); return m ? dec_(m[1]) : 20; }
 
 function acaoVistoriaDetalhe_(p, u) {
-  const v = Db.find('Vistorias', p.vistoriaId);
-  if (!v) throw new Error('Vistoria não encontrada.');
-  if (v.equipeId !== u.equipeId && !ehSupervisor_(u)) throw new Error('Sem acesso a esta vistoria.');
+  const v = exigirVistoria_(p.vistoriaId, u);
   const R = dadosRelatorio_(v.id);
   const et = R.et, en = et.entrada || {};
   // Carga instalada (estimativa): TUG 100 W, luminárias pela potência do nome, TUE típicos, equipamentos.
@@ -262,11 +269,11 @@ function acaoVistoriaDetalhe_(p, u) {
       (a.tue || []).reduce((s, t) => s + (Number(t.qtd) || 0) * (POT_TUE_W_[t.nome] !== undefined ? POT_TUE_W_[t.nome] || 60 : 150), 0));
   });
   ((et.equipamentos || {}).itens || []).forEach(x => { if (!x.desc) w += cvParaW_(x.pot, x.un) * (Number(x.qtd) || 1); });
-  const vll = en.padrao === 'MT' ? 380 : (/380/.test(en.tensao) ? 380 : 220);
   const m = en.med || {};
   const imax = Math.max(dec_(m.ir), dec_(m.is), dec_(m.it));
-  const demanda = imax ? Math.sqrt(3) * vll * imax / 1000 : null;
-  const padrao = en.padrao === 'MT' ? (Number((en.trafo || {}).n) || 1) * dec_((en.trafo || {}).kva) : (dec_((en.cx2 || {}).disjuntor) ? Math.sqrt(3) * vll * dec_(en.cx2.disjuntor) / 1000 : null);
+  const enDem = en.padrao === 'MT' ? { tensao: '380 V', fases: 'Trifásico' } : en;
+  const demanda = imax ? kvaFornecimento_(enDem, imax) : null;
+  const padrao = en.padrao === 'MT' ? (Number((en.trafo || {}).n) || 1) * dec_((en.trafo || {}).kva) : (dec_((en.cx2 || {}).disjuntor) ? kvaFornecimento_(en, en.cx2.disjuntor) : null);
   const prevista = (demanda || 0) + R.calc.kwAc / 0.92;
   const d = R.d, es = et.estrutura || {}, el = et.eletrica || {};
   const qd = (el.blocos || []).reduce((s, b) => s + (Number(b.quadros) || 0), 0);
@@ -304,9 +311,7 @@ function acaoVistoriaDetalhe_(p, u) {
 }
 
 function acaoReabrir_(p, u) {
-  const v = Db.find('Vistorias', p.vistoriaId);
-  if (!v) throw new Error('Vistoria não encontrada.');
-  if (v.equipeId !== u.equipeId && !ehSupervisor_(u)) throw new Error('Sem acesso a esta vistoria.');
+  const v = exigirVistoria_(p.vistoriaId, u);
   marcarRetorno_(v.escolaId, v.equipeId, p.motivo || 'Reaberta para retorno', u);
   Db.upsert('Pendencias', { id: 'pr-' + v.id + '-' + uid_().slice(0, 4), vistoriaId: v.id, escolaId: v.escolaId, etapa: 'revisao',
     descricao: 'Reaberta para retorno' + (p.motivo ? ': ' + p.motivo : ''), status: 'aberta', criadoEm: agora_() });
@@ -340,7 +345,7 @@ function acaoPendenciasPainel_(p, u) {
   const eqs = {}; Db.all('Equipes').forEach(x => { eqs[x.id] = x; });
   const rot = Db.where('Roteiro', r => r.status === 'retorno');
   const canc = Db.all('Cancelamentos').sort((a, b) => a.criadoEm < b.criadoEm ? 1 : -1);
-  const vist = Db.all('Vistorias').sort((a, b) => a.checkin < b.checkin ? 1 : -1);
+  const vist = Db.where('Vistorias', v => v.status !== 'mesclada').sort((a, b) => a.checkin < b.checkin ? 1 : -1);
   const pend = Db.where('Pendencias', x => x.status === 'aberta');
   const itens = [];
   escolas.forEach(e => {
@@ -375,8 +380,7 @@ function acaoPendenciasPainel_(p, u) {
 
 function acaoReagendar_(p, u) {
   if (!p.escolaId || !/^\d{4}-\d{2}-\d{2}$/.test(p.data || '')) throw new Error('Informe a data.');
-  const e = Db.find('Escolas', p.escolaId);
-  if (!e) throw new Error('Escola não encontrada.');
+  const e = exigirEscola_(p.escolaId, u);
   const equipeId = p.equipeId && ehSupervisor_(u) ? p.equipeId : u.equipeId;
   const ex = Db.where('Roteiro', r => r.escolaId === e.id && (r.status === 'retorno' || r.status === 'agendada'))[0];
   Db.upsert('Roteiro', Object.assign(ex || { id: 'r-' + uid_(), ordem: 0, criadoPor: u.id }, {
@@ -388,8 +392,8 @@ function acaoReagendar_(p, u) {
 }
 
 function acaoCobrarDre_(p, u) {
-  const e = Db.find('Escolas', p.escolaId);
-  const d = e && Db.find('DREs', e.dre);
+  const e = exigirEscola_(p.escolaId, u);
+  const d = Db.find('DREs', e.dre);
   if (!d) throw new Error('DRE não encontrada.');
   const c = Db.all('Cancelamentos').filter(x => x.escolaId === e.id).sort((a, b) => a.criadoEm < b.criadoEm ? 1 : -1)[0];
   let enviado = false;
@@ -409,6 +413,7 @@ function acaoCobrarDre_(p, u) {
 }
 
 function acaoRegistro_(p, u) {
+  exigirEscola_(p.escolaId, u);
   const c = Db.all('Cancelamentos').filter(x => x.escolaId === p.escolaId).sort((a, b) => a.criadoEm < b.criadoEm ? 1 : -1)[0];
   if (!c) throw new Error('Nenhum registro.');
   const f = c.fotoId ? Db.find('Fotos', c.fotoId) : null;
@@ -419,7 +424,8 @@ function acaoRegistro_(p, u) {
 
 /** Dados da última visita para retomar de onde parou. */
 function acaoRetomarDados_(p, u) {
-  const v = Db.where('Vistorias', x => x.escolaId === p.escolaId && x.status !== 'em_andamento').sort((a, b) => a.checkin < b.checkin ? 1 : -1)[0];
+  exigirEscola_(p.escolaId, u);
+  const v = Db.where('Vistorias', x => x.escolaId === p.escolaId && x.status !== 'em_andamento' && x.status !== 'mesclada').sort((a, b) => a.checkin < b.checkin ? 1 : -1)[0];
   if (!v) return null;
   return { id: v.id, codigo: v.codigo, versao: Number(v.versao) || 1, etapas: lerEtapas_(v.id),
     fotos: Db.where('Fotos', f => f.vistoriaId === v.id).map(f => ({ id: f.id, etapa: f.etapa, slot: f.slot, ref: f.ref, fileId: f.fileId, legenda: f.legenda, criadoEm: f.criadoEm })) };
@@ -450,6 +456,7 @@ function acaoProgramacao_(p, u) {
 
 function acaoSalvarVisita_(p, u) {
   exigirSupervisor_(u);
+  if (p.tipo !== 'escritorio') exigirEscola_(p.escolaId, u);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.data || '')) throw new Error('Informe a data.');
   if (p.tipo !== 'escritorio' && !Db.find('Escolas', p.escolaId)) throw new Error('Escolha a escola.');
   if (!p.equipeId) throw new Error('Escolha a equipe.');
@@ -518,6 +525,7 @@ function acaoGaleria_(p, u) {
 function acaoLegenda_(p, u) {
   const f = Db.find('Fotos', p.id);
   if (!f) throw new Error('Foto ainda não sincronizada.');
+  exigirVistoria_(f.vistoriaId, u);
   Db.upsert('Fotos', { id: f.id, legenda: String(p.legenda || '').slice(0, 300) });
   try { DriveApp.getFileById(f.fileId).setDescription(p.legenda); } catch (e) { /* sem acesso ao arquivo */ }
   return { ok: true };

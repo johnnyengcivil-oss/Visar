@@ -94,6 +94,10 @@ function acoes_() {
     legenda: { fn: acaoLegenda_, lock: true },
     usuarios: { fn: acaoUsuarios_ },
     salvarUsuario: { fn: acaoSalvarUsuario_, lock: true },
-    novoCodigo: { fn: acaoNovoCodigo_, lock: true }
+    novoCodigo: { fn: acaoNovoCodigo_, lock: true },
+    entrarVistoria: { fn: acaoEntrarVistoria_, lock: true },
+    sairVistoria: { fn: acaoSairVistoria_, lock: true },
+    puxarVistoria: { fn: acaoPuxarVistoria_ },
+    guardarFalha: { fn: acaoGuardarFalha_, lock: true }
   };
 }

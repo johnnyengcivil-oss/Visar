@@ -15,6 +15,14 @@ App da Web para as equipes de campo do **Consórcio Climatiza São Paulo**: chec
 9. **Programação** em dia, semana e mês. **Login** (e-mail ou matrícula, manter conectado, esqueci a senha), **Primeiro acesso** com código, **Configurações** (texto, tema escuro, qualidade das fotos, só Wi-Fi, notificações, permissões, biometria), **Credencial** e **assinatura em tela cheia**.
 10. **Módulo de supervisão** (perfis supervisor, coordenação e admin): painel do dia com alertas, equipes ao vivo (status, posição, fila de envio), validação de vistorias (aprovar ou pedir correção), programação das equipes e usuários/códigos de acesso.
 
+## Trabalho em equipe e integridade dos dados (v1.1)
+
+- **Equipe em várias escolas ao mesmo tempo:** cada técnico faz check-in na sua escola; a equipe fica "em campo" enquanto houver escola aberta, e a supervisão vê cada técnico no mapa.
+- **Dois técnicos na mesma vistoria:** o colega toca em *Entrar*. As alterações viram operações por campo (`etapa.campo`) ou por registro (`ambientes.itens#id`) com carimbo de tempo; o servidor mescla e o mais recente vence, sem um sobrescrever o trabalho do outro. Check-ins duplicados feitos sem sinal na mesma escola são unidos automaticamente.
+- **Nada se perde na fila:** envios recusados vão para *Itens com erro* (reenviar, baixar, descartar), com cópia no Drive em *Falhas de sincronização*.
+- **Permissões:** todas as ações conferem equipe/supervisão e as DREs autorizadas do usuário (escola, vistoria, fotos, miniaturas, legendas, retomada, rotas, pendências).
+- **Pré-dimensionamento:** aberturas por ambiente (janelas e portas com medidas, fachada e proteção solar) entram como ganho solar do vidro; fornecimento mono, bi ou trifásico; fatores por m² ajustáveis na aba Config (`FATORES_BTU_M2`); blocos e setores com nome livre. Continua sendo estimativa para orçamento, não projeto.
+
 ## Recursos do Google usados
 
 | Recurso | Uso |
@@ -62,6 +70,7 @@ Carga = área × fator do uso (ex.: sala de aula 650 BTU/h·m², informática 80
 ## Desenvolvimento local
 
 ```bash
+npm install && npm test      # tudo abaixo de uma vez (também roda no GitHub Actions)
 node dev/gas-sim.js          # testa o servidor (.gs) com Planilha/Drive/e-mail simulados
 node dev/build-preview.js    # gera dev/preview.html com servidor simulado (dev/mock.js)
 node dev/smoke.js            # percorre todas as telas no Chromium e salva screenshots em dev/shots

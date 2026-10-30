@@ -72,13 +72,15 @@ const LS = (() => {
 /** IndexedDB com fallback em memória (fila offline e miniaturas). */
 const IDB = (() => {
   let dbp = null;
-  const mem = { outbox: new Map(), thumbs: new Map() };
+  const mem = { outbox: new Map(), thumbs: new Map(), falhas: new Map() };
   function open() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
       if (!window.indexedDB) return rej(new Error('sem IndexedDB'));
-      const r = indexedDB.open('vistar', 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore('outbox', { keyPath: 'id' }); r.result.createObjectStore('thumbs', { keyPath: 'id' }); };
+      const r = indexedDB.open('vistar', 2);
+      r.onupgradeneeded = () => {
+        ['outbox', 'thumbs', 'falhas'].forEach(n => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n, { keyPath: 'id' }); });
+      };
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     }).catch(() => null);
@@ -128,19 +130,21 @@ const Api = {
 
 /* ───── Fila offline: tudo que altera dados passa por aqui ───── */
 const Sync = {
-  q: [], busy: false, fails: 0, handlers: {}, waiters: [],
+  q: [], busy: false, fails: 0, handlers: {}, waiters: [], nFalhas: 0,
   async init() {
     this.q = ((await IDB.all('outbox')) || []).sort((a, b) => a.seq - b.seq);
+    this.nFalhas = ((await IDB.all('falhas')) || []).length;
     this.q.forEach(i => { i.running = false; });
     window.addEventListener('online', () => { this.fails = 0; this.kick(); App.renderNet(); });
     window.addEventListener('offline', () => { this.render(); App.renderNet(); });
     setInterval(() => this.kick(), 20000);
   },
   on(acao, fn) { this.handlers[acao] = fn; },
-  async add(acao, payload, key) {
+  /** Enfileira. Com "key", junta com o item ainda não enviado (juntar(antigo, novo) ou substitui). */
+  async add(acao, payload, key, juntar) {
     if (key) {
       const ex = this.q.find(i => i.key === key && !i.running);
-      if (ex) { ex.payload = payload; await IDB.put('outbox', ex); this.kickSoon(); return ex; }
+      if (ex) { ex.payload = juntar ? juntar(ex.payload, payload) : payload; await IDB.put('outbox', ex); this.kickSoon(); return ex; }
     }
     const it = { id: uid(), seq: Date.now() + Math.random(), acao: acao, payload: payload, key: key || '', tries: 0 };
     this.q.push(it);
@@ -150,6 +154,28 @@ const Sync = {
     return it;
   },
   has(pred) { return this.q.some(pred); },
+  /**
+   * Nada é descartado: o item recusado pelo servidor vai para "Itens com erro" no aparelho
+   * (dá para reenviar, baixar ou descartar) e uma cópia vai para o Drive, se possível.
+   */
+  async arquivarFalha(it, erro) {
+    it.erro = erro; it.falhouEm = new Date().toISOString(); it.running = false;
+    await IDB.put('falhas', it);
+    this.nFalhas++;
+    toast('Não sincronizado: ' + erro + ' · veja em Menu › Itens com erro', 'err', 7000);
+    if (it.acao !== 'guardarFalha') Api.run('guardarFalha', { acao: it.acao, erro: erro, payload: it.payload }).catch(() => {});
+    this.render();
+  },
+  async falhas() { return ((await IDB.all('falhas')) || []).sort((a, b) => a.seq - b.seq); },
+  async reenviar(id) {
+    const it = await IDB.get('falhas', id);
+    if (!it) return;
+    await IDB.del('falhas', id); this.nFalhas = Math.max(0, this.nFalhas - 1);
+    it.tries = 0; delete it.erro; it.seq = Date.now() + Math.random();
+    this.q.push(it); await IDB.put('outbox', it);
+    this.fails = 0; this.kickSoon(100); this.render();
+  },
+  async descartar(id) { await IDB.del('falhas', id); this.nFalhas = Math.max(0, this.nFalhas - 1); this.render(); },
   kickSoon(ms) { clearTimeout(this._t); this._t = setTimeout(() => this.kick(), ms === undefined ? 800 : ms); },
   async kick() {
     if (this.busy || !this.q.length || !App.token) { this.done(); return; }
@@ -172,7 +198,7 @@ const Sync = {
           it.tries++;
           if (it.tries >= 3) {
             this.q.shift(); await IDB.del('outbox', it.id);
-            toast('Não sincronizado: ' + e.message, 'err', 6000);
+            await this.arquivarFalha(it, e.message);
             const h = this.handlers[it.acao + ':erro'];
             if (h) { try { h(e, it.payload); } catch (x) { console.error(x); } }
           } else { await IDB.put('outbox', it); await new Promise(r => setTimeout(r, 1500)); }
@@ -196,10 +222,12 @@ const Sync = {
   render() {
     const n = this.q.length;
     const off = navigator.onLine === false;
+    const nf = this.nFalhas;
     $$('[data-sync]').forEach(el => {
-      el.classList.toggle('hidden', !n && !off);
-      el.className = 'sync' + (off ? ' off' : '') + (this.busy ? ' run' : '') + (this.fails > 2 ? ' err' : '') + (!n && !off ? ' hidden' : '');
-      el.innerHTML = '<i></i>' + (off ? 'Offline' + (n ? ' · ' + n : '') : this.busy ? 'Enviando ' + n : this.esperaWifi ? n + ' · aguarda Wi-Fi' : n + ' na fila');
+      el.className = 'sync' + (off ? ' off' : '') + (this.busy ? ' run' : '') + (this.fails > 2 || nf ? ' err' : '') + (!n && !off && !nf ? ' hidden' : '');
+      el.dataset.act = 'go'; el.dataset.to = 'falhas';
+      el.innerHTML = '<i></i>' + (off ? 'Offline' + (n ? ' · ' + n : '') : this.busy ? 'Enviando ' + n : this.esperaWifi ? n + ' · aguarda Wi-Fi' : n ? n + ' na fila' : '') +
+        (nf ? (n || off ? ' · ' : '') + nf + ' com erro' : '');
     });
   }
 };
@@ -548,10 +576,11 @@ const App = {
     this._sessao = true;
     setInterval(() => this.tick(), 30000);
     setInterval(() => this.ping(), 5 * 60000);
+    setInterval(() => Vist.puxar(), 40000); // alterações dos colegas na mesma vistoria
     setTimeout(() => this.ping(), 8000);
     Lembretes.agendar();
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && Date.now() - (this._lastRefresh || 0) > 60000) this.refresh();
+      if (document.visibilityState === 'visible' && Date.now() - (this._lastRefresh || 0) > 60000) { this.refresh(); Vist.puxar(); }
     });
   },
 

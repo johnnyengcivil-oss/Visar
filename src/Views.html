@@ -379,7 +379,7 @@ const Views = {
     const a = App.form;
     if (!a || !App.V) { setTimeout(() => Router.back(), 0); return { body: '' }; }
     const ext = a.externo;
-    const sub = ext ? 'Área externa · ' + Amb.nome(a).toLowerCase() : 'Bloco ' + BLOCO(a.bloco) + ' · ' + (Number(a.pav) === 0 ? 'Térreo' : PAV(a.pav) + ' pavimento');
+    const sub = ext ? 'Área externa · ' + Amb.nome(a).toLowerCase() : NB(a.bloco) + ' · ' + (Number(a.pav) === 0 ? 'Térreo' : PAV(a.pav) + ' pavimento');
     const tipos = ext ? TIPOS_EXT : TIPOS_AMB;
     const ilum = (a.lum || []).reduce((s, l) => s + (Number(l.qtd) || 0), 0);
     const slots = ext ? [['ambientes.' + a.id + '.vista', 'Vista geral'], ['ambientes.' + a.id + '.ilum', 'Iluminação']]
@@ -398,11 +398,9 @@ const Views = {
           '<div class="area-box"><div class="a1"><small>Área por unidade</small><b data-calc="areaUn"></b></div><div class="a2"><small>Área total do tipo</small><b data-calc="areaTot"></b></div></div>') +
         (ext ? '' : F.card('Fachadas voltadas', F.chips('@fachadas', '', ['Norte', 'Leste', 'Sul', 'Oeste', 'Nenhuma'], { multi: true }) + '<div class="ph-hint">Norte é a fachada oposta à entrada principal.</div>',
           { badge: '<span class="badge b-teal">Pode marcar mais de uma</span>' }) +
-          F.card('Janelas', '<div class="box-n" style="margin-top:0"><b>Janelas externas</b><div class="muted small">Quantidade e medidas</div>' +
-            F.chips('@jan.tipo', 'Tipo de janela', ['Basculante', 'Correr', 'Outro']) + F.chips('@jan.vidro', 'Tipo de vidro', ['Comum', 'Temperado', 'Insulado', 'Fumê', 'Outro']) +
-            F.row(F.numero('@jan.alt', 'Altura da janela (m)', { ph: 'Ex.: 1,20' }), F.numero('@jan.peit', 'Altura do peitoril (m)', { ph: 'Ex.: 1,00' })) +
-            F.row(F.numero('@jan.qtd', 'Quantidade de janelas', { ph: 'Ex.: 3', im: 'numeric' }), F.numero('@jan.abert', '% de abertura', { ph: 'Ex.: 50', suf: '%' })) + '</div>' +
-            '<div class="box-n"><b>Ventilação cruzada superior</b><div class="muted small" style="margin-bottom:6px">Marque se existir</div>' + F.check('@ventCruz', 'Existe ventilação cruzada superior', 'Vergas, bandeiras ou aberturas no alto da parede') + '</div>')) +
+          F.card('Aberturas', Views.aberturas(a) +
+            '<div class="box-n"><b>Ventilação cruzada superior</b><div class="muted small" style="margin-bottom:6px">Marque se existir</div>' + F.check('@ventCruz', 'Existe ventilação cruzada superior', 'Vergas, bandeiras ou aberturas no alto da parede') + '</div>',
+            { badge: '<span class="badge b-teal">Janelas e portas</span>' })) +
         F.card('Pontos elétricos', '<div class="pt-sec">Pontos padrão</div>' +
           '<div class="pt"><span><b>TUG</b><small>Tomada de uso geral</small></span>' + qi('@tug', a.tug || '', 'un.') + '</div>' +
           '<div class="pt"><span><b>Iluminação</b><small>Detalhe o tipo de luminária</small></span>' + qi('', ilum, 'pontos', true) + '</div>' +
@@ -590,7 +588,7 @@ Object.assign(Act, {
     App.V = V;
     Vist.salvar(true);
     await Sync.add('checkin', { id: V.id, escolaId: e.id, checkin: V.checkin, lat: V.lat, lng: V.lng });
-    Vist.tocar('dados', true);
+    ETAPAS.forEach(x => { Vist.mudou(x.k, false, true); Vist.tocar(x.k, true); });
     const D = App.data;
     const rot = (D.roteiro || []).find(r => r.escolaId === e.id && r.status !== 'concluida');
     if (rot) rot.status = 'em_andamento';

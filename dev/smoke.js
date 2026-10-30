@@ -43,6 +43,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await shot('00-login');
   await clica('button[type=submit]');
   await page.waitForSelector('.stats');
+  await page.waitForSelector('[data-act=entrarVistoria]');
   await shot('01-home-iniciar');
 
   await clica('[data-act=checkin]');
@@ -50,6 +51,16 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await foto('[data-slot="dados.placa"]');
   await foto('[data-slot="dados.frontal"]');
   await shot('02-dados');
+  // Mesclagem: o que veio do colega entra; o que ainda não foi enviado daqui é mantido.
+  const mescla = await page.evaluate(() => {
+    Form.set('dados.obs', 'digitado aqui');
+    Vist.aplicarServidor('dados', Object.assign({}, App.V.d.dados, { obs: 'versão antiga do servidor', acesso: 'Portaria (colega)' }));
+    return [App.V.d.dados.obs, App.V.d.dados.acesso];
+  });
+  if (mescla[0] !== 'digitado aqui' || mescla[1] !== 'Portaria (colega)') throw new Error('Mesclagem errada: ' + mescla);
+  // Item recusado pelo servidor vai para "Itens com erro" (não é descartado).
+  await page.evaluate(() => Sync.add('acaoQueNaoExiste', { teste: 1 }));
+  await page.waitForFunction(() => Sync.nFalhas === 1, null, { timeout: 20000 });
 
   await clica('[data-act=etapaProx]');
   await clica('[data-act=pick][data-v=BT]');
@@ -86,6 +97,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await page.fill('[data-k="@pd"]', '3,2');
   await clica('[data-k="@fachadas"][data-v="Norte"]');
   await page.fill('[data-k="@lum.0.qtd"]', '5');
+  await page.fill('[data-k="@aberturas.0.larg"]', '2');
+  await page.fill('[data-k="@aberturas.0.alt"]', '1,2');
+  await page.fill('[data-k="@aberturas.0.qtd"]', '2');
+  await clica('[data-k="@aberturas.0.fachada"][data-v="Oeste"]');
+  await clica('[data-k="@aberturas.0.protecao"][data-v="Brise ou marquise"]');
   await foto('[data-slot$=".vista"]');
   await shot('08-ambiente-form');
   await clica('[data-act=ambSalvar]');
@@ -163,6 +179,24 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await confirma();
   await page.waitForSelector('.stats');
   await shot('18-home-apos-cancelar');
+
+  // Itens com erro
+  await page.evaluate(() => Router.go('falhas'));
+  await page.waitForSelector('[data-act=falhaDescartar]');
+  await shot('18a-itens-com-erro');
+  await clica('[data-act=falhaDescartar]');
+  await confirma();
+  await clica('[data-act=back]');
+
+  // Entrar na vistoria do colega (mesma equipe, outra escola)
+  await clica('[data-act=entrarVistoria]');
+  await page.waitForSelector('.whdr');
+  const dir = await page.evaluate(() => App.V.d.dados.diretor);
+  if (!/João/.test(dir)) throw new Error('Dados do colega não vieram: ' + dir);
+  await shot('18b-vistoria-do-colega');
+  await clica('[data-act=sairVistoria]');
+  await confirma();
+  await page.waitForSelector('.stats');
 
   await clica('[data-act=tab][data-to=escolas]');
   await page.waitForSelector('.prog-hero');

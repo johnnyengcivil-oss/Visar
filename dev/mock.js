@@ -30,15 +30,17 @@
     ],
     stats: { concluidas: 6, aguardando: 3, pendentes: 2 },
     pendencias: [{ id: 'p1', escolaId: 'e-deodoro', etapa: 'eletrica', descricao: 'Fotos e medição do QDC', status: 'aberta', criadoEm: new Date().toISOString() }],
-    vistorias: {}, etapas: {}, fotos: {}, seq: 230
+    vistorias: { 'v-joao': { id: 'v-joao', codigo: 'VST-2026-0229', escolaId: 'e-alencar', status: 'em_andamento', checkin: new Date(Date.now() - 50 * 60000).toISOString(), participantes: ['João Souza'] } },
+    etapas: { 'v-joao': { dados: { dados: { nome: 'EMEF José de Alencar', diretor: 'Paula (preenchido pelo João)' }, ts: '' } } }, fotos: {}, seq: 230
   };
   let quem = 'tec';
   const boot = () => {
     const usuario = quem === 'sup' ? db.sup : db.usuario;
-    const ativa = Object.values(db.vistorias).find(v => v.status === 'em_andamento');
+    const ativa = Object.values(db.vistorias).find(v => v.status === 'em_andamento' && v.id !== 'v-joao');
     return JSON.parse(JSON.stringify({
       usuario: usuario, equipe: db.equipe, cfg: db.cfg, empresa: db.empresa, dres: db.dres, escolas: db.escolas, roteiro: db.roteiro,
       stats: db.stats, pendencias: db.pendencias, hoje: dia(0), serverTime: new Date().toISOString(),
+      emAndamento: Object.values(db.vistorias).filter(v => v.status === 'em_andamento').map(v => ({ id: v.id, codigo: v.codigo, escolaId: v.escolaId, checkin: v.checkin, participantes: v.participantes || ['Marcos Silva'] })),
       vistoriaAtiva: ativa ? { id: ativa.id, codigo: ativa.codigo, escolaId: ativa.escolaId, status: ativa.status, checkin: ativa.checkin, etapas: db.etapas[ativa.id] || {}, fotos: Object.values(db.fotos).filter(f => f.vistoriaId === ativa.id) } : null
     }));
   };
@@ -105,8 +107,23 @@
         { id: 'u3', nome: 'Roberto Lima', email: 'roberto@x.com', matricula: '2001', perfil: 'supervisor', equipeId: '', ativo: true, ativado: true, dres: 'Penha, Itaquera' }] }),
     salvarUsuario: () => ({ id: 'u9', codigo: '482913' }), novoCodigo: () => ({ codigo: '774120' }),
     bootstrap: () => boot(),
-    checkin: p => { db.vistorias[p.id] = { id: p.id, codigo: 'VST-2026-0' + (++db.seq), escolaId: p.escolaId, status: 'em_andamento', checkin: p.checkin }; db.equipe.status = 'em_campo'; return { id: p.id, codigo: db.vistorias[p.id].codigo }; },
-    salvarEtapa: p => { (db.etapas[p.vistoriaId] = db.etapas[p.vistoriaId] || {})[p.etapa] = { dados: p.dados, ts: new Date().toISOString() }; return { ts: new Date().toISOString() }; },
+    checkin: p => { db.vistorias[p.id] = { id: p.id, codigo: 'VST-2026-0' + (++db.seq), escolaId: p.escolaId, status: 'em_andamento', checkin: p.checkin, participantes: ['Marcos Silva'] }; db.equipe.status = 'em_campo'; return { id: p.id, codigo: db.vistorias[p.id].codigo }; },
+    salvarEtapa: p => {
+      const et = (db.etapas[p.vistoriaId] = db.etapas[p.vistoriaId] || {});
+      const d = (et[p.etapa] = et[p.etapa] || { dados: {} }).dados;
+      (p.ops || []).forEach(o => {
+        if (o.init) { Object.keys(o.v || {}).forEach(k => { if (d[k] === undefined) d[k] = o.v[k]; }); return; }
+        const rel = o.p.slice(p.etapa.length + 1);
+        if (rel.indexOf('#') >= 0) { const col = rel.split('#')[0], id = rel.split('#')[1]; const arr = d[col.split('.').pop()] = d[col.split('.').pop()] || []; const i = arr.findIndex(r => r.id === id); if (o.v === null) { if (i >= 0) arr.splice(i, 1); } else if (i >= 0) arr[i] = o.v; else arr.push(o.v); return; }
+        const ks = rel.split('.'); let x = d; ks.slice(0, -1).forEach(k => { x = x[k] = x[k] && typeof x[k] === 'object' ? x[k] : {}; }); x[ks[ks.length - 1]] = o.v;
+      });
+      et[p.etapa].ts = new Date().toISOString();
+      return { ts: et[p.etapa].ts, etapa: p.etapa, vistoriaId: p.vistoriaId, dados: JSON.parse(JSON.stringify(d)) };
+    },
+    puxarVistoria: p => { const v = db.vistorias[p.vistoriaId]; return { id: v.id, codigo: v.codigo, escolaId: v.escolaId, status: v.status, checkin: v.checkin, participantes: v.participantes || [], etapas: db.etapas[v.id] || {}, fotos: Object.values(db.fotos).filter(f => f.vistoriaId === v.id) }; },
+    entrarVistoria: p => { const v = db.vistorias[p.vistoriaId]; v.participantes = (v.participantes || []).concat('Marcos Silva'); return A.puxarVistoria(p); },
+    sairVistoria: () => ({ ok: true }),
+    guardarFalha: () => ({ fileId: 'falha1' }),
     uploadFoto: p => { db.fotos[p.id] = { id: p.id, vistoriaId: p.vistoriaId, etapa: p.etapa, slot: p.slot, ref: p.ref, fileId: 'f' + p.id, criadoEm: p.criadoEm }; return { id: p.id, fileId: 'f' + p.id }; },
     removerFoto: p => { delete db.fotos[p.id]; return { removida: true }; },
     cancelar: p => { db.vistorias[p.vistoriaId].status = 'cancelada'; db.equipe.status = 'disponivel'; return { ok: true }; },

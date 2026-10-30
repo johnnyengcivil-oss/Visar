@@ -796,6 +796,65 @@ Views.hdrApp = (orig => function () {
   return h.replace(/<div class="sub">[\s\S]*?<\/div><\/span>/, '<div class="sub"><b>Supervisão</b> · ' + esc(u.cargo || '') + '</div></span>');
 })(Views.hdrApp);
 
+/* ═════════════ Aberturas do ambiente (janelas e portas, para o ganho solar) ═════════════ */
+Views.aberturas = a => {
+  if (!a.aberturas) {
+    const j = a.jan || {};
+    a.aberturas = j.qtd || j.alt ? [Object.assign(Amb.abertura(), { modelo: j.tipo || '', vidro: j.vidro || '', alt: j.alt || '', peit: j.peit || '', qtd: j.qtd || '', abert: j.abert || '', fachada: (a.fachadas || [])[0] || '' })] : [];
+  }
+  return a.aberturas.map((x, i) => {
+    const P = '@aberturas.' + i + '.';
+    const vidro = x.tipo !== 'Porta';
+    const area = num(x.larg) * num(x.alt) * (Number(x.qtd) || 1);
+    return '<div class="box-n"' + (i ? '' : ' style="margin-top:0"') + '><div class="row" style="justify-content:space-between"><b>Abertura ' + (i + 1) + (area ? ' · ' + fmt(area, 2) + ' m²' + (vidro ? ' de vidro' : '') : '') + '</b>' +
+      '<a href="#" class="small" style="color:var(--red)" data-act="rmAbertura" data-id="' + x.id + '">remover</a></div>' +
+      F.chips(P + 'tipo', 'Tipo', ['Janela', 'Porta', 'Porta de vidro'], { cls: 'sm' }) +
+      F.chips(P + 'modelo', 'Modelo', ['Correr', 'Basculante', 'Maxim-ar', 'Pivotante', 'Abrir', 'Fixa'], { cls: 'sm', outro: false }) +
+      (vidro ? F.chips(P + 'vidro', 'Vidro', ['Comum', 'Temperado', 'Insulado', 'Fumê', 'Outro'], { cls: 'sm' }) : '') +
+      '<div class="grid3" style="align-items:end">' + F.numero(P + 'larg', 'Largura (m)', { ph: '1,50' }) + F.numero(P + 'alt', 'Altura (m)', { ph: '1,20' }) + F.numero(P + 'qtd', 'Quantidade', { ph: '3', im: 'numeric' }) + '</div>' +
+      (x.tipo === 'Janela' ? F.row(F.numero(P + 'peit', 'Peitoril (m)', { ph: '1,00' }), F.numero(P + 'abert', '% de abertura', { ph: '50', suf: '%' })) : '') +
+      F.chips(P + 'fachada', 'Fachada', ['Norte', 'Leste', 'Sul', 'Oeste', 'Interna'], { cls: 'sm' }) +
+      (vidro ? F.chips(P + 'protecao', 'Proteção solar', ['Nenhuma', 'Cortina ou persiana', 'Película', 'Brise ou marquise'], { cls: 'sm' }) : '') + '</div>';
+  }).join('') + '<button class="add-link" data-act="addAbertura">+ Adicionar abertura</button>' +
+  '<div class="ph-hint">As janelas e portas de vidro com medidas e fachada entram no cálculo do ganho solar do pré-dimensionamento.</div>';
+};
+Object.assign(Act, {
+  addAbertura() { App.form.aberturas = (App.form.aberturas || []).concat(Amb.abertura()); App.rerender(); },
+  rmAbertura(el) { App.form.aberturas = (App.form.aberturas || []).filter(x => x.id !== el.dataset.id); App.rerender(); }
+});
+
+/* ═════════════ Itens com erro (envios recusados pelo servidor) ═════════════ */
+const DESC_ACAO = { uploadFoto: 'Foto', salvarEtapa: 'Etapa', checkin: 'Check-in', finalizar: 'Finalização', cancelar: 'Cancelamento', legenda: 'Legenda', removerFoto: 'Exclusão de foto', sairVistoria: 'Saída da vistoria', resolverPendencia: 'Pendência' };
+Views.falhas = () => ({
+  header: Views.hdrNavy('Sincronização', 'Itens com erro'),
+  body: '<p class="intro">Envios que o servidor recusou 3 vezes. <b>Nada foi apagado</b>: eles ficam guardados neste aparelho e uma cópia foi para a pasta "Falhas de sincronização" do Drive. Corrija a causa (ex.: entrar de novo, pedir acesso à escola) e reenvie.</p><div id="flBox">' + SKEL + '</div>',
+  async after() {
+    const l = await Sync.falhas();
+    encher('#flBox', l.length ? l.map(it => {
+      const p = it.payload || {};
+      const e = App.escola(p.escolaId) || {};
+      const det = it.acao === 'uploadFoto' ? (p.legenda || ROTULO_ETAPA[p.etapa] || '') : it.acao === 'salvarEtapa' ? (ROTULO_ETAPA[p.etapa] || p.etapa) + ' · ' + plural((p.ops || []).length, 'campo') : (e.nome || p.vistoriaId || '');
+      return '<section class="card"><div class="row" style="align-items:flex-start"><span style="flex:1;min-width:0"><b>' + esc(DESC_ACAO[it.acao] || it.acao) + '</b><div class="muted small">' + esc(det) + '</div>' +
+        '<div class="small c-red" style="margin-top:6px">' + esc(it.erro || '') + '</div><div class="muted small">' + (it.falhouEm ? dataBR(it.falhouEm, true) + ' · ' + hora(it.falhouEm) : '') + '</div></span>' +
+        (it.acao === 'uploadFoto' && p.data ? '<img src="' + p.data + '" style="width:64px;height:64px;object-fit:cover;border-radius:10px" alt="">' : '') + '</div>' +
+        '<div class="grid3 mt"><button class="btn btn-teal btn-sm" style="width:100%" data-act="falhaReenviar" data-id="' + it.id + '">Reenviar</button><button class="btn btn-out btn-sm" style="width:100%" data-act="falhaBaixar" data-id="' + it.id + '">Baixar</button>' +
+        '<button class="btn btn-out-red btn-sm" style="width:100%" data-act="falhaDescartar" data-id="' + it.id + '">Descartar</button></div></section>';
+    }).join('') : '<div class="empty">' + I('ok', 40) + '<div>Nenhum item com erro.</div></div>');
+  }
+});
+Object.assign(Act, {
+  async falhaReenviar(el) { await Sync.reenviar(el.dataset.id); toast('Item devolvido à fila', 'ok'); App.rerender(); },
+  async falhaBaixar(el) {
+    const it = await IDB.get('falhas', el.dataset.id);
+    if (!it) return;
+    baixarDataUrl('data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(it, null, 1)), 'VistAR_' + it.acao + '_' + it.id + '.json');
+  },
+  async falhaDescartar(el) {
+    if (!(await confirmar({ titulo: 'Descartar este item?', texto: 'Ele deixa de existir neste aparelho. A cópia no Drive (se foi possível enviar) continua.', sim: 'Descartar', perigo: true }))) return;
+    await Sync.descartar(el.dataset.id); App.rerender();
+  }
+});
+
 /* ═════════════ Menu do cabeçalho ═════════════ */
 Views.menu = () => {
   const u = (App.data || {}).usuario || {};
@@ -807,6 +866,7 @@ Views.menu = () => {
     it('menuIr', 'calendar', 'Programação', 'Dia, semana e mês', ' data-to="programacao"') +
     (modoSup ? it('menuIr', 'chart', 'Painel do contrato', 'Avanço por DRE e equipe', ' data-to="escolas"') + it('menuIr', 'image', 'Fotos', 'Galeria de todas as escolas', ' data-to="fotos"') + it('menuIr', 'users', 'Usuários e acessos', 'Cadastrar técnicos e códigos', ' data-to="usuarios"') : '') +
     it('menuIr', 'settings', 'Configurações', 'Texto, tema, fotos, notificações', ' data-to="configuracoes"') +
+    it('menuIr', 'alert', 'Itens com erro' + (Sync.nFalhas ? ' · ' + Sync.nFalhas : ''), 'Envios recusados: reenviar, baixar ou descartar', ' data-to="falhas"') +
     it('sair', 'logout', 'Sair da conta', ''));
 };
 
@@ -828,7 +888,8 @@ async function iniciarVistoria(e, pos, base) {
   App.V = V;
   Vist.salvar(true);
   await Sync.add('checkin', { id: V.id, escolaId: e.id, checkin: V.checkin, lat: V.lat, lng: V.lng, retomarDe: base ? base.id : '', fotosCopiar: fotosCopiar });
-  ETAPAS.forEach(x => { if (base ? base.etapas && base.etapas[x.k] : x.k === 'dados') Vist.tocar(x.k, true); });
+  // "init" só preenche o que o servidor ainda não tem: se um colega já abriu a escola, nada dele é sobrescrito.
+  ETAPAS.forEach(x => { Vist.mudou(x.k, false, true); Vist.tocar(x.k, true); });
   const D = App.data;
   const rot = (D.roteiro || []).find(r => r.escolaId === e.id && r.status !== 'concluida');
   if (rot) rot.status = 'em_andamento';
@@ -1083,9 +1144,96 @@ Object.assign(Act, {
     catch (e) { toast(e.message, 'err'); }
   }
 });
-Act.checkinEscola = (orig => async function (el) {
-  if (el && el.dataset && el.dataset.retomar) return Act.retomar(el);
-  return orig(el);
-})(Act.checkinEscola);
+/* ═════════════ Equipe em várias escolas e dois técnicos na mesma escola ═════════════ */
+const Equipe = {
+  /** Vistorias abertas da equipe em que este técnico não está. */
+  outras() {
+    const D = App.data || {}, V = App.V;
+    return (D.emAndamento || []).filter(x => !V || (x.id !== V.id && x.escolaId !== V.escolaId));
+  },
+  naEscola(escolaId) { return ((App.data || {}).emAndamento || []).find(x => x.escolaId === escolaId && (!App.V || x.id !== App.V.id)); },
+  cartoes() {
+    const l = Equipe.outras();
+    if (!l.length) return '';
+    return '<section class="card" style="border-left:6px solid var(--c-and)"><div class="kh">Sua equipe também está em</div>' + l.map(x => {
+      const e = App.escola(x.escolaId) || {};
+      return '<div class="doc-row"><span style="min-width:0"><b>' + esc(e.nome || x.codigo) + '</b><small>' + esc((x.participantes || []).join(' e ') || 'sem técnico no momento') + ' · desde ' + hora(x.checkin) + '</small></span>' +
+        (App.V ? '' : '<button class="btn btn-out-teal btn-sm" style="margin-left:auto;width:auto" data-act="entrarVistoria" data-id="' + x.id + '">Entrar</button>') + '</div>';
+    }).join('') + (App.V ? '' : '<p class="muted small" style="margin:8px 0 0">Entre para ajudar o colega na mesma escola. Cada um pode preencher etapas e ambientes diferentes, ao mesmo tempo.</p>') + '</section>';
+  }
+};
+
+Views.home = (orig => function (p) {
+  const out = orig(p);
+  if (!App.data || !out.body) return out;
+  const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+  if (V && (V.participantes || []).length > 1) out.body = out.body.replace('<div class="counts">', '<div class="small" style="margin-top:6px;color:var(--teal-d);font-weight:700">' + I('users', 15) + ' Junto com ' + esc(V.participantes.filter(n => n !== ((App.data.usuario || {}).nome)).join(' e ')) + '</div><div class="counts">');
+  out.body = out.body.replace('<div class="stats">', Equipe.cartoes() + '<div class="stats">');
+  return out;
+})(Views.home);
+
+Views.etapa = (orig => Object.assign(function (p) {
+  const out = orig(p);
+  if (App.V && out.body) out.body += '<button class="btn mt" style="color:var(--muted);font-weight:600" data-act="sairVistoria">' + I('logout', 18) + ' Sair desta vistoria (continua aberta para a equipe)</button>';
+  return out;
+}, { onBack: orig.onBack }))(Views.etapa);
+
+Object.assign(Act, {
+  async checkinEscola(el) {
+    if (el && el.dataset && el.dataset.retomar) return Act.retomar(el);
+    const id = el.dataset.id;
+    const e = App.escola(id);
+    if (!e) return;
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    if (V && V.escolaId === id) return Act.continuar();
+    if (V) {
+      if (!(await confirmar({ titulo: 'Você está em ' + curto(V.d.dados.nome), texto: 'Para ir a outra escola, saia desta vistoria. Ela continua aberta para a equipe e nada do que você fez se perde.', sim: 'Sair e continuar' }))) return;
+      await Act._sair();
+    }
+    Sheet.close(true);
+    // Colega já está nesta escola? Entra na mesma vistoria.
+    const ja = Equipe.naEscola(id);
+    if (ja && navigator.onLine !== false) {
+      if (await confirmar({ titulo: 'Sua equipe já está aqui', texto: esc((ja.participantes || []).join(' e ') || 'Um colega') + ' abriu a vistoria às ' + hora(ja.checkin) + '. Entrar na mesma vistoria para trabalharem juntos?', sim: 'Entrar' })) return Act.entrarVistoria({ dataset: { id: ja.id } });
+      return;
+    }
+    const btn = el.tagName ? el : $('[data-act=checkin]');
+    carregando(btn, true, 'Localizando');
+    const pos = await Geo.get(7000);
+    carregando(btn, false);
+    const raio = ((App.data || {}).cfg || {}).raioCheckin || 400;
+    if (pos && e.lat && e.lng) {
+      const dist = Geo.dist(pos.lat, pos.lng, Number(e.lat), Number(e.lng));
+      if (dist > raio && !(await confirmar({ titulo: 'Você está longe da escola', texto: 'O GPS indica <b>' + (dist > 1000 ? fmt(dist / 1000, 1) + ' km' : Math.round(dist) + ' m') + '</b> de distância da ' + esc(e.nome) + '. Fazer o check-in mesmo assim?', sim: 'Fazer check-in' }))) return;
+    } else if (!pos && !(await confirmar({ titulo: 'Localização indisponível', texto: 'Não foi possível confirmar sua posição pelo GPS. Fazer o check-in mesmo assim?', sim: 'Fazer check-in' }))) return;
+    iniciarVistoria(e, pos, null);
+  },
+  async entrarVistoria(el) {
+    if (App.V && App.V.status === 'em_andamento') { toast('Saia da vistoria atual antes.', 'warn'); return; }
+    if (el.tagName) carregando(el, true);
+    try {
+      const r = await Api.run('entrarVistoria', { vistoriaId: el.dataset.id });
+      App.V = Vist.doServidor(r);
+      Vist.salvar(true);
+      vib(20); toast('Você entrou na vistoria · ' + curto((App.escola(r.escolaId) || {}).nome), 'ok');
+      App.refresh();
+      Router.reset('home'); Router.go('etapa', { k: 'dados' });
+    } catch (e) { if (el.tagName) carregando(el, false); toast(e.net ? 'Entrar na vistoria do colega precisa de internet.' : e.message, 'err', 4000); }
+  },
+  async sairVistoria() {
+    if (!(await confirmar({ titulo: 'Sair desta vistoria?', texto: 'Ela continua aberta para a sua equipe. Tudo o que você preencheu é enviado; quem ficar finaliza.', sim: 'Sair' }))) return;
+    await Act._sair();
+    toast('Você saiu da vistoria', 'ok');
+    Router.reset('home');
+  },
+  async _sair() {
+    const V = App.V;
+    if (!V) return;
+    ETAPAS.forEach(x => Vist.tocar(x.k, true));
+    await Sync.add('sairVistoria', { vistoriaId: V.id });
+    App.V = null; Vist.salvar(true);
+    App.refresh();
+  }
+});
 Views.etapa = (orig => Object.assign(function (p) { const out = orig(p); out.after = null; return out; }, { onBack: orig.onBack }))(Views.etapa);
 </script>

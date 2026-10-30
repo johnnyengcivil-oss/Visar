@@ -174,7 +174,10 @@ const vid = 'v-teste-1';
 const ck = api('checkin', T, { id: vid, escolaId: 'e-farialima', checkin: new Date().toISOString(), lat: -23.54, lng: -46.52 });
 ok(ck.ok && /^VST-\d{4}-0001$/.test(ck.data.codigo), 'check-in gera código ' + (ck.data && ck.data.codigo));
 ok(api('checkin', T, { id: vid, escolaId: 'e-farialima' }).ok, 'check-in repetido é idempotente');
-ok(!api('checkin', T, { id: 'outro', escolaId: 'e-infante' }).ok, 'segunda vistoria simultânea é bloqueada');
+const TJ = at.data.token; // João, da mesma equipe
+ok(api('checkin', TJ, { id: 'v-par', escolaId: 'e-alencar', checkin: new Date().toISOString() }).ok, 'colega da mesma equipe abre outra escola ao mesmo tempo');
+ok(api('bootstrap', T).data.emAndamento.length === 2, 'a equipe vê as duas vistorias abertas');
+ok(api('bootstrap', T).data.vistoriaAtiva.id === vid && api('bootstrap', TJ).data.vistoriaAtiva.id === 'v-par', 'cada técnico continua na sua vistoria');
 const etapas = {
   dados: { nome: 'EMEF Brigadeiro Faria Lima', diretor: 'Carla Mendes', imovel: 'Próprio', idadeAnos: '30', obs: 'Sem restrições' },
   entrada: { padrao: 'BT', tipoEntrada: 'Aérea', tensao: '220 V', cx1: { tipo: 'Tipo M', medidor: '10492338' }, cx2: { tipo: 'Tipo T', protecao: 'Chave seccionadora', disjuntor: '150' },
@@ -202,10 +205,49 @@ ok(rv.ok && /Ar-condicionado nas salas 1 e 2/.test(rv.data.html) && /PRÓPRIO \(
 const fin = api('finalizar', T, { vistoriaId: vid, checkout: new Date().toISOString(), pendencias: [{ etapa: 'equipamentos', descricao: 'potência inacessível: Elevador' }], resumo: { ambientes: 6, fotos: 2, pendencias: 1 } });
 ok(fin.ok && fin.data.assinado && fin.data.docs.completo.fileId, 'finalização gera PDFs no Drive');
 ok(fin.data.copia.enviada && emails.some(e => e.to === 'carla@sme.sp.gov.br' && e.attachments.length), 'cópia enviada para a unidade com anexo');
-ok(fin.data.equipeStatus === 'em_transito' && fin.data.proxima.escolaId === 'e-infante', 'equipe em trânsito para a próxima escola');
+ok(fin.data.equipeStatus === 'em_campo' && fin.data.proxima.escolaId === 'e-infante', 'equipe continua em campo (colega ainda na outra escola)');
 ok(api('finalizar', T, { vistoriaId: vid }).ok, 'finalizar de novo (reenvio da fila) não quebra');
 const b2 = api('bootstrap', T).data;
 ok(b2.stats.concluidas === 7 && !b2.vistoriaAtiva, 'indicadores atualizados (7 concluídas)');
+
+console.log('Colaboração: dois técnicos na mesma escola');
+// Marcos chega à escola do João sem sinal e faz check-in: as duas vistorias viram uma só.
+const dup = api('checkin', T, { id: 'v-dup', escolaId: 'e-alencar', checkin: new Date().toISOString() });
+ok(dup.ok && dup.data.mescladaEm === 'v-par', 'check-in duplicado na mesma escola é mesclado na vistoria do colega');
+const t0 = '2030-01-01T10:00:00.000Z000', t1 = '2030-01-01T10:05:00.000Z000', t2 = '2030-01-01T10:09:00.000Z000';
+api('salvarEtapa', TJ, { vistoriaId: 'v-par', etapa: 'dados', ops: [{ p: 'dados.diretor', v: 'Paula', ts: t1 }, { p: 'dados.acesso', v: 'Portaria', ts: t1 }] });
+api('salvarEtapa', T, { vistoriaId: 'v-dup', etapa: 'dados', ops: [{ p: 'dados.obs', v: 'Obra no pátio', ts: t1 }, { p: 'dados.diretor', v: 'Paula Lima', ts: t2 }] });
+const offline = api('salvarEtapa', TJ, { vistoriaId: 'v-par', etapa: 'dados', ops: [{ p: 'dados.diretor', v: 'P.', ts: t0 }] }).data.dados;
+ok(offline.acesso === 'Portaria' && offline.obs === 'Obra no pátio', 'campos diferentes dos dois técnicos são mantidos');
+ok(offline.diretor === 'Paula Lima', 'mesmo campo: vence a alteração mais recente (a antiga, enviada depois, é ignorada)');
+api('salvarEtapa', TJ, { vistoriaId: 'v-par', etapa: 'ambientes', ops: [{ p: 'ambientes.itens#s1', v: { id: 's1', tipo: 'Sala de aula', c: '8', l: '7' }, ts: t1 }] });
+api('salvarEtapa', T, { vistoriaId: 'v-dup', etapa: 'ambientes', ops: [{ p: 'ambientes.itens#s2', v: { id: 's2', tipo: 'Biblioteca', c: '10', l: '8' }, ts: t1 }] });
+let amb = api('puxarVistoria', T, { vistoriaId: 'v-dup' }).data.etapas.ambientes.dados.itens;
+ok(amb.length === 2, 'ambientes cadastrados ao mesmo tempo pelos dois aparecem juntos');
+api('salvarEtapa', T, { vistoriaId: 'v-dup', etapa: 'ambientes', ops: [{ p: 'ambientes.itens#s1', v: null, ts: t2 }] });
+api('salvarEtapa', TJ, { vistoriaId: 'v-par', etapa: 'ambientes', ops: [{ p: 'ambientes.itens#s1', v: { id: 's1', tipo: 'Sala de aula', c: '9', l: '7' }, ts: t1 }] });
+amb = api('puxarVistoria', TJ, { vistoriaId: 'v-par' }).data.etapas.ambientes.dados.itens;
+ok(amb.length === 1 && amb[0].id === 's2', 'exclusão mais recente não é desfeita por edição antiga');
+const pv = api('puxarVistoria', T, { vistoriaId: 'v-dup' }).data;
+ok(pv.participantes.length === 2 && pv.id === 'v-par', 'a vistoria mostra os dois participantes');
+api('uploadFoto', T, { id: 'foto-dup', vistoriaId: 'v-dup', etapa: 'dados', slot: 'dados.placa', data: png });
+ok(api('puxarVistoria', TJ, { vistoriaId: 'v-par' }).data.fotos.some(f => f.id === 'foto-dup'), 'foto do colega chega para o outro');
+ok(api('sairVistoria', T, { vistoriaId: 'v-dup' }).ok && api('puxarVistoria', TJ, { vistoriaId: 'v-par' }).data.participantes.length === 1, 'sair da vistoria sem encerrá-la');
+ok(api('entrarVistoria', T, { vistoriaId: 'v-par' }).data.participantes.length === 2, 'entrar de novo na vistoria do colega');
+ok(api('cancelar', T, { vistoriaId: 'v-dup', motivo: 'Problema da equipe' }).ok && api('puxarVistoria', TJ, { vistoriaId: 'v-par' }).data.status === 'cancelada', 'encerrar pelo id mesclado encerra a vistoria real');
+
+console.log('Permissões');
+const supT = api('login', '', { email: '2001', senha: 'vistar2026' }).data.token;
+const nUser = api('salvarUsuario', supT, { nome: 'Lia', email: 'lia@x.com', matricula: '4001', perfil: 'tecnico', equipeId: 'eq03', dres: ['Itaquera'] }).data;
+const TL = api('ativar', '', { login: '4001', codigo: nUser.codigo, senha: 'Lia12345', aceite: true }).data.token;
+ok(!api('escola', TL, { escolaId: 'e-farialima' }).ok, 'escola fora das DREs do usuário é bloqueada');
+ok(api('escola', TL, { escolaId: 'e-portinari' }).ok, 'escola da própria DRE é liberada');
+ok(!api('retomarDados', TL, { escolaId: 'e-infante' }).ok, 'retomar vistoria de escola fora das DREs é bloqueado');
+ok(!api('legenda', TL, { id: 'foto2', legenda: 'x' }).ok, 'legenda de foto de outra equipe é bloqueada');
+ok(!api('vistoriaDetalhe', TL, { vistoriaId: vid }).ok, 'detalhe de vistoria de outra equipe é bloqueado');
+ok(Object.keys(api('thumbs', TL, { ids: [up.data.fileId] }).data).length === 0, 'miniaturas de fotos fora do escopo não são entregues');
+ok(!api('checkin', TL, { id: 'v-l', escolaId: 'e-farialima' }).ok, 'check-in em escola fora das DREs é bloqueado');
+ok(api('guardarFalha', T, { acao: 'uploadFoto', erro: 'teste', payload: { id: 'x' } }).data.fileId, 'envio recusado ganha cópia de segurança no Drive');
 
 console.log('Consultas');
 const vd = api('vistoriaDetalhe', T, { vistoriaId: vid }).data;
@@ -217,7 +259,7 @@ ok(pnl && pnl.cont.concluida === 7 && pnl.serie.length === 14 && pnl.metaHoje !=
 const prog = api('programacao', T, { inicio: new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10), fim: new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10) }).data;
 ok(prog && prog.itens.length >= 10, 'programação da equipe (' + (prog && prog.itens.length) + ' itens)');
 const gal = api('galeria', T, {}).data;
-ok(gal && gal.total === 2 && gal.grupos[0].fotos.some(f => f.rotulo === 'Medidor nº 10492338'), 'galeria agrupada com legendas');
+ok(gal && gal.total === 3 && gal.grupos.some(g => g.fotos.some(f => f.rotulo === 'Medidor nº 10492338')), 'galeria agrupada com legendas');
 const pend = api('pendenciasPainel', T, {}).data;
 ok(pend && pend.itens.some(i => i.situacao === 'aguardando_autorizacao') && pend.itens.some(i => i.situacao === 'retorno_solicitado'), 'pendências com situação por escola');
 ok(api('reagendar', T, { escolaId: 'e-deodoro', data: '2030-01-10', hora: '09:00', confirmado: true }).ok, 'retorno reagendado');
@@ -259,6 +301,17 @@ ok(api('usuarios', sup).data.usuarios.length >= 5, 'lista de usuários');
 ok(api('cobrarDre', sup, { escolaId: 'e-bilac' }).ok, 'cobrar DRE (sem e-mail: devolve telefone)');
 ok(api('reabrir', sup, { vistoriaId: vid, motivo: 'medir QDC do bloco B' }).ok, 'reabrir vistoria para retorno');
 ok(api('rota', T, { escolaId: 'e-infante', lat: -23.54, lng: -46.52 }).data.km > 0, 'rota cai na estimativa quando o Maps falha');
+
+console.log('Pré-dimensionamento');
+const calc = vm.runInContext('preDimensionamento_', ctx)({
+  entrada: { padrao: 'BT', tensao: '220 V', fases: 'Monofásico', cx2: { disjuntor: '100' } },
+  estrutura: { blocos: [{ pav: 2, nome: 'Prédio principal' }] },
+  ambientes: { itens: [{ tipo: 'Sala de aula', qtd: 1, c: '8', l: '7', bloco: 0, pav: 0, aberturas: [{ tipo: 'Janela', larg: '2', alt: '1,2', qtd: 2, fachada: 'Oeste', protecao: 'Brise ou marquise' }] }] }
+}, { KW_POR_TR: '1.05', FATORES_BTU_M2: '{"Sala de aula": 700}' });
+ok(calc.linhas[0].fator === 700, 'fator por m² ajustável na aba Config');
+ok(/vidro \+1\.680/.test(calc.linhas[0].ajustes), 'ganho solar pelas janelas medidas (4,8 m² a Oeste com brise)');
+ok(Math.abs(calc.kwEntrada - 127.0171 * 100 * 0.92 / 1000) < 0.1, 'entrada monofásica calculada por fase-neutro');
+ok(calc.linhas[0].local.indexOf('Prédio principal') === 0, 'nome do bloco/setor aparece no relatório');
 
 console.log('Administrador');
 const adm = vm.runInContext('criarAdministrador()', ctx);

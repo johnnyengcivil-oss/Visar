@@ -19,7 +19,7 @@ Este guia é para quem **nunca programou**. Você só vai copiar e colar arquivo
 9. Publique o app (gerar o link)
 10. Seu primeiro acesso e o teste completo
 11. Cadastre os dados reais (escolas, equipes, usuários, roteiro)
-12. Instale no celular das equipes
+12. Instale no celular das equipes (trabalho em equipe e itens com erro)
 13. Problemas comuns
 14. Como atualizar o app depois (sem mudar o link)
 15. Limites do Google, backup e segurança
@@ -195,7 +195,7 @@ Você tem **dois caminhos**. Para conhecer o app, o caminho A é o melhor.
 2. Clique no botão azul **Implantar** (canto superior direito) › **Nova implantação**.
 3. Clique na **engrenagem ⚙** ao lado de "Selecionar tipo" › **App da Web**.
 4. Preencha:
-   - **Descrição:** `VistAR 1.0`
+   - **Descrição:** `VistAR 1.1`
    - **Executar como:** **Eu** (seu e-mail). ⚠️ *Não* escolha "Usuário que acessa o app da Web".
    - **Quem pode acessar:** escolha conforme a tabela abaixo.
 5. Clique em **Implantar**. Se pedir autorização de novo, repita o passo 7.4.
@@ -238,8 +238,9 @@ Faça este roteiro **uma vez antes de liberar o app para as equipes**:
    - no seu e-mail: a cópia do relatório;
    - na planilha: as abas **Vistorias**, **Etapas** e **Fotos** com linhas novas.
 9. **Teste sem internet:** ative o modo avião, tire uma foto e preencha um campo. Desligue o modo avião e veja o selo "na fila" sumir em alguns segundos.
+10. **Teste em dupla (com dois celulares):** no celular A, faça check-in numa escola. No celular B, com outro técnico da **mesma equipe**, toque em **Entrar** no cartão "Sua equipe também está em". Preencha campos diferentes nos dois e cadastre um ambiente em cada um. Em até 1 minuto, os dois celulares mostram tudo.
 
-✅ **Confira:** os 9 passos funcionaram. Se algum falhou, veja a seção 13.
+✅ **Confira:** os 10 passos funcionaram. Se algum falhou, veja a seção 13.
 
 ---
 
@@ -267,6 +268,7 @@ Edite a coluna **valor**:
 | RAIO_CHECKIN_M | Distância máxima da escola para o check-in sem aviso (padrão 400 m) |
 | ENVIO_AUTOMATICO_COPIA | `sim` envia o relatório assinado para a escola ao finalizar |
 | KW_POR_TR | Premissa de consumo do pré-dimensionamento (padrão 1,05) |
+| FATORES_BTU_M2 | Opcional. Ajusta a carga por m² de cada tipo de ambiente, por exemplo: `{"Sala de aula": 700, "Biblioteca": 650}` |
 
 ### 11.2 · DREs
 
@@ -333,6 +335,29 @@ Envie o **link do app** por WhatsApp ou e-mail para cada técnico.
 - **Não feche o app** antes do selo da fila sumir no fim do dia. Se precisar, use **Fotos › Enviar agora**.
 - Se a câmera do app não abrir, use **☰ › Configurações › Câmera › Sistema**.
 
+### 12.1 · Trabalho em equipe
+
+**A dupla pode se dividir em duas escolas ao mesmo tempo.** Cada técnico faz o check-in na sua escola. A equipe aparece "em campo" para a supervisão enquanto houver alguma escola aberta, e cada técnico aparece no mapa com a escola em que está.
+
+**Ou os dois podem trabalhar juntos na mesma escola:**
+- Quem chega primeiro faz o check-in. O colega abre o app e toca em **Entrar** no cartão **"Sua equipe também está em"**. Se ele tentar fazer check-in na mesma escola, o app oferece entrar na vistoria do colega.
+- Cada um preenche o que quiser, inclusive a mesma etapa: o app junta **campo por campo** e **ambiente por ambiente**. Se os dois mudarem o **mesmo campo**, vale a alteração mais recente.
+- O que o colega faz aparece no seu celular em até **1 minuto** (com internet).
+- **Os dois sem sinal?** Se ambos fizerem check-in na mesma escola sem internet, o servidor junta as duas vistorias numa só quando o sinal voltar. Nada se perde.
+- **Para ir a outra escola** sem encerrar a vistoria, use **Sair desta vistoria**, no fim de qualquer etapa. Ela continua aberta para quem ficou, e quem ficar finaliza.
+- Quando um dos dois **finaliza ou cancela**, o celular do outro avisa e volta para o início.
+
+**Regras:** uma escola só pode ter uma vistoria aberta por vez, e uma equipe não pode abrir uma escola que outra equipe está vistoriando.
+
+### 12.2 · Itens com erro
+
+Se o servidor recusar um envio 3 vezes (por exemplo, a escola foi retirada das DREs do técnico), o item **não é apagado**. Ele vai para **☰ Menu › Itens com erro**, e o selo do topo fica vermelho ("N com erro"). Ali dá para:
+- **Reenviar**, depois de corrigir a causa;
+- **Baixar** o item (arquivo .json, com a foto, se houver);
+- **Descartar**, se não precisar mais.
+
+Uma cópia de cada item recusado vai também para a pasta **VistAR › Falhas de sincronização** do Drive, para o administrador recuperar o dado se o celular se perder.
+
 ---
 
 ## 13. Problemas comuns
@@ -347,6 +372,10 @@ Envie o **link do app** por WhatsApp ou e-mail para cada técnico.
 | **"Este acesso ainda não foi ativado"** | O usuário precisa usar **Primeiro acesso** com o código recebido. |
 | **"Código inválido ou vencido"** | O código vale 72 h e só pode ser usado uma vez. Gere outro em **Usuários › Reenviar código**. |
 | **"Muitas tentativas"** | Proteção contra senha errada. Aguarde 10 minutos. |
+| **Selo vermelho "N com erro"** | Abra **☰ › Itens com erro** e veja a mensagem de cada item. Corrija a causa e toque em **Reenviar** (seção 12.2). |
+| **"Esta escola não pertence às suas DREs autorizadas"** | Em **Usuários**, inclua a DRE da escola no cadastro do técnico. Depois, reenvie os itens com erro. |
+| **"Outra equipe já está vistoriando esta escola"** | Só uma equipe por escola de cada vez. Combine com a supervisão, ou peça para a outra equipe finalizar ou sair. |
+| **O que o colega preencheu não aparece** | As alterações chegam em até 1 minuto, com internet nos dois celulares. Feche e abra o app para forçar a atualização. |
 | **"Sessão expirada"** | Faça login de novo. **Nada do que foi coletado se perde**: a fila continua guardada no celular. |
 | **A câmera não abre** | Permita a câmera nas configurações do navegador. Ou use **Configurações › Câmera › Sistema**. |
 | **"Você está longe da escola"** no check-in | O GPS acha que você está fora da escola. Confira se a escola tem lat/lng corretos (seção 11.3). Você pode confirmar e seguir mesmo assim. |
@@ -429,4 +458,4 @@ Cada vistoria ocupa em média **15 a 30 MB** (fotos + PDFs). Com 15 GB, cabem ce
 
 ---
 
-*VistAR · Consórcio Climatiza São Paulo · guia da versão 1.0*
+*VistAR · Consórcio Climatiza São Paulo · guia da versão 1.1*

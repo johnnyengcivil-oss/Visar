@@ -1,0 +1,29 @@
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Servidor (Planilha, Drive e e-mail simulados)
+        run: npm run test:servidor
+      - name: Pacote de instalação (dist/) atualizado e testado
+        run: |
+          npm run test:dist
+          git diff --exit-code -- dist || (echo "::error::dist/ desatualizado: rode 'npm run build' e faça commit" && exit 1)
+      - name: Telas (Chromium)
+        run: npm run test:telas
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: dev/shots
