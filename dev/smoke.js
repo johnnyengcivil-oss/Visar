@@ -150,11 +150,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
 
   await clica('[data-act=menu]');
   await shot('16a-menu');
-  await clica('[data-act=menuIr][data-to=credencial]');
+  await clica('#layer [data-act=menuIr][data-to=credencial]');
   await shot('16-credencial');
   await clica('[data-act=back]');
   await clica('[data-act=menu]');
-  await clica('[data-act=menuIr][data-to=configuracoes]');
+  await clica('#layer [data-act=menuIr][data-to=configuracoes]');
   await shot('16b-configuracoes');
   await clica('[data-act=back]');
   await clica('[data-act=go][data-to=programacao]');
@@ -258,7 +258,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await shot('29-sup-vistoria');
   await clica('[data-act=back]');
   await clica('[data-act=menu]');
-  await clica('[data-act=menuIr][data-to=usuarios]');
+  await clica('#layer [data-act=menuIr][data-to=usuarios]');
   await page.waitForSelector('#uBox .sch');
   await clica('[data-act=usuarioNovo]');
   await page.fill('#usNome', 'Ana Teste');
@@ -274,6 +274,90 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAQklEQVR
   await page.waitForSelector('.wk-row');
   await clica('[data-act=visitaNova]');
   await shot('32-sup-nova-visita');
+
+  // ═══ Computador: administrador (menu lateral, cadastros, perfis, extração, assistente) ═══
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sair = async () => { await page.evaluate(() => { Sheet.close(true); App.token = null; LS.del('token'); LS.del('boot'); LS.del('modo'); App.data = null; Dados.mem = {}; Router.reset('login'); }); };
+  const entrar = async login => { await sair(); await page.fill('input[name=email]', login); await page.fill('input[name=senha]', 'vistar2026'); await clica('button[type=submit]'); await page.waitForTimeout(900); };
+  await entrar('1000');
+  await page.waitForSelector('.prog-hero');
+  await shot('40-pc-admin-painel');
+  const vai = async (rota, sel, nome) => { await page.evaluate(r => Router.go(r), rota); await page.waitForSelector(sel, { timeout: 15000 }); await shot(nome); };
+  await vai('cadastro', '.tabela', '41-pc-cadastro-escolas');
+  await clica('[data-act=escolaForm][data-id]');
+  await page.waitForSelector('#esOk');
+  await shot('42-pc-escola-form');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await clica('[data-act=cadAba][data-v=dres]'); await page.waitForTimeout(600); await shot('43-pc-dres');
+  await clica('[data-act=cadAba][data-v=empresas]'); await page.waitForSelector('[data-act=empresaCompartilhar]'); await shot('44-pc-empresas');
+  await vai('perfis', '[data-act=perfilForm]', '45-pc-perfis');
+  await clica('[data-act=perfilForm]'); await page.waitForSelector('#pfOk'); await shot('46-pc-perfil-form'); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await vai('personalizar', '.psCfg', '47-pc-personalizar');
+  await vai('extracao', '[data-act=exVer]', '48a-pc-extracao');
+  await clica('[data-act=exVer]'); await page.waitForSelector('#exBox .tabela'); await shot('48-pc-extracao');
+  await vai('equipesCad', '[data-act=equipeForm][data-id]', '49-pc-equipes');
+  await vai('usuarios', '#uBox .tabela', '50-pc-usuarios');
+  await clica('[data-act=usuarioEditar]'); await page.waitForSelector('#usOk'); await shot('51-pc-usuario-form'); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await vai('consulta', '#consBox .tabela', '52-pc-consulta');
+  await vai('assistente', '[data-act=asProximas]', '53a-pc-assistente');
+  await clica('[data-act=asProximas]'); await clica('[data-act=asAdd]'); await clica('[data-act=asSugerir]');
+  await page.waitForSelector('.rot-item');
+  // arrastar o 3º para o topo
+  const alca = await page.locator('[data-arrasta]').nth(2).boundingBox(), topo = await page.locator('.rot-item').first().boundingBox();
+  await page.mouse.move(alca.x + 8, alca.y + 8); await page.mouse.down(); await page.mouse.move(alca.x + 8, topo.y + 10, { steps: 8 }); await page.mouse.up();
+  await page.waitForTimeout(400);
+  await shot('53-pc-assistente');
+  await clica('[data-act=asSalvar]'); await confirma(); await page.waitForSelector('.tabs3');
+  await shot('54-pc-programacao');
+  // Orçamentos: gestor/admin atribui
+  await vai('orcamentos', '#orcBox .tabela', '55-pc-orcamentos');
+  await clica('#orcBox .tabela [data-to=orcamento]');
+  await page.waitForSelector('[data-act=orcAtribuir]');
+  await shot('56-pc-orcamento-detalhe');
+  await clica('[data-act=orcAtribuir]');
+  await page.selectOption('#oaResp', 'u-orc');
+  await shot('57-pc-orcamento-atribuir');
+  await clica('[data-act=orcAtribuirOk]');
+  await page.waitForFunction(() => /Em elaboração/.test(document.querySelector('#orcSt').textContent));
+
+  // ═══ Orçamentos (escritório): painel, vistorias, extração ═══
+  await entrar('3001');
+  await page.waitForSelector('.prog-hero');
+  await shot('60-pc-orcamento');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => App.rerender());
+  await page.waitForTimeout(500);
+  await shot('61-cel-orcamento');
+  // Orçamentista envia a revisão com documento
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => Router.go('orcamento', { id: 'orc-vx9' }));
+  await page.waitForSelector('[data-act=orcEnviar]');
+  await clica('[data-act=orcEnviar]');
+  await page.fill('#ov0', '250.000,00'); await page.fill('#ov1', '48.500,50');
+  await page.setInputFiles('#ovArq', { name: 'Orcamento_FariaLima_v1.xlsx', mimeType: 'application/vnd.ms-excel', buffer: Buffer.from('planilha') });
+  await page.waitForSelector('#ovLista .chip');
+  const tot = await page.textContent('#ovTot');
+  if (!/298\.500,50/.test(tot)) throw new Error('Total do orçamento errado: ' + tot);
+  await shot('63-pc-orcamento-enviar');
+  await clica('[data-act=orcEnviarOk]');
+  await page.waitForFunction(() => /Em aprovação/.test(document.querySelector('#orcSt').textContent));
+  await shot('64-pc-orcamento-em-aprovacao');
+  // Gestor aprova
+  await entrar('2001');
+  await page.evaluate(() => Router.go('orcamento', { id: 'orc-vx9' }));
+  await page.waitForSelector('[data-act=orcDecidir][data-d=aprovar]');
+  await clica('[data-act=orcDecidir][data-d=aprovar]');
+  await clica('[data-act=orcDecidirOk]');
+  await page.waitForFunction(() => /finalizado/.test(document.querySelector('#orcSt').textContent));
+  await shot('65-pc-orcamento-finalizado');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => Router.go('orcamentos'));
+  await page.waitForSelector('#orcBox .so-cel .sch');
+  await shot('66-cel-orcamentos-lista');
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await entrar('1001');
+  await page.waitForSelector('.stats');
+  await shot('62-tablet-vistoriador');
 
   await browser.close();
   if (erros.length) { console.error('ERROS NO NAVEGADOR:\n' + erros.join('\n')); process.exit(1); }

@@ -3,19 +3,6 @@
  * galeria de fotos, detalhe de escola/vistoria e gestão de usuários.
  */
 
-const PERFIS_SUPERVISAO_ = ['supervisor', 'admin', 'coordenacao'];
-
-function exigirSupervisor_(u) {
-  if (PERFIS_SUPERVISAO_.indexOf(u.perfil) < 0) throw new Error('Disponível só para supervisão e coordenação.');
-}
-function ehSupervisor_(u) { return PERFIS_SUPERVISAO_.indexOf(u.perfil) >= 0; }
-
-/** Escolas que o usuário enxerga (pelas DREs autorizadas). */
-function escolasDoUsuario_(u) {
-  const dres = lista_(u.dres);
-  return Db.all('Escolas').filter(e => !dres.length || dres.indexOf(e.dre) >= 0);
-}
-
 function diaISO_(d) { return Utilities.formatDate(d, 'America/Sao_Paulo', 'yyyy-MM-dd'); }
 function somaDias_(iso, n) { return diaISO_(new Date(new Date(iso + 'T12:00:00-03:00').getTime() + n * 864e5)); }
 
@@ -101,13 +88,13 @@ function acaoPainel_(p, u) {
 
   const porDre = {};
   escolas.forEach(e => { const x = porDre[e.dre] = porDre[e.dre] || { dre: e.dre, total: 0, concluidas: 0 }; x.total++; if (st[e.id] === 'concluida') x.concluidas++; });
-  const equipes = Db.all('Equipes');
+  const equipes = equipesPermitidas_(u);
   const porEquipe = equipes.map(eq => ({ id: eq.id, nome: eq.nome, n: finPer.filter(v => v.equipeId === eq.id).length }));
   const nTot = porEquipe.reduce((s, x) => s + x.n, 0) || 1;
   porEquipe.forEach(x => { x.pct = x.n / nTot; });
 
   return {
-    periodo: p.periodo || 'mes', dre: p.dre || '', dres: lista_(u.dres).length ? lista_(u.dres) : Db.all('DREs').map(d => d.id),
+    periodo: p.periodo || 'mes', dre: p.dre || '', dres: dresPermitidas_(u).map(d => d.id),
     total: escolas.length, cont: cont, pct: pctHoje, ritmo: ritmo, previsao: previsao, metaData: metaData,
     metaHoje: metaHoje, deltaMeta: metaHoje === null ? null : pctHoje - metaHoje,
     serie: serie,
@@ -118,7 +105,8 @@ function acaoPainel_(p, u) {
     },
     porDre: Object.keys(porDre).map(k => porDre[k]).sort((a, b) => b.concluidas / b.total - a.concluidas / a.total),
     porEquipe: porEquipe.sort((a, b) => b.n - a.n),
-    mapa: escolas.filter(e => e.lat && e.lng).map(e => ({ id: e.id, nome: e.nome, lat: Number(e.lat), lng: Number(e.lng), st: st[e.id] }))
+    mapa: escolas.filter(e => e.lat && e.lng).map(e => ({ id: e.id, nome: e.nome, lat: Number(e.lat), lng: Number(e.lng), st: st[e.id] })),
+    orcamentos: resumoOrcamentos_(u, ids)
   };
 }
 
@@ -132,7 +120,7 @@ function acaoPing_(p, u) {
 }
 
 function acaoEquipes_(p, u) {
-  exigirSupervisor_(u);
+  exigir_(u, 'supervisao.painel');
   const hoje = hoje_();
   const esc = {};
   Db.all('Escolas').forEach(e => { esc[e.id] = e; });
@@ -143,7 +131,7 @@ function acaoEquipes_(p, u) {
   const usuarios = Db.all('Usuarios');
   const nomes = {};
   usuarios.forEach(x => { nomes[x.id] = x.nome; });
-  const equipes = Db.all('Equipes').map(eq => {
+  const equipes = equipesPermitidas_(u).map(eq => {
     const abertas = vist.filter(v => v.equipeId === eq.id && v.status === 'em_andamento');
     const r = rot.filter(x => x.equipeId === eq.id);
     const resumo = v => ({ id: v.id, codigo: v.codigo, escola: (esc[v.escolaId] || {}).nome, escolaId: v.escolaId, checkin: v.checkin,
@@ -177,18 +165,20 @@ function acaoEquipes_(p, u) {
 /* ───────────────────────── Validação ───────────────────────── */
 
 function acaoValidacoes_(p, u) {
-  exigirSupervisor_(u);
+  exigir_(u, 'vistorias.validar');
   const esc = {}; Db.all('Escolas').forEach(e => { esc[e.id] = e; });
   const eqs = {}; Db.all('Equipes').forEach(e => { eqs[e.id] = e; });
   const filtro = p.filtro || 'pendente';
-  return Db.where('Vistorias', v => v.status === 'finalizada' && (filtro === 'todas' || (filtro === 'pendente' ? (!v.validacao || v.validacao === 'pendente') : v.validacao === filtro)))
+  const visiveis = {};
+  escolasPermitidas_(u, true).forEach(e => { visiveis[e.id] = true; });
+  return Db.where('Vistorias', v => v.status === 'finalizada' && visiveis[v.escolaId] && (filtro === 'todas' || (filtro === 'pendente' ? (!v.validacao || v.validacao === 'pendente') : v.validacao === filtro)))
     .sort((a, b) => a.checkout < b.checkout ? 1 : -1).slice(0, 80)
     .map(v => ({ id: v.id, codigo: v.codigo, escola: (esc[v.escolaId] || {}).nome, dre: (esc[v.escolaId] || {}).dre, equipe: (eqs[v.equipeId] || {}).nome,
       checkout: v.checkout, assinado: !!v.assinadoEm, resumo: parse_(v.resumo), validacao: v.validacao || 'pendente', nota: v.validacaoNota }));
 }
 
 function acaoValidar_(p, u) {
-  exigirSupervisor_(u);
+  exigir_(u, 'vistorias.validar');
   const v = exigirVistoria_(p.vistoriaId, u);
   if (!v || v.status !== 'finalizada') throw new Error('Vistoria não encontrada ou não finalizada.');
   if (['aprovada', 'correcao'].indexOf(p.decisao) < 0) throw new Error('Decisão inválida.');
@@ -306,7 +296,8 @@ function acaoVistoriaDetalhe_(p, u) {
     copia: v.copiaEnviadaEm ? { para: v.copiaPara, em: v.copiaEnviadaEm } : null, respEmail: R.rev.respEmail || d.email,
     historico: historico_(v.historico).length ? historico_(v.historico) : [{ v: Number(v.versao) || 1, em: v.checkout, nota: 'gerada' }],
     validacao: { status: v.validacao || 'pendente', por: v.validadoPor, em: v.validadoEm, nota: v.validacaoNota },
-    podeValidar: ehSupervisor_(u)
+    podeValidar: ehSupervisor_(u),
+    orcamento: orcamentoDaVistoria_(v.id, u)
   };
 }
 
@@ -438,8 +429,9 @@ function acaoProgramacao_(p, u) {
   const equipeId = sup && p.equipeId !== undefined ? p.equipeId : u.equipeId;
   const esc = {}; Db.all('Escolas').forEach(e => { esc[e.id] = e; });
   const vist = {}; Db.all('Vistorias').forEach(v => { vist[v.id] = v; });
-  const itens = Db.where('Roteiro', r => (!equipeId || r.equipeId === equipeId) && r.data >= p.inicio && r.data <= p.fim)
-    .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora))
+  const eqOk = {}; equipesPermitidas_(u).forEach(e => { eqOk[e.id] = e.nome; });
+  const itens = Db.where('Roteiro', r => (!equipeId || r.equipeId === equipeId) && (!sup || eqOk[r.equipeId] !== undefined) && r.data >= p.inicio && r.data <= p.fim)
+    .sort((a, b) => (a.data + (a.hora || '99') + String(a.ordem || 0).padStart(3, '0')).localeCompare(b.data + (b.hora || '99') + String(b.ordem || 0).padStart(3, '0')))
     .map(r => {
       const e = esc[r.escolaId] || {};
       const v = vist[r.vistoriaId];
@@ -447,15 +439,15 @@ function acaoProgramacao_(p, u) {
         id: r.id, data: r.data, hora: r.hora, horaFim: r.horaFim || (v && v.checkout ? fmtData_(v.checkout, 'HH:mm') : ''), equipeId: r.equipeId,
         escolaId: r.escolaId, escola: e.nome || r.nota, dre: e.dre, endereco: [e.logradouro, e.numero].filter(String).join(', '),
         ambientes: e.ambientesPrevistos, status: r.status, tipo: r.tipo || (r.status === 'retorno' ? 'retorno' : r.escolaId ? 'visita' : 'escritorio'),
-        nota: r.nota, confirmado: r.confirmado === 'sim', responsavel: e.diretor,
+        nota: r.nota, confirmado: r.confirmado === 'sim', responsavel: e.diretor, ordem: Number(r.ordem) || 0, lat: e.lat, lng: e.lng, equipe: eqOk[r.equipeId] || '',
         vistoria: v ? { id: v.id, checkin: v.checkin, checkout: v.checkout, resumo: parse_(v.resumo), status: v.status } : null
       };
     });
-  return { itens: itens, equipes: sup ? Db.all('Equipes').map(e => ({ id: e.id, nome: e.nome })) : null, equipeId: equipeId };
+  return { itens: itens, equipes: sup ? equipesPermitidas_(u).map(e => ({ id: e.id, nome: e.nome })) : null, equipeId: equipeId };
 }
 
 function acaoSalvarVisita_(p, u) {
-  exigirSupervisor_(u);
+  exigir_(u, 'programacao.editar');
   if (p.tipo !== 'escritorio') exigirEscola_(p.escolaId, u);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.data || '')) throw new Error('Informe a data.');
   if (p.tipo !== 'escritorio' && !Db.find('Escolas', p.escolaId)) throw new Error('Escolha a escola.');
@@ -474,7 +466,7 @@ function acaoSalvarVisita_(p, u) {
 }
 
 function acaoExcluirVisita_(p, u) {
-  exigirSupervisor_(u);
+  exigir_(u, 'programacao.editar');
   const r = Db.find('Roteiro', p.id);
   if (!r) return { ok: true };
   if (r.status === 'concluida' || r.status === 'em_andamento') throw new Error('Visitas iniciadas ou concluídas não podem ser excluídas.');
@@ -531,64 +523,3 @@ function acaoLegenda_(p, u) {
   return { ok: true };
 }
 
-/* ───────────────────────── Usuários ───────────────────────── */
-
-function acaoUsuarios_(p, u) {
-  exigirSupervisor_(u);
-  return {
-    usuarios: Db.all('Usuarios').map(x => ({
-      id: x.id, nome: x.nome, email: x.email, matricula: x.matricula, cargo: x.cargo, perfil: x.perfil || 'tecnico', equipeId: x.equipeId,
-      dres: x.dres, ativo: x.ativo !== 'nao', ativado: !!x.senhaHash, codigoPendente: !!x.codigoAtivacao, ultimoAcesso: x.ultimoAcesso, rg: x.rg, telefone: x.telefone
-    })).sort((a, b) => String(a.nome).localeCompare(b.nome)),
-    equipes: Db.all('Equipes').map(e => ({ id: e.id, nome: e.nome, membros: e.membros })),
-    dres: Db.all('DREs').map(d => d.id)
-  };
-}
-
-function acaoSalvarUsuario_(p, u) {
-  exigirSupervisor_(u);
-  if (!p.nome || !(p.email || p.matricula)) throw new Error('Informe nome e e-mail ou matrícula.');
-  if (p.perfil === 'admin' && u.perfil !== 'admin') throw new Error('Só o administrador cria outro administrador.');
-  const dup = Db.all('Usuarios').find(x => x.id !== p.id && ((p.email && String(x.email).toLowerCase() === String(p.email).toLowerCase()) || (p.matricula && x.matricula === p.matricula)));
-  if (dup) throw new Error('Já existe um usuário com este e-mail ou matrícula (' + dup.nome + ').');
-  const novo = !p.id;
-  const reg = Db.upsert('Usuarios', {
-    id: p.id || 'u-' + uid_().slice(0, 8), nome: p.nome, email: p.email || '', matricula: p.matricula || '', cargo: p.cargo || '', perfil: p.perfil || 'tecnico',
-    equipeId: p.equipeId || '', dres: Array.isArray(p.dres) ? p.dres.join(', ') : (p.dres || ''), rg: p.rg || '', telefone: p.telefone || '',
-    empresa: p.empresa || getConfig_().EMPRESA, ativo: p.ativo === false ? 'nao' : 'sim', criadoEm: novo ? agora_() : undefined, tokenVersao: novo ? '1' : undefined
-  });
-  // Mantém a lista de membros da equipe coerente.
-  if (reg.equipeId) {
-    const eq = Db.find('Equipes', reg.equipeId);
-    if (eq && lista_(eq.membros).indexOf(reg.nome) < 0 && reg.perfil === 'tecnico') Db.upsert('Equipes', { id: eq.id, membros: lista_(eq.membros).concat(reg.nome).join(', ') });
-  }
-  let codigo = '';
-  if (novo || p.novoCodigo) codigo = enviarCodigo_(reg, p.enviarEmail !== false);
-  log_(u.id, 'usuario', { id: reg.id, novo: novo });
-  return { id: reg.id, codigo: codigo };
-}
-
-function enviarCodigo_(reg, email) {
-  const cod = gerarCodigo_(reg);
-  if (email && /@/.test(reg.email)) {
-    const url = ScriptApp.getService().getUrl() || '';
-    try {
-      MailApp.sendEmail({
-        to: reg.email, name: 'VistAR · ' + getConfig_().CONSORCIO, subject: 'Seu acesso ao VistAR',
-        htmlBody: '<div style="font-family:Arial,sans-serif"><p>Olá, ' + esc_(reg.nome) + '.</p><p>Seu acesso ao VistAR foi criado.</p>' +
-          '<ol><li>Abra o app' + (url ? ': <a href="' + url + '">' + url + '</a>' : '') + '</li><li>Toque em <b>Primeiro acesso</b></li>' +
-          '<li>Informe ' + (reg.matricula ? 'a matrícula <b>' + esc_(reg.matricula) + '</b> ou ' : '') + 'o e-mail e o código abaixo</li></ol>' +
-          '<p style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0F2140">' + cod + '</p><p style="color:#5B6B82">O código vale por 72 horas.</p></div>'
-      });
-    } catch (e) { console.warn(e); }
-  }
-  return cod;
-}
-
-function acaoNovoCodigo_(p, u) {
-  exigirSupervisor_(u);
-  const reg = Db.find('Usuarios', p.id);
-  if (!reg) throw new Error('Usuário não encontrado.');
-  if (p.bloquearSenha) Db.upsert('Usuarios', { id: reg.id, senhaHash: '', tokenVersao: String((Number(reg.tokenVersao) || 1) + 1) });
-  return { codigo: enviarCodigo_(Db.find('Usuarios', reg.id), true) };
-}

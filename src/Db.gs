@@ -80,7 +80,8 @@ const Db = (function () {
     const row = id === undefined || id === '' ? 0 : linhaDe_(nome, id);
     let atual = {};
     if (row) atual = paraObjeto_(cols, sh.getRange(row, 1, 1, cols.length).getValues()[0]);
-    const novo = Object.assign({}, atual, obj);
+    const novo = Object.assign({}, atual);
+    Object.keys(obj).forEach(k => { if (obj[k] !== undefined) novo[k] = obj[k]; }); // undefined = não mexer
     const valores = [cols.map(k => paraCelula_(novo[k]))];
     if (row) sh.getRange(row, 1, 1, cols.length).setValues(valores);
     else sh.getRange(sh.getLastRow() + 1, 1, 1, cols.length).setNumberFormat('@').setValues(valores);

@@ -94,7 +94,7 @@ Views.login = () => {
   const cfg = (App.boot && App.boot.cfg) || {};
   return {
     flush: true,
-    body: '<div class="login2"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:14px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+    body: '<div class="login2"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:14px">' + Logo() + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
       '<form class="card" id="fLogin" autocomplete="on"><h2 style="margin:0;font-size:28px">Entrar</h2><p class="muted" style="margin:4px 0 16px">Acesse com seu usuário do consórcio.</p>' +
       '<span class="lbl">E-mail ou matrícula</span><div class="in-ic">' + I('user', 20) + '<input class="inp" name="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '"></div>' +
       '<span class="lbl">Senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" name="senha" type="password" autocomplete="current-password" required><button type="button" class="eye" data-act="olho" aria-label="Mostrar senha">' + I('eye', 20) + '</button></div>' +
@@ -422,6 +422,7 @@ const Painel = {
         Graf.legenda() + '</section>' +
       '<section class="card"><h3 style="margin:0">Produtividade por equipe</h3><div class="muted small">Escolas concluídas no período</div>' +
         d.porEquipe.map(x => '<div class="hbar" style="display:grid;grid-template-columns:90px 1fr 70px;gap:10px;align-items:center"><b>' + esc(x.nome) + '</b><div class="tr"><i style="width:' + x.pct * 100 + '%;background:var(--teal)"></i></div><b style="text-align:right">' + x.n + ' · ' + pct(x.pct) + '</b></div>').join('') + '</section>' +
+      (d.orcamentos && Views.orcPainel ? Views.orcPainel(d.orcamentos) : '') +
       '<section class="card"><div class="card-h"><h3>Mapa das unidades</h3></div>' + Graf.mapa(d.mapa) + Graf.legenda() + '</section>';
   }
 };
@@ -529,6 +530,7 @@ Views.vistoria = p => ({
         (r.pendencias.length ? '<section class="card"><div class="kh">Pendências registradas</div>' + r.pendencias.map(x => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)"></i><span><b>' + esc(x.descricao) + '</b><small>' + esc(ROTULO_ETAPA[x.etapa] || x.etapa) + '</small></span></div>').join('') + '</section>' : '') +
         '<section class="card"><div class="kh">Assinaturas e relatórios</div>' + r.assinaturas.map(a => '<div class="doc-row"><span><b>' + esc(a.nome) + '</b><small>' + (a.ok ? 'Assinado em ' + dataBR(a.em, true) + ' · ' + hora(a.em) : 'Sem assinatura') + '</small></span><span class="badge ' + (a.ok ? 'b-green">Assinado' : 'b-amber">Pendente') + '</span></div>').join('') +
           '<div class="doc-row"><span><b>Cópia enviada à unidade</b><small>' + (r.copia ? dataBR(r.copia.em, true) + ' · ' + hora(r.copia.em) + ' · ' + esc(r.copia.para) : 'Ainda não enviada') + '</small></span><span class="badge ' + (r.copia ? 'b-green">Enviada' : 'b-gray">Pendente') + '</span></div></section>' +
+        (Views.orcCartao ? Views.orcCartao(r.orcamento) : '') +
         '<section class="card"><div class="kh">Validação da supervisão</div><div class="doc-row"><span><b>' + ({ aprovada: 'Aprovada', correcao: 'Correção solicitada', pendente: 'Aguardando validação' })[val.status] + '</b><small>' +
           esc([val.por, val.em ? dataBR(val.em, true) : '', val.nota].filter(Boolean).join(' · ') || 'A supervisão confere a vistoria e aprova ou pede correção.') + '</small></span><span class="badge ' + ({ aprovada: 'b-green', correcao: 'b-red', pendente: 'b-amber' })[val.status] + '">' + ({ aprovada: 'OK', correcao: 'Corrigir', pendente: 'Pendente' })[val.status] + '</span></div>' +
           (r.podeValidar && fin ? '<div class="grid2 mt"><button class="btn btn-out-red" data-act="validar" data-id="' + r.id + '" data-d="correcao">Pedir correção</button><button class="btn btn-teal" data-act="validar" data-id="' + r.id + '" data-d="aprovada">' + I('check', 18) + ' Aprovar</button></div>' : '') + '</section>' +

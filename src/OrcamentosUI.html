@@ -1,0 +1,237 @@
+<script>
+'use strict';
+/* ═══════════════════════ VistAR · orçamentos ═══════════════════════
+   Vistoria finalizada → Aguardando atribuição → Em elaboração → Em aprovação → Orçamento finalizado
+   (o gestor pode devolver para revisão; cada envio é uma revisão v1, v2… com valores e documentos). */
+
+ICONS.money = '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/>';
+
+const ORC_ST = {
+  aguardando: ['Aguardando atribuição', 'b-gray', 'var(--c-ni)'],
+  em_andamento: ['Em elaboração', 'b-blue', 'var(--c-and)'],
+  em_aprovacao: ['Em aprovação', 'b-amber', 'var(--c-ag)'],
+  revisao: ['Em revisão', 'b-red', 'var(--c-ret)'],
+  finalizado: ['Orçamento finalizado', 'b-green', 'var(--c-ok)'],
+  cancelado: ['Cancelado', 'b-gray', 'var(--muted-2)']
+};
+const ORC_ORDEM = ['aguardando', 'em_andamento', 'revisao', 'em_aprovacao', 'finalizado'];
+const MAX_DOC_MB = 10;
+const brl = n => 'R$ ' + fmt(n, 2);
+/** "12.345,67" ou "12345.67" → número. */
+const moedaNum = s => {
+  s = String(s || '').replace(/[^\d,.-]/g, '');
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return isNaN(n) ? 0 : n;
+};
+const orcBadge = st => { const s = ORC_ST[st] || ORC_ST.aguardando; return '<span class="badge ' + s[1] + '">' + s[0] + '</span>'; };
+App.verOrcamentos = () => App.pode('orcamentos.ver') || App.pode('orcamentos.elaborar');
+
+/* ───── Painel: bloco de orçamentos (painel do contrato e do escritório) ───── */
+Views.orcPainel = o => {
+  if (!o) return '';
+  const c = o.cont || {}, tot = ORC_ORDEM.reduce((s, k) => s + (c[k] || 0), 0);
+  const tile = (st, rot, sub) => '<button class="card kpi-mini orc-kpi" style="margin:0;padding:12px;text-align:left;border-left:4px solid ' + ORC_ST[st][2] + '" data-act="orcIr" data-v="' + st + '"><div class="kh">' + rot + '</div><b>' + (c[st] || 0) + '</b><small class="muted">' + sub + '</small></button>';
+  return '<section class="card"><div class="card-h"><span><h3>Orçamentos</h3><div class="muted small">' + plural(tot, 'escola') + ' com vistoria finalizada' + (o.atrasados ? ' · <b class="c-red">' + plural(o.atrasados, 'atrasado') + '</b>' : '') + '</div></span>' +
+      '<button class="link" data-act="go" data-to="orcamentos">Ver todos</button></div>' +
+    '<div class="grade-kpi">' +
+      tile('aguardando', 'A atribuir', 'aguardando orçamentista') + tile('em_andamento', 'Em elaboração', (c.revisao ? c.revisao + ' em revisão' : 'com orçamentista')) +
+      tile('em_aprovacao', 'Em aprovação', brl(o.valorEmAprovacao)) + tile('finalizado', 'Finalizados', brl(o.valorFinalizado)) + '</div>' +
+    (tot ? '<div class="stack mt">' + ORC_ORDEM.filter(k => c[k]).map(k => '<div style="flex:' + c[k] + ';background:' + ORC_ST[k][2] + '" title="' + ORC_ST[k][0] + ': ' + c[k] + '">' + (c[k] / tot >= 0.12 ? c[k] : '') + '</div>').join('') + '</div>' +
+      '<div class="leg">' + ORC_ORDEM.map(k => '<span><i style="background:' + ORC_ST[k][2] + '"></i>' + ORC_ST[k][0] + ' · ' + (c[k] || 0) + '</span>').join('') + '</div>' : '') + '</section>';
+};
+
+/* ───── Lista ───── */
+Views.orcamentos = p => {
+  const st = App._orc = App._orc || { f: '', busca: '', dre: '' };
+  if (p && p.f !== undefined) st.f = p.f;
+  return {
+    header: App.escritorio() ? Views.hdrApp() : Views.hdrNavy('Gestão', 'Orçamentos'),
+    body: '<div id="orcKpi" class="full"></div><div class="search full">' + I('search', 20) + '<input class="inp" id="orcBusca" placeholder="Buscar escola, código ou orçamentista" value="' + esc(st.busca) + '"></div>' +
+      '<div id="orcChips" class="fchips full"></div><div id="orcBox" class="full">' + SKEL + '</div>',
+    nav: App.escritorio() ? 'orcamentos' : null,
+    after() {
+      const b = $('#orcBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.orcRender(), 150); };
+      Dados.obter('orc:lista', 'orcamentos', {}, (r, c, e) => { App._orcD = r; if (!r) return encher('#orcBox', erroBox(e)); Views.orcRender(); }, { semLS: true });
+    }
+  };
+};
+Views.orcRender = () => {
+  const r = App._orcD, st = App._orc;
+  if (!r || !$('#orcBox')) return;
+  const eu_ = eu().id;
+  const n = r.contagem;
+  encher('#orcKpi', '<div class="grade-kpi" style="margin-bottom:14px">' +
+    [['aguardando', 'A atribuir', n.aguardando, 'aguardando orçamentista'], ['em_andamento', 'Em elaboração', n.em_andamento + n.revisao, n.revisao ? n.revisao + ' em revisão' : 'com orçamentista'],
+      ['em_aprovacao', 'Em aprovação', n.em_aprovacao, brl(r.totais.emAprovacao)], ['finalizado', 'Finalizados', n.finalizado, brl(r.totais.finalizado)]]
+      .map(k => '<div class="card kpi-mini" style="margin:0;padding:12px;border-left:4px solid ' + ORC_ST[k[0]][2] + '"><div class="kh">' + k[1] + '</div><b>' + k[2] + '</b><small class="muted">' + k[3] + '</small></div>').join('') + '</div>');
+  const atras = r.itens.filter(o => o.atrasado).length, meus = r.itens.filter(o => o.responsavelId === eu_ && ['em_andamento', 'revisao'].indexOf(o.status) >= 0).length;
+  const chips = [['', 'Todos · ' + r.itens.length]].concat(r.podeElaborar ? [['meus', 'Meus em aberto · ' + meus]] : []).concat(ORC_ORDEM.concat(['cancelado']).filter(k => n[k]).map(k => [k, ORC_ST[k][0] + ' · ' + n[k]]))
+    .concat(atras ? [['atrasados', 'Atrasados · ' + atras]] : []);
+  encher('#orcChips', chips.map(x => '<button class="chip dark' + (st.f === x[0] ? ' on' : '') + '" data-act="orcF" data-v="' + x[0] + '">' + esc(x[1]) + '</button>').join(''));
+  const q = norm(st.busca);
+  const l = r.itens.filter(o => (!st.f || o.status === st.f || (st.f === 'atrasados' && o.atrasado) || (st.f === 'meus' && o.responsavelId === eu_ && ['em_andamento', 'revisao'].indexOf(o.status) >= 0)) &&
+    (st.f === 'cancelado' || st.f === '' || o.status !== 'cancelado') &&
+    (!q || norm([o.escola, o.codigo, o.responsavel, o.dre].join(' ')).indexOf(q) >= 0));
+  const prazo = o => o.prazo ? '<span class="' + (o.atrasado ? 'c-red' : '') + '">' + dataBR(o.prazo) + (o.atrasado ? ' · atrasado' : '') + '</span>' : '';
+  const abrir = o => 'data-act="go" data-to="orcamento" data-p=\'' + JSON.stringify({ id: o.id }) + '\'';
+  encher('#orcBox', !l.length ? '<div class="empty">' + I('money', 36) + '<div><b>Nenhum orçamento aqui</b></div><div class="small">' + (r.itens.length ? 'Mude o filtro ou a busca.' : 'Os orçamentos aparecem quando uma vistoria é finalizada.') + '</div></div>' :
+    '<div class="tabela-wrap so-pc"><table class="tabela"><tr><th>Escola</th><th>DRE</th><th>Vistoria</th><th>Orçamentista</th><th>Prazo</th><th class="n">Valor</th><th>Status</th><th></th></tr>' +
+      l.map(o => '<tr><td><b>' + esc(o.escola) + '</b>' + (o.empresa ? '<br><span class="muted small">' + esc(o.empresa) + '</span>' : '') + '</td><td>' + esc(o.dre) + '</td><td>' + esc(o.codigo) + '<br><span class="muted small">' + dataBR(o.vistoriaEm) + '</span></td>' +
+        '<td>' + esc(o.responsavel || '—') + '</td><td>' + prazo(o) + '</td><td class="n">' + (o.valor ? brl(o.valor) + '<br><span class="muted small">v' + o.versao + '</span>' : '—') + '</td><td>' + orcBadge(o.status) + '</td>' +
+        '<td><button class="btn btn-out btn-sm" ' + abrir(o) + '>Abrir</button></td></tr>').join('') + '</table></div>' +
+    '<div class="so-cel">' + l.map(o => '<button class="sch" ' + abrir(o) + '><span style="flex:1;min-width:0"><h4>' + esc(o.escola) + '</h4><div class="ad">' + esc([o.codigo, o.dre, o.responsavel].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="tags">' + orcBadge(o.status) + (o.valor ? '<span class="tag b-gray">' + brl(o.valor) + '</span>' : '') + (o.prazo ? '<span class="tag ' + (o.atrasado ? 'b-red' : 'b-gray') + '">prazo ' + dataBR(o.prazo) + '</span>' : '') + '</div></span><span class="chev">' + I('right') + '</span></button>').join('') + '</div>');
+};
+
+/* ───── Detalhe ───── */
+Views.orcamento = p => ({
+  header: Views.hdrNavy('Orçamento', '', '<span id="orcSt"></span>'),
+  body: '<div id="orcDet">' + SKEL + '</div>',
+  footOne: true,
+  foot: '<div id="orcFoot"></div>',
+  after() {
+    Dados.obter('orc:' + p.id, 'orcamento', { id: p.id }, (o, c, e) => {
+      if (!o) return encher('#orcDet', erroBox(e));
+      App._orcAtual = o;
+      $('.whdr .ttl').textContent = o.escola;
+      encher('#orcSt', orcBadge(o.status));
+      const t = o.tecnico;
+      const passos = ['aguardando', 'em_andamento', 'em_aprovacao', 'finalizado'];
+      const at = o.status === 'revisao' ? 1 : passos.indexOf(o.status);
+      encher('#orcDet', '<div class="grade duas">' +
+        '<section class="card"><div class="kh">Situação</div>' +
+          '<div class="orc-passos">' + passos.map((s, i) => '<div class="' + (i < at || o.status === 'finalizado' ? 'ok' : i === at ? 'atual' : '') + '"><i></i><span>' + (s === 'em_andamento' && o.status === 'revisao' ? 'Em revisão' : ORC_ST[s][0]) + '</span></div>').join('') + '</div>' +
+          '<div class="kpi3 mt">' + [['Valor', o.valor ? brl(o.valor) : '—'], ['Revisão', o.versao ? 'v' + o.versao : '—'], ['Prazo', o.prazo ? dataBR(o.prazo) : '—']]
+            .map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b style="font-size:17px">' + k[1] + '</b></div>').join('') + '</div>' +
+          '<div class="doc-row"><span><b>' + esc(o.responsavel || 'Sem orçamentista') + '</b><small>Orçamentista responsável' + (o.atrasado ? ' · <span class="c-red">prazo vencido</span>' : '') + '</small></span></div>' +
+          (o.aprovadoPor ? '<div class="doc-row"><span><b>Aprovado por ' + esc(o.aprovadoPor) + '</b><small>' + dataBR(o.aprovadoEm, true) + ' · ' + hora(o.aprovadoEm) + '</small></span><span class="badge b-green">Aprovado</span></div>' : '') +
+          '<div class="doc-row"><span><b>Vistoria ' + esc(o.codigo) + '</b><small>DRE ' + esc(o.dre) + ' · finalizada em ' + dataBR(o.vistoriaEm, true) + (o.empresa ? ' · ' + esc(o.empresa) : '') + '</small></span>' +
+            '<button class="btn btn-out btn-sm" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: o.vistoriaId }) + '\'>Abrir</button></div></section>' +
+        (t ? '<section class="card"><div class="kh">Base técnica da vistoria</div><div class="kpi3 mt" style="margin-bottom:10px">' +
+            [['Área climatizável', fmt(t.areaClim, 0) + ' m²'], ['Carga térmica', fmt(t.tr, 1) + ' TR'], ['Potência AC', fmt(t.kwAc, 1) + ' kW']]
+              .map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b style="font-size:17px">' + k[1] + '</b></div>').join('') + '</div>' +
+            '<div class="doc-row"><span><b>' + plural(t.ambientes, 'ambiente') + (t.externos ? ' + ' + t.externos + ' áreas externas' : '') + '</b><small>Área total ' + fmt(t.area, 0) + ' m²</small></span></div>' +
+            '<div class="doc-row"><span><b>Entrada de energia' + (t.padrao ? ' · ' + esc(t.padrao) : '') + '</b><small>' + (t.kwEntrada ? 'Capacidade ' + fmt(t.kwEntrada, 1) + ' kW' : 'Capacidade não informada') + '</small></span>' +
+              (t.kwEntrada ? '<span class="badge ' + (t.suporta ? 'b-green">Comporta' : 'b-red">Requer aumento') + '</span>' : '') + '</div>' +
+            '<div class="grid2 mt"><button class="btn btn-out btn-sm" data-act="go" data-to="relatorio" data-p=\'' + esc(JSON.stringify({ tipo: 'completo', vistoriaId: o.vistoriaId, escolaId: o.escolaId })) + '\'>Relatório completo</button>' +
+              '<button class="btn btn-out btn-sm" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: o.escolaId }) + '\'>Fotos</button></div></section>' : '') +
+        '</div>' +
+        '<section class="card"><div class="card-h"><h3>Revisões</h3><span class="muted small">' + plural(o.revisoes.length, 'envio') + '</span></div>' +
+          (o.revisoes.length ? o.revisoes.map(r => '<div class="orc-rev"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><b>v' + r.versao + ' · ' + brl(r.valor) + '</b>' +
+              '<span class="badge ' + ({ aprovada: 'b-green">Aprovada', devolvida: 'b-red">Devolvida', em_analise: 'b-amber">Em análise' })[r.status] + '</span></div>' +
+            '<div class="muted small">Enviada por ' + esc(r.enviadoPor) + ' · ' + dataBR(r.enviadoEm, true) + ' ' + hora(r.enviadoEm) + '</div>' +
+            '<div class="orc-grupos">' + r.grupos.filter(g => g[1]).map(g => '<span>' + esc(g[0]) + '<b>' + brl(g[1]) + '</b></span>').join('') + '</div>' +
+            (r.notas ? '<p class="small" style="margin:6px 0">' + esc(r.notas) + '</p>' : '') +
+            '<div class="orc-arqs">' + r.arquivos.map(a => '<button class="chip" data-act="abrirUrl" data-url="' + esc(a.url) + '">' + I('file', 16) + ' ' + esc(a.nome) + '</button>').join('') + '</div>' +
+            (r.parecer ? '<div class="warn-box" style="margin:8px 0 0;' + (r.status === 'aprovada' ? 'background:var(--green-l);color:var(--green)' : 'background:var(--red-l);color:var(--red)') + '"><b>Parecer de ' + esc(r.parecerPor) + ':</b> ' + esc(r.parecer) + '</div>' : '') + '</div>').join('')
+            : '<p class="muted small" style="margin:0">Nenhuma revisão enviada ainda. O orçamentista envia os valores e os documentos (planilha, PDF) para aprovação.</p>') + '</section>' +
+        '<section class="card"><div class="kh">Histórico</div>' + o.historico.map(h => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:' + (ORC_ST[h.status] || ORC_ST.aguardando)[2] + '"></i><span><b>' + esc(h.nota || (ORC_ST[h.status] || [''])[0]) + '</b><small>' +
+          dataBR(h.em, true) + ' · ' + hora(h.em) + (h.por ? ' · ' + esc(h.por) : '') + '</small></span></div>').join('') + '</section>');
+      const pd = o.pode, bt = [];
+      if (pd.atribuir) bt.push('<button class="btn btn-out" data-act="orcAtribuir">' + I('user', 18) + ' ' + (o.responsavelId ? 'Reatribuir' : 'Atribuir orçamentista') + '</button>');
+      if (pd.elaborar) bt.push('<button class="btn btn-teal" data-act="orcEnviar">' + I('up', 18) + ' ' + (o.status === 'revisao' ? 'Enviar nova revisão' : 'Enviar orçamento') + '</button>');
+      if (pd.aprovar) bt.push('<button class="btn btn-out-red" data-act="orcDecidir" data-d="devolver">Devolver para revisão</button>', '<button class="btn btn-teal" data-act="orcDecidir" data-d="aprovar">' + I('check', 18) + ' Aprovar orçamento</button>');
+      if (pd.reabrir) bt.push('<button class="btn btn-out" data-act="orcDecidir" data-d="reabrir">' + I('refresh', 18) + ' Reabrir para revisão</button>');
+      encher('#orcFoot', bt.length > 1 ? '<div class="grid2">' + bt.join('') + '</div>' : bt.length ? bt[0].replace('<button ', '<button style="width:100%" ') : '');
+    }, { semLS: true });
+  }
+});
+
+/** Cartão do orçamento no detalhe da vistoria. */
+Views.orcCartao = o => !o ? '' : '<section class="card"><div class="kh">Orçamento</div><div class="doc-row"><span><b>' + (ORC_ST[o.status] || ORC_ST.aguardando)[0] + '</b><small>' +
+  (o.valor ? brl(o.valor) + ' · revisão v' + o.versao : 'Sem valores ainda') + '</small></span><button class="btn btn-out btn-sm" data-act="go" data-to="orcamento" data-p=\'' + JSON.stringify({ id: o.id }) + '\'>Abrir</button></div></section>';
+
+/* ───── Formulários ───── */
+Views.orcAtribuirForm = () => {
+  const o = App._orcAtual;
+  if (!o.orcamentistas.length) return toast('Nenhum usuário com perfil de orçamentista no seu escopo. Cadastre em Usuários e acessos.', 'warn', 5000);
+  Sheet.open('<h3>Atribuir orçamento</h3><p class="muted small">' + esc(o.escola) + '</p>' +
+    '<span class="lbl">Orçamentista</span><select class="inp" id="oaResp">' + opcoes(o.orcamentistas.map(x => [x.id, x.nome]), o.responsavelId, 'Escolha…') + '</select>' +
+    '<div class="mt">' + campo('oaPrazo', 'Prazo de entrega', o.prazo || somaDiasISO(hojeISO(), 5), { type: 'date' }) + '</div>' +
+    '<p class="muted small">O orçamentista recebe um e-mail e passa a ver este orçamento. O status vai para <b>Em elaboração</b>.</p>' +
+    '<button class="btn btn-navy mt" style="width:100%" data-act="orcAtribuirOk">Atribuir</button>');
+};
+const somaDiasISO = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); while (x.getDay() === 0 || x.getDay() === 6) x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); };
+
+Views.orcEnviarForm = () => {
+  const o = App._orcAtual;
+  const ult = o.revisoes[0];
+  App._orcArqs = [];
+  Sheet.open('<h3>' + (o.status === 'revisao' ? 'Nova revisão' : 'Enviar orçamento') + ' · v' + (o.versao + 1) + '</h3><p class="muted small">' + esc(o.escola) + '</p>' +
+    (o.status === 'revisao' && ult && ult.parecer ? '<div class="warn-box" style="background:var(--red-l);color:var(--red)"><b>O que revisar:</b> ' + esc(ult.parecer) + '</div>' : '') +
+    '<div class="grid2">' + o.grupos.map((g, i) => campo('ov' + i, esc(g[1]) + ' (R$)', ult ? fmt((ult.grupos[i] || [])[1] || 0, 2) : '', { im: 'decimal', ph: '0,00' })).join('') + '</div>' +
+    '<div class="row mt" style="justify-content:space-between"><span class="muted">Total</span><b id="ovTot" style="font-size:20px">' + brl(0) + '</b></div>' +
+    '<div class="fld mt"><span class="lbl">Observações</span><textarea class="inp" id="ovNotas" rows="3" placeholder="Premissas, exclusões, validade da proposta…"></textarea></div>' +
+    '<label class="btn btn-out-teal mt" style="cursor:pointer;width:100%">' + I('up', 18) + ' Anexar documentos<input type="file" id="ovArq" multiple accept=".pdf,.xlsx,.xls,.csv,.doc,.docx,.zip,.dwg,image/*" class="hidden"></label>' +
+    '<div id="ovLista" class="orc-arqs mt"></div><p class="muted small">Planilha de orçamento, memorial, PDF da proposta… até ' + MAX_DOC_MB + ' MB cada. Ficam na pasta da empresa no Google Drive (Orçamentos › escola › versão).</p>' +
+    '<button class="btn btn-teal mt" style="width:100%" data-act="orcEnviarOk">' + I('up', 18) + ' Enviar para aprovação</button>');
+  const tot = () => { $('#ovTot').textContent = brl(o.grupos.reduce((s, g, i) => s + moedaNum(valor('ov' + i)), 0)); };
+  o.grupos.forEach((g, i) => { $('#ov' + i).oninput = tot; });
+  tot();
+  $('#ovArq').onchange = ev => {
+    Array.from(ev.target.files || []).forEach(f => {
+      if (f.size > MAX_DOC_MB * 1048576) return toast(f.name + ': maior que ' + MAX_DOC_MB + ' MB', 'warn', 4000);
+      App._orcArqs.push(f);
+    });
+    ev.target.value = '';
+    Views.orcListaArqs();
+  };
+};
+Views.orcListaArqs = () => encher('#ovLista', App._orcArqs.map((f, i) => '<span class="chip on">' + I('file', 16) + ' ' + esc(f.name) + ' · ' + (f.size < 1048576 ? Math.max(1, Math.round(f.size / 1024)) + ' KB' : fmt(f.size / 1048576, 1) + ' MB') + ' <button class="link" data-act="orcTirarArq" data-i="' + i + '" aria-label="Remover">✕</button></span>').join(''));
+
+const lerDataUrl = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Não foi possível ler ' + f.name)); r.readAsDataURL(f); });
+
+Views.orcDecidirForm = d => {
+  const o = App._orcAtual;
+  const t = { aprovar: ['Aprovar orçamento', 'A revisão v' + o.versao + ' (' + brl(o.valor) + ') passa a ser o orçamento finalizado.', 'Parecer (opcional)', 'Aprovar', 'btn-teal'],
+    devolver: ['Devolver para revisão', 'O orçamentista recebe o seu parecer por e-mail e envia uma nova revisão.', 'O que precisa ser revisto?', 'Devolver', 'btn-out-red'],
+    reabrir: ['Reabrir orçamento', 'O orçamento finalizado volta para revisão. O histórico e as versões anteriores ficam guardados.', 'Motivo da reabertura', 'Reabrir', 'btn-navy'] }[d];
+  Sheet.open('<h3>' + t[0] + '</h3><p class="muted small">' + esc(o.escola) + ' · ' + t[1] + '</p><div class="fld"><span class="lbl">' + t[2] + '</span><textarea class="inp" id="odParecer" rows="4"></textarea></div>' +
+    '<button class="btn ' + t[4] + ' mt" style="width:100%" data-act="orcDecidirOk" data-d="' + d + '">' + t[3] + '</button>');
+};
+
+Object.assign(Act, {
+  orcIr(el) { App._orc = Object.assign(App._orc || { busca: '', dre: '' }, { f: el.dataset.v }); App.go('orcamentos'); },
+  orcF(el) { App._orc.f = el.dataset.v; Views.orcRender(); },
+  orcAtribuir() { Views.orcAtribuirForm(); },
+  async orcAtribuirOk(el) {
+    const o = App._orcAtual, resp = valor('oaResp');
+    if (!resp) return toast('Escolha o orçamentista', 'warn');
+    carregando(el, true);
+    try { await Api.run('atribuirOrcamento', { id: o.id, responsavelId: resp, prazo: valor('oaPrazo') }); Sheet.close(true); toast('Orçamento atribuído', 'ok'); Dados.limpar('orc:'); App.rerender(); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  orcEnviar() { Views.orcEnviarForm(); },
+  orcTirarArq(el) { App._orcArqs.splice(Number(el.dataset.i), 1); Views.orcListaArqs(); },
+  async orcEnviarOk(el) {
+    const o = App._orcAtual, valores = {};
+    o.grupos.forEach((g, i) => { valores[g[0]] = moedaNum(valor('ov' + i)); });
+    if (!o.grupos.some(g => valores[g[0]] > 0)) return toast('Informe os valores do orçamento', 'warn');
+    if (!App._orcArqs.length) return toast('Anexe pelo menos um documento', 'warn');
+    const notas = valor('ovNotas');
+    try {
+      const arquivos = [];
+      for (let i = 0; i < App._orcArqs.length; i++) {
+        const f = App._orcArqs[i];
+        carregando(el, true, 'Enviando ' + (i + 1) + '/' + App._orcArqs.length);
+        const r = await Api.run('uploadDocOrcamento', { id: o.id, nome: f.name, mime: f.type, data: await lerDataUrl(f) });
+        arquivos.push({ fileId: r.fileId, nome: r.nome, url: r.url, bytes: r.bytes });
+      }
+      carregando(el, true, 'Registrando');
+      const r = await Api.run('enviarOrcamento', { id: o.id, valores: valores, notas: notas, arquivos: arquivos });
+      Sheet.close(true); toast('Revisão v' + r.versao + ' enviada para aprovação', 'ok'); Dados.limpar('orc:'); App.rerender();
+    } catch (x) { carregando(el, false); toast(x.message, 'err', 5000); }
+  },
+  orcDecidir(el) { Views.orcDecidirForm(el.dataset.d); },
+  async orcDecidirOk(el) {
+    const d = el.dataset.d, parecer = valor('odParecer');
+    if (d !== 'aprovar' && !parecer) return toast(d === 'devolver' ? 'Descreva o que precisa ser revisto' : 'Informe o motivo', 'warn');
+    carregando(el, true);
+    try { await Api.run('decidirOrcamento', { id: App._orcAtual.id, decisao: d, parecer: parecer }); Sheet.close(true);
+      toast({ aprovar: 'Orçamento aprovado e finalizado', devolver: 'Devolvido para revisão', reabrir: 'Orçamento reaberto' }[d], 'ok'); Dados.limpar('orc:'); Dados.limpar('painel'); App.rerender(); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  }
+});
+</script>

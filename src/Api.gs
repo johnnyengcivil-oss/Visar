@@ -9,12 +9,11 @@
 function montarBoot_(u) {
   const cfg = getConfig_();
   const equipe = Db.find('Equipes', u.equipeId) || { id: u.equipeId, nome: u.equipeId, membros: u.nome };
-  const dresUsuario = lista_(u.dres);
-  const dres = Db.all('DREs').filter(d => !dresUsuario.length || dresUsuario.indexOf(d.id) >= 0);
-  const escolas = Db.all('Escolas').filter(e => !dresUsuario.length || dresUsuario.indexOf(e.dre) >= 0);
+  const dres = dresPermitidas_(u);
+  const escolas = escolasPermitidas_(u, false);
   const idsEscolas = {};
   escolas.forEach(e => { idsEscolas[e.id] = true; });
-  const roteiro = Db.where('Roteiro', r => r.equipeId === u.equipeId);
+  const roteiro = Db.where('Roteiro', r => r.equipeId === u.equipeId && (!r.escolaId || idsEscolas[r.escolaId]));
   const vistorias = Db.where('Vistorias', v => v.equipeId === u.equipeId && v.status !== 'mesclada');
   const abertas = vistorias.filter(v => v.status === 'em_andamento').sort((a, b) => a.checkin < b.checkin ? 1 : -1);
   // Cada técnico tem a sua vistoria ativa; a equipe pode ter várias abertas (escolas diferentes).
@@ -75,15 +74,6 @@ function vistoriaCliente_(v) {
 }
 
 /* ───────────────────────── Permissões ───────────────────────── */
-
-/** A escola precisa estar numa DRE autorizada para o usuário (sem DREs = todas). */
-function exigirEscola_(id, u) {
-  const e = Db.find('Escolas', id);
-  if (!e) throw new Error('Escola não encontrada.');
-  const dres = lista_(u.dres);
-  if (dres.length && dres.indexOf(e.dre) < 0) throw new Error('Esta escola não pertence às suas DREs autorizadas.');
-  return e;
-}
 
 /** Segue vistorias "mescladas" (check-in duplicado offline) até a vistoria real. */
 function resolverVistoria_(id) {
@@ -351,6 +341,7 @@ function acaoFinalizar_(p, u) {
     if (v.retomadaDe) Db.where('Pendencias', x => x.vistoriaId === v.retomadaDe && x.status === 'aberta')
       .forEach(x => Db.upsert('Pendencias', { id: x.id, status: 'resolvida', resolvidoEm: agora_(), resolvidoPor: u.id }));
     Db.where('Roteiro', r => r.vistoriaId === v.id).forEach(r => Db.upsert('Roteiro', { id: r.id, status: 'concluida', nota: '' }));
+    try { sincronizarOrcamentos_(); } catch (e) { console.error('[orcamentos]', e); } // vistoria finalizada → disponível para orçamento
   }
 
   const vf = Db.find('Vistorias', v.id);
@@ -495,7 +486,10 @@ function subpasta_(pai, nome) {
 
 function pastaVistoria_(v, escola) {
   if (v.pastaId) { try { return DriveApp.getFolderById(v.pastaId); } catch (e) { /* recria */ } }
-  const dre = subpasta_(subpasta_(pastaRaiz_(), 'Vistorias'), 'DRE ' + (escola.dre || 'sem DRE'));
+  // Cada empresa do consórcio guarda fotos e PDFs na sua própria pasta: VistAR/Empresas/<empresa>/Vistorias/DRE …
+  const emp = empresaDaEscola_(escola);
+  const base = emp ? pastaEmpresa_(emp) : pastaRaiz_();
+  const dre = subpasta_(subpasta_(base, 'Vistorias'), 'DRE ' + (escola.dre || 'sem DRE'));
   const f = subpasta_(dre, v.codigo + ' · ' + (escola.nome || v.escolaId));
   Db.upsert('Vistorias', { id: v.id, pastaId: f.getId() });
   v.pastaId = f.getId();

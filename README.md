@@ -23,6 +23,18 @@ App da Web para as equipes de campo do **Consórcio Climatiza São Paulo**: chec
 - **Permissões:** todas as ações conferem equipe/supervisão e as DREs autorizadas do usuário (escola, vistoria, fotos, miniaturas, legendas, retomada, rotas, pendências).
 - **Pré-dimensionamento:** aberturas por ambiente (janelas e portas com medidas, fachada e proteção solar) entram como ganho solar do vidro; fornecimento mono, bi ou trifásico; fatores por m² ajustáveis na aba Config (`FATORES_BTU_M2`); blocos e setores com nome livre. Continua sendo estimativa para orçamento, não projeto.
 
+## Hierarquia, escritório e orçamentos (v1.2)
+
+- **Níveis:** Administrador › Diretoria/Coordenação (todas as empresas) › Gestão da empresa › Orçamentos › Vistoriador. Ninguém cria usuário acima do próprio nível; a gestão só atua na sua empresa.
+- **Empresas do consórcio** com suas DREs e uma pasta própria no Drive (fotos, relatórios, orçamentos, extrações).
+- **Perfis de acesso** com funções por perfil e alcance (tudo, empresa, DREs, equipe); perfis padrão protegidos e perfis personalizados.
+- **Cadastros:** escolas (131 EMEFs iniciais com dados SME), DREs, empresas, equipes e usuários; inativar/reativar escolas; importação de Excel/CSV.
+- **Assistente de roteiro:** escolas próximas, ordem sugerida, arrastar para reordenar, horários e mapa.
+- **Extração de dados** (CSV ou Planilha Google) e **consulta de vistorias**.
+- **Orçamentos:** vistoria finalizada → aguardando atribuição → em elaboração → em aprovação → finalizado (ou devolvido para revisão). Revisões numeradas com valores por grupo, documentos no Drive, parecer da gestão, e-mails de aviso; valores e status no painel, na consulta e na extração.
+- **Boas-vindas:** e-mail com código, guia rápido e manual em PDF conforme o perfil.
+- **Layout para computador** com menu lateral, tabelas e janelas modais.
+
 ## Recursos do Google usados
 
 | Recurso | Uso |
@@ -52,7 +64,7 @@ App da Web para as equipes de campo do **Consórcio Climatiza São Paulo**: chec
 
 **Guia completo para leigos:** [`docs/GUIA_DE_IMPLANTACAO.md`](docs/GUIA_DE_IMPLANTACAO.md) (também em PDF: `docs/Guia_de_Implantacao_VistAR.pdf`).
 
-Resumo: crie uma planilha › Extensões › Apps Script › cole os **5 arquivos da pasta `dist/`** (`appsscript.json`, `Codigo.gs`, `Index`, `RelatorioVistoria`, `RelatorioCompleto`) › execute `instalarVistAR` › execute `criarAdministrador` (ou `carregarExemplo`) › Implantar › App da Web (executar como *Eu*).
+Resumo: crie uma planilha › Extensões › Apps Script › cole os **6 arquivos da pasta `dist/`** (`appsscript.json`, `Codigo.gs`, `Index`, `RelatorioVistoria`, `RelatorioCompleto`, `Manual`) › execute `instalarVistAR` › execute `carregarEscolasIniciais` (131 EMEFs) › execute `criarAdministrador` (ou `carregarExemplo`) › Implantar › App da Web (executar como *Eu*).
 
 Com o [clasp](https://github.com/google/clasp), dá para usar `src/` direto: `cp .clasp.json.example .clasp.json`, preencha o `scriptId` e rode `clasp push`.
 
@@ -74,7 +86,7 @@ npm install && npm test      # tudo abaixo de uma vez (também roda no GitHub Ac
 node dev/gas-sim.js          # testa o servidor (.gs) com Planilha/Drive/e-mail simulados
 node dev/build-preview.js    # gera dev/preview.html com servidor simulado (dev/mock.js)
 node dev/smoke.js            # percorre todas as telas no Chromium e salva screenshots em dev/shots
-node dev/build-dist.js       # gera dist/ (5 arquivos para colar no Apps Script)
+node dev/build-dist.js       # gera dist/ (6 arquivos para colar no Apps Script)
 node dev/gas-sim.js --dist   # testa o pacote dist/
 python3 dev/build-guia.py    # gera o PDF do guia de implantação
 ```
@@ -99,8 +111,16 @@ src/
   Views.html             telas principais
   Telas.html             login, primeiro acesso, configurações, programação, painel, galeria, detalhes
   Supervisao.html        módulo de supervisão (cliente)
-  Supervisao.gs          painel, equipes, validação, programação, pendências, galeria, usuários
-dist/                    pacote de instalação (5 arquivos)
+  Supervisao.gs          painel, equipes, validação, programação, pendências, galeria
+  Acesso.gs              níveis, perfis, funções (capabilities) e escopo por empresa/DRE/equipe
+  Cadastros.gs           escolas, DREs, empresas, equipes, usuários, boas-vindas, personalização
+  Extracao.gs            consulta de vistorias, extração de dados e assistente de roteiro
+  Orcamentos.gs          fluxo de orçamentos, revisões, documentos e aprovação
+  DadosIniciais.gs       131 EMEFs iniciais (lista SME por DRE)
+  Gestao.html            menu por perfil, cadastros, perfis, extração, assistente (cliente)
+  OrcamentosUI.html      telas de orçamentos (cliente)
+  Manual.html            manual do usuário e guia rápido (PDF por perfil)
+dist/                    pacote de instalação (6 arquivos)
 docs/                    guia de implantação (Markdown e PDF)
 dev/                     preview local e teste de fumaça
 ```

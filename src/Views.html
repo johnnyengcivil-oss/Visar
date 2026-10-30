@@ -12,7 +12,7 @@ const Views = {
   hdrApp() {
     const D = App.data || {}, u = D.usuario || {}, eq = D.equipe || {};
     return '<header class="hdr"><div class="hdr-top"><div class="logo">Vist<b>AR</b></div>' +
-      '<div class="cons">' + LOGO + '<span>Consórcio<b>' + esc(String((D.cfg || App.boot.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div></div>' +
+      '<div class="cons">' + Logo() + '<span>Consórcio<b>' + esc(String((D.cfg || App.boot.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div></div>' +
       '<div class="hdr-user"><span class="avatar">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" class="hidden" alt="">' : '') + esc(u.iniciais || '') + '</span>' +
       '<span><div class="nm">' + esc(u.nome || '') + '</div><div class="sub"><b>' + esc(eq.nome || '') + '</b>' + (eq.parceiro ? ' · com ' + esc(eq.parceiro) : '') + '</div></span>' +
       '<span class="sync hidden" data-sync style="margin-left:auto"></span>' +
@@ -93,7 +93,7 @@ const Views = {
   login() {
     const cfg = (App.boot && App.boot.cfg) || {};
     return {
-      body: '<div class="login"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:12px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+      body: '<div class="login"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:12px">' + Logo() + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
         '<form class="card" id="fLogin" autocomplete="on"><h3 style="margin:0 0 4px">Entrar</h3><p class="muted small" style="margin:0 0 14px">Use o e-mail cadastrado pela coordenação.</p>' +
         '<span class="lbl">E-mail</span><input class="inp" name="email" type="email" inputmode="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '">' +
         '<span class="lbl">Senha</span><input class="inp" name="senha" type="password" autocomplete="current-password" required>' +
@@ -332,7 +332,7 @@ const Views = {
     const dreAtual = V ? (App.escola(V.escolaId) || {}).dre : (u.dres || [])[0];
     return {
       header: '<header class="lhdr"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><h1>Credencial</h1><span class="sync hidden" data-sync style="margin-left:auto;background:var(--navy)"></span></header>',
-      body: '<div class="badge-card"><div class="slot"></div><div class="top">' + LOGO + '<span><small>CONSÓRCIO</small><b>' + esc(String((D.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+      body: '<div class="badge-card"><div class="slot"></div><div class="top">' + Logo() + '<span><small>CONSÓRCIO</small><b>' + esc(String((D.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
         '<button class="ph-id" data-act="fotoPerfil" aria-label="Trocar foto">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" alt="">' :
           '<svg viewBox="0 0 160 190" style="width:100%;height:100%"><circle cx="80" cy="74" r="34" fill="#9AAFC0"/><path d="M22 190c0-40 26-66 58-66s58 26 58 66z" fill="#9AAFC0"/></svg>') +
         '<span class="cam">' + I('camera', 18) + '</span></button>' +

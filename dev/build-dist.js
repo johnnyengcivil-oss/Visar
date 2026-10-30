@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Gera a pasta dist/ com o MÍNIMO de arquivos para colar no editor do Apps Script:
- *   Codigo.gs, Index.html, RelatorioVistoria.html, RelatorioCompleto.html, appsscript.json
+ *   Codigo.gs, Index.html, RelatorioVistoria.html, RelatorioCompleto.html, Manual.html, appsscript.json
  *   node dev/build-dist.js
  */
 const fs = require('fs');
@@ -11,7 +11,7 @@ const dist = path.join(__dirname, '..', 'dist');
 fs.mkdirSync(dist, { recursive: true });
 fs.readdirSync(dist).forEach(f => fs.unlinkSync(path.join(dist, f)));
 
-const ordem = ['Config', 'Db', 'Auth', 'Code', 'Api', 'Relatorios', 'Supervisao'];
+const ordem = ['Config', 'Db', 'Acesso', 'Auth', 'Code', 'Api', 'Relatorios', 'Supervisao', 'Cadastros', 'Extracao', 'Orcamentos', 'DadosIniciais'];
 const gs = fs.readdirSync(src).filter(f => f.endsWith('.gs')).map(f => f.replace('.gs', ''));
 const faltando = gs.filter(f => ordem.indexOf(f) < 0);
 if (faltando.length) throw new Error('Adicione à ordem: ' + faltando.join(', '));
@@ -26,5 +26,5 @@ let index = fs.readFileSync(path.join(src, 'Index.html'), 'utf8')
 const scriptlets = index.match(/<\?/g) || [];
 if (scriptlets.length !== 1 || !/<\?!= boot \?>/.test(index)) throw new Error('Index.html deveria ter só o scriptlet do boot (achei ' + scriptlets.length + ')');
 fs.writeFileSync(path.join(dist, 'Index.html'), index);
-['RelatorioVistoria.html', 'RelatorioCompleto.html', 'appsscript.json'].forEach(f => fs.copyFileSync(path.join(src, f), path.join(dist, f)));
+['RelatorioVistoria.html', 'RelatorioCompleto.html', 'Manual.html', 'appsscript.json'].forEach(f => fs.copyFileSync(path.join(src, f), path.join(dist, f)));
 fs.readdirSync(dist).forEach(f => console.log('dist/' + f + ' · ' + Math.round(fs.statSync(path.join(dist, f)).size / 1024) + ' KB'));

@@ -5,7 +5,7 @@
  * Rode `instalarVistAR()` uma vez no editor (ou pelo menu VistAR da planilha).
  */
 
-const VERSAO = '1.1.0';
+const VERSAO = '1.2.0';
 
 /** Valores padrão. Podem ser sobrescritos na aba "Config" da planilha. */
 const CONFIG_PADRAO = {
@@ -23,6 +23,10 @@ const CONFIG_PADRAO = {
   ENVIO_AUTOMATICO_COPIA: 'sim',
   KW_POR_TR: '1.05',
   FATORES_BTU_M2: '',
+  CONSORCIO_CNPJ: '',
+  CONTRATANTE: 'Secretaria Municipal de Educação de São Paulo (SME-SP)',
+  CONTRATO_OBJETO: 'Climatização de unidades escolares',
+  CONTRATO_VIGENCIA: '',
   META_INICIO: '',
   META_DATA: '',
   NOME_APP: 'VistAR'
@@ -43,6 +47,10 @@ const DESCRICOES_CONFIG = {
   ENVIO_AUTOMATICO_COPIA: 'sim/nao · envia o relatório para a unidade ao finalizar',
   KW_POR_TR: 'Premissa de consumo elétrico (kW por TR) no pré-dimensionamento',
   FATORES_BTU_M2: 'Opcional · ajusta fatores de carga por tipo, em JSON. Ex.: {"Sala de aula": 700, "Biblioteca": 650}',
+  CONSORCIO_CNPJ: 'CNPJ do consórcio (aparece nos relatórios)',
+  CONTRATANTE: 'Órgão contratante',
+  CONTRATO_OBJETO: 'Objeto do contrato',
+  CONTRATO_VIGENCIA: 'Vigência do contrato (texto livre)',
   META_INICIO: 'Início do contrato (AAAA-MM-DD) · base da linha de meta do painel',
   META_DATA: 'Data para concluir todas as escolas (AAAA-MM-DD)',
   NOME_APP: 'Nome exibido nos e-mails'
@@ -53,13 +61,17 @@ const SCHEMA = {
   Config: ['chave', 'valor', 'descricao'],
   Usuarios: ['id', 'email', 'nome', 'cargo', 'equipeId', 'rg', 'empresa', 'telefone', 'perfil', 'dres',
     'fotoId', 'senhaHash', 'salt', 'tokenVersao', 'ativo', 'criadoEm', 'matricula', 'codigoAtivacao', 'codigoExpira',
-    'ultimoAcesso', 'lat', 'lng', 'vistoEm', 'fila', 'vistoriaAtual'],
+    'ultimoAcesso', 'lat', 'lng', 'vistoEm', 'fila', 'vistoriaAtual', 'perfilId', 'empresaId'],
   Equipes: ['id', 'nome', 'membros', 'supervisorNome', 'supervisorTel', 'status', 'statusDesde',
-    'vistoriaAtual', 'destinoEscolaId', 'destinoEta', 'lat', 'lng', 'vistoEm', 'fila'],
-  DREs: ['id', 'nome', 'engenheiroNome', 'engenheiroCargo', 'engenheiroTel', 'engenheiroEmail'],
+    'vistoriaAtual', 'destinoEscolaId', 'destinoEta', 'lat', 'lng', 'vistoEm', 'fila', 'empresaId', 'dres', 'ativo', 'baseNome', 'baseLat', 'baseLng'],
+  DREs: ['id', 'nome', 'engenheiroNome', 'engenheiroCargo', 'engenheiroTel', 'engenheiroEmail', 'sigla', 'empresaId', 'ativo'],
+  Empresas: ['id', 'nome', 'sigla', 'cnpj', 'emailGestao', 'logo', 'pastaId', 'ativo', 'criadoEm'],
+  Perfis: ['id', 'nome', 'nivel', 'escopo', 'permissoes', 'padrao', 'descricao', 'ativo', 'atualizadoEm'],
   Escolas: ['id', 'nome', 'cie', 'dre', 'etapaEnsino', 'logradouro', 'numero', 'cep', 'bairro', 'complemento',
     'lat', 'lng', 'diretor', 'telefone', 'email', 'ambientesPrevistos', 'imovel', 'idadeAnos', 'fotoId',
-    'status', 'nota', 'atualizadoEm'],
+    'status', 'nota', 'atualizadoEm', 'ativo', 'tipoUnidade', 'inep', 'telefone2', 'distrito', 'subprefeitura', 'obs', 'motivoInativacao',
+    'inativadaEm', 'inativadaPor', 'ordemSme', 'tempMax', 'obsSme', 'salas', 'areaSalas', 'g1Qtd', 'g1Area', 'g2Qtd', 'g2Area', 'g3Qtd', 'g3Area',
+    'labs', 'leitura', 'auditorio', 'areaAmbientes', 'padraoConstrutivo', 'notas'],
   Roteiro: ['id', 'data', 'hora', 'equipeId', 'escolaId', 'ordem', 'status', 'nota', 'vistoriaId', 'tipo', 'horaFim',
     'confirmado', 'criadoPor'],
   Vistorias: ['id', 'codigo', 'escolaId', 'equipeId', 'usuarioId', 'status', 'checkin', 'checkout',
@@ -71,6 +83,10 @@ const SCHEMA = {
   Pendencias: ['id', 'vistoriaId', 'escolaId', 'etapa', 'descricao', 'status', 'criadoEm', 'resolvidoEm', 'resolvidoPor'],
   Cancelamentos: ['id', 'vistoriaId', 'escolaId', 'motivo', 'houveRecusa', 'quemRecusou', 'descricao', 'fotoId',
     'usuarioId', 'criadoEm', 'situacao', 'cobradoEm'],
+  Orcamentos: ['id', 'vistoriaId', 'escolaId', 'empresaId', 'status', 'responsavelId', 'atribuidoPor', 'atribuidoEm', 'prazo', 'valor',
+    'versaoAtual', 'aprovadoPor', 'aprovadoEm', 'observacao', 'historico', 'criadoEm', 'atualizadoEm'],
+  OrcRevisoes: ['id', 'orcamentoId', 'versao', 'valor', 'valorAc', 'valorEletrica', 'valorCivil', 'valorOutros', 'notas', 'arquivos', 'status',
+    'enviadoPor', 'enviadoEm', 'parecer', 'parecerPor', 'parecerEm'],
   Log: ['ts', 'usuario', 'acao', 'detalhe']
 };
 
@@ -90,7 +106,7 @@ function configPublica_(cfg) {
   return {
     consorcio: cfg.CONSORCIO,
     contrato: cfg.CONTRATO,
-    raioCheckin: Number(cfg.RAIO_CHECKIN_M) || 400,
+    raioCheckin: Number(cfg.RAIO_CHECKIN_M) || 400, logo: cfg.LOGO || '', contratante: cfg.CONTRATANTE, cnpj: cfg.CONSORCIO_CNPJ,
     responsavelTecnico: cfg.RESPONSAVEL_TECNICO, responsavelCargo: cfg.RESPONSAVEL_TECNICO_CARGO, lote: cfg.LOTE,
     versao: VERSAO
   };
@@ -252,7 +268,7 @@ function criarAdministrador() {
   if (!email) throw new Error('Não foi possível identificar seu e-mail Google.');
   const ex = Db.all('Usuarios').find(x => String(x.email).toLowerCase() === email.toLowerCase());
   const u = Db.upsert('Usuarios', Object.assign({ ativo: 'sim', criadoEm: agora_(), tokenVersao: '1', cargo: 'Coordenação técnica', empresa: getConfig_().EMPRESA },
-    ex || { id: 'u-admin', nome: email.split('@')[0] }, { email: email, perfil: 'admin', matricula: (ex && ex.matricula) || '1000', ativo: 'sim' }));
+    ex || { id: 'u-admin', nome: email.split('@')[0] }, { email: email, perfil: 'admin', perfilId: 'admin', matricula: (ex && ex.matricula) || '1000', ativo: 'sim' }));
   const cod = gerarCodigo_(u);
   const msg = 'Acesso de administrador pronto.\n\nNo app, toque em "Primeiro acesso" e informe:\n• Usuário: ' + email + ' (ou matrícula ' + u.matricula + ')\n• Código: ' + cod +
     '\n\nO código vale por 72 horas. Depois edite seu nome e equipe na aba Usuarios, se quiser.';
@@ -268,6 +284,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('VistAR')
       .addItem('Instalar / atualizar estrutura', 'instalarVistAR')
       .addItem('Criar meu acesso de administrador', 'criarAdministrador')
+      .addItem('Carregar escolas iniciais (131 EMEFs)', 'carregarEscolasIniciais')
       .addItem('Carregar dados de exemplo', 'carregarExemplo')
       .addSeparator()
       .addItem('Definir senha de usuário…', 'menuSenha_')

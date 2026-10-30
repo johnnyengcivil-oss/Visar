@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<?
+  var ve = function (niveis) { return niveis.indexOf(nivel) >= 0; };
+  var campo = ve(['vistoriador', 'gestor', 'diretoria', 'admin']);
+  var gestao = ve(['gestor', 'diretoria', 'admin']);
+  var consulta = ve(['orcamento', 'gestor', 'diretoria', 'admin']);
+  var topo = ve(['diretoria', 'admin']);
+  var orc = ve(['orcamento', 'gestor', 'diretoria', 'admin']);
+  var aprova = ve(['gestor', 'diretoria', 'admin']);
+  var nomesNivel = { vistoriador: 'Vistoriador', orcamento: 'Orçamentos', gestor: 'Gestão da empresa', diretoria: 'Diretoria / Coordenação geral', admin: 'Administrador' };
+  var c = cfg || {};
+  var n = 0;
+?>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #0F1E36; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 6px; color: #0F2140; }
+  h2 { font-size: 15pt; color: #0F2140; border-bottom: 3px solid #1F8F86; padding-bottom: 4px; margin: 18px 0 10px; }
+  h3 { font-size: 11.5pt; color: #1F8F86; margin: 14px 0 6px; }
+  p { margin: 0 0 8px; }
+  ol, ul { margin: 0 0 8px 18px; padding: 0; }
+  li { margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; }
+  td, th { border: 1px solid #D5DCE5; padding: 6px 8px; vertical-align: top; font-size: 9.5pt; text-align: left; }
+  th { background: #E3F4F2; color: #0F2140; }
+  .nova { page-break-before: always; }
+  .capa { background: #0F2140; color: #fff; padding: 40px 32px; border-radius: 10px; }
+  .capa h1 { color: #fff; font-size: 26pt; }
+  .capa .sub { color: #C9D6E6; font-size: 11pt; }
+  .logo { font-size: 30pt; font-weight: bold; color: #fff; }
+  .logo span { color: #3CC1B5; }
+  .dica { background: #E3F4F2; border-left: 4px solid #1F8F86; padding: 8px 10px; margin: 8px 0; }
+  .atencao { background: #FFF1DB; border-left: 4px solid #E08A00; padding: 8px 10px; margin: 8px 0; }
+  .alerta { background: #FDE8E8; border-left: 4px solid #D93C3C; padding: 8px 10px; margin: 8px 0; }
+  .card { border: 1px solid #D5DCE5; border-top: 4px solid #1F8F86; border-radius: 6px; padding: 8px 10px; vertical-align: top; }
+  .card b { color: #0F2140; }
+  .num { display: inline-block; background: #0F2140; color: #fff; border-radius: 10px; padding: 0 7px; font-weight: bold; font-size: 9pt; }
+  .rod { color: #6B7A90; font-size: 8.5pt; text-align: center; margin-top: 18px; }
+  .k { color: #6B7A90; font-size: 9pt; }
+</style>
+</head>
+<body>
+
+<!-- ════════════ Capa ════════════ -->
+<div class="capa">
+  <? if (c.logo) { ?><img src="<?= c.logo ?>" style="max-height:60px;max-width:220px;margin-bottom:16px"><br><? } ?>
+  <div class="logo">Vist<span>AR</span></div>
+  <h1 style="margin-top:18px"><?= tipo === 'guia' ? 'Guia rápido' : 'Manual do usuário' ?></h1>
+  <div class="sub"><?= c.consorcio || '' ?><?= c.empresa ? ' · ' + c.empresa : '' ?></div>
+  <div class="sub"><?= c.contrato ? 'Contrato ' + c.contrato : '' ?></div>
+  <p style="margin-top:22px;color:#fff">Preparado para <b><?= nome || 'você' ?></b> · perfil <b><?= nomesNivel[nivel] || nivel ?></b></p>
+  <? if (c.url) { ?><p style="color:#C9D6E6;font-size:9.5pt">Link do app: <?= c.url ?></p><? } ?>
+  <p style="color:#C9D6E6;font-size:9pt">Versão <?= c.versao || '' ?></p>
+</div>
+
+<? if (tipo === 'guia') { ?>
+<!-- ════════════ GUIA RÁPIDO (2 páginas) ════════════ -->
+<h2>Comece em 3 passos</h2>
+<table>
+  <tr>
+    <td class="card" style="width:33%"><span class="num">1</span> <b>Primeiro acesso</b><br>Abra o link do app, toque em <b>Primeiro acesso</b>, informe seu e-mail ou matrícula e o código de 6 dígitos recebido. Crie sua senha.</td>
+    <td class="card" style="width:33%"><span class="num">2</span> <b>Instale no celular</b><br>Android: menu ⋮ › <b>Adicionar à tela inicial</b>. iPhone (Safari): Compartilhar › <b>Adicionar à Tela de Início</b>.</td>
+    <td class="card" style="width:34%"><span class="num">3</span> <b>Permita</b><br>Localização (check-in e rota) e câmera (fotos). Sem isso o app pede confirmação a cada uso.</td>
+  </tr>
+</table>
+
+<? if (campo) { ?>
+<h2>Em campo</h2>
+<table>
+  <tr>
+    <td class="card" style="width:50%"><b>Check-in</b><br>No Início, escolha a escola do roteiro e toque em <b>Fazer check-in</b>. O GPS confere se você está na unidade.</td>
+    <td class="card" style="width:50%"><b>6 etapas + revisão</b><br>Dados · Entrada de energia · Estrutura · Elétrica · Ambientes · Equipamentos. Use <b>Salvar e continuar</b>; tudo fica salvo no celular.</td>
+  </tr>
+  <tr>
+    <td class="card"><b>Fotos</b><br>Toque no quadro da foto ou no botão flutuante <b>Foto</b>. A foto sai com carimbo (escola, data e GPS) e vai para a etapa certa.</td>
+    <td class="card"><b>Sem internet?</b><br>Continue normalmente. O selo "<b>na fila</b>" mostra o que falta enviar. Não feche o app no fim do dia antes da fila zerar.</td>
+  </tr>
+  <tr>
+    <td class="card"><b>Em dupla</b><br>Seu colega já abriu a escola? Toque em <b>Entrar</b> no cartão "Sua equipe também está em". Vocês podem preencher ao mesmo tempo.</td>
+    <td class="card"><b>Finalizar</b><br>Na Revisão, colete as assinaturas (responsável e empresa) e toque em <b>Finalizar vistoria</b>. Os relatórios em PDF são gerados e a cópia vai por e-mail.</td>
+  </tr>
+  <tr>
+    <td class="card"><b>Não deu para terminar?</b><br><b>Cancelar vistoria</b> com o motivo e, se combinado, a data de retorno. Nada do que foi coletado se perde: depois use <b>Retomar</b>.</td>
+    <td class="card"><b>Selo vermelho "com erro"</b><br>Menu ☰ › <b>Itens com erro</b>: reenviar, baixar ou descartar. Os itens nunca são apagados sozinhos.</td>
+  </tr>
+</table>
+<? } ?>
+
+<? if (consulta && !campo) { ?>
+<h2>Consulta e relatórios</h2>
+<table>
+  <tr>
+    <td class="card" style="width:50%"><b>Escolas</b><br>Painel com o avanço das vistorias. Toque numa escola para ver dados, contato, histórico, fotos e relatórios.</td>
+    <td class="card" style="width:50%"><b>Extração de dados</b><br>Escolha o conjunto (ambientes, aberturas, pontos elétricos, equipamentos, pré-dimensionamento…), filtre e exporte em CSV/Excel ou Planilha Google.</td>
+  </tr>
+  <tr>
+    <td class="card"><b>Relatórios</b><br>Em cada vistoria: relatório de vistoria (SME) e relatório completo em PDF.</td>
+    <td class="card"><b>Fotos</b><br>Galeria por escola e etapa, com legenda, data, local e autor.</td>
+  </tr>
+</table>
+<? } ?>
+
+<? if (gestao) { ?>
+<h2>Gestão</h2>
+<table>
+  <tr>
+    <td class="card" style="width:50%"><b>Painel do dia</b><br>Equipes em campo e em trânsito, vistorias a validar e alertas (fila parada, tempo excessivo, cancelamentos).</td>
+    <td class="card" style="width:50%"><b>Assistente de roteiro</b><br>Em Programação: escolha a equipe e o dia, peça as escolas mais próximas, arraste para reordenar e salve na programação.</td>
+  </tr>
+  <tr>
+    <td class="card"><b>Validar</b><br>Abra a vistoria finalizada e toque em <b>Aprovar</b> ou <b>Pedir correção</b> (a equipe recebe a pendência).</td>
+    <td class="card"><b>Usuários e acessos</b><br>Cadastre a pessoa, escolha o perfil e o escopo. Ela recebe um código de 6 dígitos para o primeiro acesso.</td>
+  </tr>
+</table>
+<? } ?>
+
+<? if (orc) { ?>
+<h2>Orçamentos</h2>
+<table>
+  <tr>
+    <td class="card" style="width:50%"><b>Fluxo</b><br>Vistoria finalizada › <b>Aguardando atribuição</b> › <b>Em elaboração</b> › <b>Em aprovação</b> › <b>Orçamento finalizado</b> (ou <b>Em revisão</b>, se a gestão devolver).</td>
+    <td class="card" style="width:50%"><? if (aprova) { ?><b>Gestão</b><br>Atribua o orçamentista e o prazo; quando chegar uma revisão, aprove ou devolva com o seu parecer.<? } else { ?><b>Orçamentista</b><br>Abra o orçamento › <b>Enviar orçamento</b> › valores por grupo › anexe a planilha/PDF › <b>Enviar para aprovação</b>.<? } ?></td>
+  </tr>
+</table>
+<? } ?>
+
+<div class="dica"><b>Dúvidas?</b> Fale com o gestor da sua empresa ou o administrador do sistema.</div>
+<div class="rod">VistAR · <?= c.consorcio || '' ?> · Guia rápido</div>
+
+<? } else { ?>
+<!-- ════════════ MANUAL COMPLETO ════════════ -->
+
+<h2>Sumário</h2>
+<ol>
+  <li>O que é o VistAR</li>
+  <li>Acesso ao app</li>
+  <? if (campo) { ?><li>Início e roteiro do dia</li><li>A vistoria passo a passo</li><li>Fotos e câmera</li><li>Trabalhar sem internet</li><li>Trabalho em dupla e em escolas diferentes</li><li>Cancelar, retomar e pendências</li><? } ?>
+  <li>Escolas, programação e credencial</li>
+  <? if (consulta) { ?><li>Consulta e extração de dados</li><? } ?>
+  <? if (orc) { ?><li>Orçamentos</li><? } ?>
+  <? if (gestao) { ?><li>Gestão: painel, equipes, validação e programação</li><li>Cadastros: escolas, DREs, equipes e usuários</li><? } ?>
+  <? if (topo) { ?><li>Administração: perfis, empresas e personalização</li><? } ?>
+  <li>Configurações</li>
+  <? if (campo) { ?><li>Boas práticas em campo</li><? } ?>
+  <li>Dúvidas frequentes</li>
+</ol>
+
+<div class="nova"></div>
+<h2><?= ++n ?>. O que é o VistAR</h2>
+<p>O VistAR é o aplicativo de vistorias de climatização do <?= c.consorcio || 'consórcio' ?>. Ele registra, em campo, os dados da escola, a entrada de energia, a estrutura, as instalações elétricas, os ambientes e os equipamentos, com fotos e assinaturas, e gera automaticamente os relatórios em PDF.</p>
+<p>Funciona no celular, no tablet e no computador, direto pelo navegador. Em campo, continua funcionando sem internet: tudo fica guardado no aparelho e é enviado quando o sinal voltar.</p>
+<h3>Quem faz o quê</h3>
+<table>
+  <tr><th style="width:28%">Perfil</th><th>O que vê e faz</th></tr>
+  <tr><td><b>Administrador</b></td><td>Tudo: configuração do sistema, empresas, perfis de acesso, personalização e cadastros.</td></tr>
+  <tr><td><b>Diretoria / Coordenação geral</b></td><td>Vê todas as empresas, DREs e equipes; acompanha indicadores e relatórios.</td></tr>
+  <tr><td><b>Gestão da empresa</b></td><td>Programação, equipes, usuários, validação e pendências das DREs da sua empresa.</td></tr>
+  <tr><td><b>Orçamentos</b></td><td>No escritório: consulta escolas, vistorias, relatórios e extrai os dados que lhe forem atribuídos.</td></tr>
+  <tr><td><b>Vistoriador</b></td><td>Faz as vistorias em campo com a sua equipe.</td></tr>
+</table>
+<p class="k">Seu perfil: <b><?= nomesNivel[nivel] || nivel ?></b>. Os itens que você vê no app dependem das permissões do seu perfil.</p>
+
+<h2><?= ++n ?>. Acesso ao app</h2>
+<h3>Primeiro acesso</h3>
+<ol>
+  <li>Abra o link do app<?= c.url ? ' (' + c.url + ')' : '' ?>.</li>
+  <li>Toque em <b>Primeiro acesso</b>.</li>
+  <li>Informe seu <b>e-mail ou matrícula</b> e o <b>código de 6 dígitos</b> que você recebeu. O código vale 72 horas e só pode ser usado uma vez.</li>
+  <li>Crie sua senha: mínimo de 8 caracteres, com uma letra maiúscula e um número.</li>
+  <li>Aceite os termos de uso e permita localização, câmera e notificações.</li>
+</ol>
+<h3>Entrar no dia a dia</h3>
+<p>Use e-mail ou matrícula e a senha. Deixe <b>Manter conectado</b> marcado no seu aparelho pessoal; desmarque em computadores compartilhados.</p>
+<p><b>Esqueci a senha:</b> na tela de entrada, toque em <b>Esqueci a senha</b>. Um código chega no seu e-mail; use-o em <b>Primeiro acesso</b> para criar uma nova senha.</p>
+<h3>Instalar no celular</h3>
+<table>
+  <tr><th style="width:50%">Android (Chrome)</th><th>iPhone (Safari)</th></tr>
+  <tr><td>Abra o link › menu ⋮ › <b>Adicionar à tela inicial</b>.</td><td>Abra o link no Safari › <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</td></tr>
+</table>
+
+<? if (campo) { ?>
+<div class="nova"></div>
+<h2><?= ++n ?>. Início e roteiro do dia</h2>
+<p>A tela <b>Início</b> mostra o cartão principal (iniciar vistoria, vistoria em andamento ou equipe em trânsito), os indicadores (concluídas, aguardando, pendentes) e o <b>Roteiro de hoje</b>.</p>
+<ul>
+  <li><b>Fazer check-in:</b> escolha a escola e toque no botão. O GPS confere se você está na unidade; se estiver longe, o app avisa e pede confirmação.</li>
+  <li><b>Vistoria em andamento:</b> mostra fotos, ambientes, pendências e o tempo em campo. Toque em <b>Continuar vistoria</b>.</li>
+  <li><b>Equipe em trânsito:</b> depois de finalizar, o app mostra a próxima escola, o tempo previsto e os botões <b>Google Maps</b> e <b>Waze</b>.</li>
+  <li><b>Programação:</b> botão ao lado do roteiro, com as visitas do dia, da semana e do mês.</li>
+</ul>
+
+<h2><?= ++n ?>. A vistoria passo a passo</h2>
+<p>A barra no topo mostra a etapa atual. Toque nela para pular de etapa. <b>Salvar e continuar</b> avança; <b>Voltar</b> retorna. Tudo é salvo no aparelho a cada toque.</p>
+<table>
+  <tr><th style="width:24%">Etapa</th><th>O que registrar</th></tr>
+  <tr><td><b>1 · Dados</b></td><td>Confira os dados da escola (toque em <b>Editar</b> para corrigir), imóvel, idade aproximada, responsável e fotos da placa e das fachadas.</td></tr>
+  <tr><td><b>2 · Entrada de energia</b></td><td>Padrão <b>BT</b> (caixas 1 e 2, tipo de poste, tensão, fornecimento mono/bi/trifásico, disjuntor geral) ou <b>MT</b> (cabine, transformador, medição e proteção). Aterramento, cabos (o app calcula a seção pelo diâmetro), medições de tensão e corrente, fotos e estado de conservação.</td></tr>
+  <tr><td><b>3 · Estrutura</b></td><td>Número de blocos ou setores (pode dar nome, ex.: "Anexo"), pavimentos, setores externos, cobertura, brises, orientação das fachadas, paredes, local das condensadoras, tubulação e conservação.</td></tr>
+  <tr><td><b>4 · Elétrica</b></td><td>Por bloco: quadros, tipo, tensão, vagas livres, DR, alimentação do ar-condicionado, aterramento, conservação e fotos.</td></tr>
+  <tr><td><b>5 · Ambientes</b></td><td>Por bloco e pavimento: <b>Adicionar tipo neste pavimento</b>, quantidade, medidas, fachadas, <b>aberturas</b> (janelas e portas com medidas, fachada e proteção solar), pontos elétricos (TUG, luminárias, equipamentos) e fotos. Toque em <b>Concluir pavimento</b> ao terminar. Áreas externas ficam no fim da tela.</td></tr>
+  <tr><td><b>6 · Equipamentos</b></td><td>Equipamentos com carga (bombas, elevador, exaustores…): quantidade, potência em W ou CV e foto da chapa. Se não der para ler, marque <b>Desconhecido / inacessível</b>.</td></tr>
+  <tr><td><b>Revisão</b></td><td>Resumo de cada etapa e das pendências, responsável pelo acompanhamento, <b>assinaturas em tela cheia</b> (responsável e empresa), prioridades da unidade, observações e prévia dos relatórios.</td></tr>
+</table>
+<div class="dica"><b>Selos dos cartões:</b> "Pendente" indica campo obrigatório vazio; "0/3" mostra quantas fotos já foram tiradas. Você pode finalizar com pendências: elas ficam registradas para retorno.</div>
+<h3>Finalizar</h3>
+<ol>
+  <li>Na Revisão, preencha o responsável e colete as duas assinaturas.</li>
+  <li>Se quiser, toque em <b>Visualizar relatório</b> para conferir.</li>
+  <li>Toque em <b>Finalizar vistoria</b>. São gerados o <b>relatório de vistoria (SME)</b> e o <b>relatório completo</b> em PDF, e a cópia vai por e-mail para a unidade.</li>
+</ol>
+
+<div class="nova"></div>
+<h2><?= ++n ?>. Fotos e câmera</h2>
+<ul>
+  <li>Toque no quadro da foto na etapa. A <b>câmera do VistAR</b> abre com grade, guia de enquadramento e carimbo (escola, etapa, data e coordenadas).</li>
+  <li>Os botões abaixo da imagem são <b>atalhos</b> para os outros itens do mesmo cartão: depois de cada foto, o app passa para o próximo item sem foto.</li>
+  <li>O botão flutuante <b>Foto</b> tira uma foto rápida (geral, documento, fachada, quadro…) e já a coloca na etapa certa.</li>
+  <li>Toque numa foto para ver em tela cheia: editar a <b>legenda</b>, compartilhar, refazer ou excluir.</li>
+  <li>Bolinha amarela = foto na fila; verde = foto enviada.</li>
+</ul>
+<div class="atencao">Se a câmera do app não abrir, vá em ☰ › Configurações › Câmera › <b>Sistema</b> para usar a câmera do celular.</div>
+
+<h2><?= ++n ?>. Trabalhar sem internet</h2>
+<p>Tudo o que você faz é guardado no aparelho e entra numa <b>fila de envio</b>. O selo no topo mostra a situação:</p>
+<table>
+  <tr><th style="width:30%">Selo</th><th>Significado</th></tr>
+  <tr><td>"Offline · 5"</td><td>Sem internet; 5 itens esperando.</td></tr>
+  <tr><td>"Enviando 3"</td><td>Enviando agora.</td></tr>
+  <tr><td>"aguarda Wi-Fi"</td><td>A opção "Enviar fotos só no Wi-Fi" está ligada.</td></tr>
+  <tr><td style="color:#D93C3C"><b>"2 com erro"</b></td><td>O servidor recusou 2 itens. Veja abaixo.</td></tr>
+</table>
+<h3>Itens com erro</h3>
+<p>Um item recusado 3 vezes <b>não é apagado</b>: vai para ☰ Menu › <b>Itens com erro</b>, com a mensagem do motivo. Você pode <b>Reenviar</b> (depois de corrigir a causa), <b>Baixar</b> uma cópia ou <b>Descartar</b>. Uma cópia também vai para o Drive do sistema.</p>
+<div class="alerta"><b>Importante:</b> não feche o app nem saia da conta antes da fila zerar no fim do dia. Se precisar, use Fotos › <b>Enviar agora</b>.</div>
+
+<div class="nova"></div>
+<h2><?= ++n ?>. Trabalho em dupla e em escolas diferentes</h2>
+<ul>
+  <li><b>Escolas diferentes:</b> cada integrante da equipe faz o check-in na sua escola. O Início mostra o cartão "Sua equipe também está em".</li>
+  <li><b>Mesma escola:</b> quem chega primeiro faz o check-in; o colega toca em <b>Entrar</b>. Os dois podem preencher ao mesmo tempo, inclusive a mesma etapa. O app junta campo por campo e ambiente por ambiente; se os dois mudarem o mesmo campo, vale a alteração mais recente.</li>
+  <li>O que o colega faz aparece no seu aparelho em até 1 minuto (com internet).</li>
+  <li><b>Sair desta vistoria</b> (no fim de cada etapa): vai para outra escola sem encerrar. Quem ficar finaliza.</li>
+  <li>Se os dois fizerem check-in na mesma escola sem sinal, o sistema junta as duas vistorias quando a internet voltar.</li>
+</ul>
+
+<h2><?= ++n ?>. Cancelar, retomar e pendências</h2>
+<h3>Cancelar vistoria</h3>
+<p>Use quando não for possível terminar: recusa da direção, escola fechada, área interditada, retorno pedido pela unidade, falta de tempo, aguardando autorização da DRE ou problema da equipe. Descreva a situação, registre quem recusou (se houver) e, se combinado, a <b>data de retorno</b>. Os dados e fotos já coletados ficam guardados.</p>
+<h3>Retomar</h3>
+<p>Na escola ou em Pendências, toque em <b>Retomar</b>: o app carrega os dados e fotos da visita anterior e você completa só o que faltou. É criada uma nova versão, e o histórico continua disponível.</p>
+<h3>Pendências</h3>
+<p>A aba <b>Pendências</b> mostra o que falta na vistoria atual e as escolas com retorno, com a situação e as etapas concluídas. Ações: <b>Retomar</b>, <b>Reagendar</b>, <b>Cobrar DRE</b> (envia e-mail ao engenheiro da DRE) e <b>Ver registro</b> (motivo, relato e foto de uma recusa).</p>
+<? } ?>
+
+<div class="nova"></div>
+<h2><?= ++n ?>. Escolas, programação e credencial</h2>
+<ul>
+  <li><b>Escolas:</b> lista das escolas permitidas para você, com busca por nome, endereço ou CIE. Toque numa escola para ver dados, localização, contato da unidade, histórico de vistorias, documentos e fotos. <b>Abrir rota</b> leva ao Google Maps ou ao Waze.</li>
+  <li><b>Programação:</b> visualização por <b>dia</b> (linha do tempo com deslocamentos), <b>semana</b> e <b>mês</b> (calendário com as visitas).</li>
+  <li><b>Credencial:</b> ☰ Menu › Credencial. Mostra o seu crachá, o supervisor e os engenheiros das DREs com botão de ligar.</li>
+</ul>
+
+<? if (consulta) { ?>
+<h2><?= ++n ?>. Consulta e extração de dados</h2>
+<p>Em ☰ Menu › <b>Extração de dados</b>, escolha o conjunto, os filtros (empresa, DRE, escola, período, situação) e as colunas:</p>
+<table>
+  <tr><th style="width:30%">Conjunto</th><th>Uma linha por</th></tr>
+  <tr><td>Vistorias</td><td>vistoria: escola, datas, equipe, status, totais, assinaturas e validação</td></tr>
+  <tr><td>Ambientes</td><td>tipo de ambiente: bloco, pavimento, medidas, área, fachadas, pontos</td></tr>
+  <tr><td>Aberturas</td><td>janela ou porta: dimensões, vidro, fachada, proteção solar</td></tr>
+  <tr><td>Pontos elétricos</td><td>TUG, luminária ou equipamento de uso específico por ambiente</td></tr>
+  <tr><td>Equipamentos</td><td>equipamento com carga e potência</td></tr>
+  <tr><td>Entrada de energia</td><td>escola: padrão, tensão, fornecimento, disjuntor, medições</td></tr>
+  <tr><td>Pré-dimensionamento</td><td>ambiente climatizável: carga estimada e capacidade sugerida</td></tr>
+  <tr><td>Pendências / Fotos</td><td>pendência aberta ou resolvida / foto com link e legenda</td></tr>
+</table>
+<p>Resultado: prévia na tela e exportação em <b>CSV/Excel</b> ou em <b>Planilha Google</b> (salva no Drive). Você só vê os dados do escopo do seu perfil.</p>
+<div class="atencao">O pré-dimensionamento é uma estimativa para orçamento, com premissas configuradas pelo administrador. Não substitui o projeto executivo de climatização e elétrica.</div>
+<? } ?>
+
+<? if (orc) { ?>
+<h2><?= ++n ?>. Orçamentos</h2>
+<p>Toda vistoria finalizada fica disponível para orçamento, em ☰ Menu › <b>Orçamentos</b> (no escritório, é uma das abas principais).</p>
+<table>
+  <tr><th style="width:28%">Status</th><th>O que significa</th></tr>
+  <tr><td>Aguardando atribuição</td><td>A gestão ainda não escolheu o orçamentista.</td></tr>
+  <tr><td>Em elaboração</td><td>O orçamentista está preparando valores e documentos.</td></tr>
+  <tr><td>Em aprovação</td><td>Uma revisão foi enviada e aguarda a gestão.</td></tr>
+  <tr><td>Em revisão</td><td>A gestão devolveu com um parecer; envie uma nova revisão.</td></tr>
+  <tr><td>Orçamento finalizado</td><td>Revisão aprovada. A gestão pode reabrir, se necessário.</td></tr>
+</table>
+<h3>Enviar um orçamento (orçamentista)</h3>
+<ol>
+  <li>Abra o orçamento. Confira a <b>base técnica</b> (área climatizável, carga em TR, potência, entrada de energia), o relatório completo e as fotos.</li>
+  <li>Toque em <b>Enviar orçamento</b> e informe os valores: climatização, adequação elétrica, obras civis e outros. O total é somado sozinho.</li>
+  <li>Toque em <b>Anexar documentos</b> (planilha, PDF, memorial; até 10 MB cada). Eles vão para a pasta da empresa no Google Drive.</li>
+  <li>Toque em <b>Enviar para aprovação</b>. Cada envio vira uma revisão (v1, v2…), e as anteriores ficam guardadas.</li>
+</ol>
+<? if (aprova) { ?>
+<h3>Atribuir e aprovar (gestão)</h3>
+<ul>
+  <li><b>Atribuir orçamentista:</b> escolha a pessoa e o prazo. Ela recebe um e-mail. Orçamentos atrasados aparecem em vermelho.</li>
+  <li><b>Aprovar</b> finaliza o orçamento. <b>Devolver para revisão</b> exige um parecer, que o orçamentista recebe por e-mail.</li>
+  <li><b>Reabrir para revisão</b> volta um orçamento finalizado para o mesmo orçamentista, mantendo o histórico.</li>
+</ul>
+<? } ?>
+<p>Os status e os valores aparecem no <b>Painel</b>, na <b>Consulta de vistorias</b>, no detalhe da vistoria e na <b>Extração de dados › Orçamentos</b>.</p>
+<? } ?>
+
+<? if (gestao) { ?>
+<div class="nova"></div>
+<h2><?= ++n ?>. Gestão: painel, equipes, validação e programação</h2>
+<ul>
+  <li><b>Painel:</b> equipes em campo e em trânsito, vistorias a validar, alertas (sem sincronizar, fila grande, tempo excessivo, cancelamentos) e o avanço do contrato.</li>
+  <li><b>Equipes:</b> mapa com a última posição de cada técnico (enviada a cada 5 minutos com o app aberto), escolas abertas e fila de envio.</li>
+  <li><b>Validar:</b> confira a vistoria finalizada e toque em <b>Aprovar</b> ou <b>Pedir correção</b> (a equipe recebe uma pendência e a escola volta ao roteiro).</li>
+  <li><b>Pendências:</b> reagende retornos, cobre a DRE e acompanhe as decisões.</li>
+</ul>
+<h3>Assistente de roteiro</h3>
+<ol>
+  <li>Em <b>Programação</b>, toque em <b>Assistente de roteiro</b>.</li>
+  <li>Escolha a equipe, o dia e o ponto de partida.</li>
+  <li>Peça as <b>escolas mais próximas</b> ou selecione na lista (a distância aparece ao lado de cada uma).</li>
+  <li>Toque em <b>Sugerir ordem</b>: o assistente monta o percurso mais curto. Ajuste <b>arrastando</b> os cartões.</li>
+  <li>Confira os horários estimados e abra a rota no <b>Google Maps</b>.</li>
+  <li>Toque em <b>Salvar na programação</b>.</li>
+</ol>
+
+<h2><?= ++n ?>. Cadastros: escolas, DREs, equipes e usuários</h2>
+<ul>
+  <li><b>Escolas e DREs:</b> ☰ Menu › Cadastros. Inclua ou edite escolas (CIE, endereço, coordenadas, contatos, ambientes previstos) e DREs (engenheiro e contatos). <b>Inativar</b> retira a escola das vistorias sem apagar o histórico; <b>Reativar</b> devolve. É possível <b>importar uma planilha</b> com a relação de escolas.</li>
+  <li><b>Equipes:</b> nome, empresa, integrantes e supervisor.</li>
+  <li><b>Usuários e acessos:</b> cadastre nome, matrícula, e-mail, empresa, perfil, equipe e DREs. A pessoa recebe por e-mail um <b>código de 6 dígitos</b> (válido por 72 h), este manual e o guia rápido. Para quem esqueceu a senha, use <b>Redefinir acesso</b>. Para quem saiu, desmarque <b>Acesso ativo</b>.</li>
+</ul>
+<div class="dica">Você só cadastra e altera usuários com perfil abaixo do seu e dentro da sua empresa.</div>
+<? } ?>
+
+<? if (topo) { ?>
+<div class="nova"></div>
+<h2><?= ++n ?>. Administração: perfis, empresas e personalização</h2>
+<h3>Perfis de acesso</h3>
+<p>Os <b>perfis padrão</b> (Administrador, Diretoria, Gestão da empresa, Orçamentos, Vistoriador) são protegidos e servem de modelo. Para ajustar, <b>duplique</b> um perfil padrão e marque as funções permitidas (ex.: cadastrar escolas, validar, extrair dados, ver todas as empresas). Cada perfil tem um <b>escopo</b>:</p>
+<table>
+  <tr><th style="width:24%">Escopo</th><th>Vê os dados de</th></tr>
+  <tr><td>Tudo</td><td>todas as empresas e DREs</td></tr>
+  <tr><td>Empresa</td><td>as DREs da empresa do usuário</td></tr>
+  <tr><td>DREs</td><td>apenas as DREs marcadas no cadastro do usuário</td></tr>
+  <tr><td>Equipe</td><td>apenas as vistorias da própria equipe</td></tr>
+</table>
+<h3>Empresas do consórcio</h3>
+<p>Cada empresa tem suas DREs, gestores e equipes. Fotos e relatórios de cada empresa ficam numa <b>pasta própria no Drive</b>, e os gestores só enxergam os dados da sua empresa.</p>
+<h3>Personalização</h3>
+<p>☰ Menu › <b>Personalização</b>: logo do consórcio, nome, contrato e lote, responsável técnico, e-mails de cópia, metas do contrato, raio do check-in e premissas do pré-dimensionamento.</p>
+<? } ?>
+
+<div class="nova"></div>
+<h2><?= ++n ?>. Configurações</h2>
+<p>☰ Menu › <b>Configurações</b>: tamanho do texto, tema (claro, escuro ou automático), qualidade das fotos, enviar fotos só no Wi-Fi, salvar cópia na galeria, câmera do app ou do sistema, notificações, permissões do aparelho, alterar senha e entrar com biometria.</p>
+
+<? if (campo) { ?>
+<h2><?= ++n ?>. Boas práticas em campo</h2>
+<ul>
+  <li>Abra o app <b>antes</b> de sair, ainda com internet, para carregar a programação do dia.</li>
+  <li>Carregue o celular e leve um carregador portátil.</li>
+  <li>Fotografe enquadrando o item inteiro; para chapas e placas, sem reflexo e com o texto legível.</li>
+  <li><b>Não fotografe alunos</b> nem documentos pessoais.</li>
+  <li>Preencha as medidas na hora; use a legenda da foto para observações importantes.</li>
+  <li>No fim do dia, confira se o selo da fila sumiu antes de fechar o app.</li>
+</ul>
+<? } ?>
+
+<h2><?= ++n ?>. Dúvidas frequentes</h2>
+<table>
+  <tr><th style="width:38%">Pergunta</th><th>Resposta</th></tr>
+  <tr><td>"Código inválido ou vencido"</td><td>O código vale 72 h e só uma vez. Peça um novo ao gestor.</td></tr>
+  <tr><td>"Sessão expirada"</td><td>Entre de novo. Nada do que foi coletado se perde.</td></tr>
+  <tr><td>"Muitas tentativas"</td><td>Aguarde 10 minutos e tente novamente.</td></tr>
+  <? if (campo) { ?>
+  <tr><td>"Você está longe da escola"</td><td>Confira se o GPS está ligado. Se você estiver na escola, confirme e siga.</td></tr>
+  <tr><td>A câmera não abre</td><td>Permita a câmera no navegador ou use Configurações › Câmera › Sistema.</td></tr>
+  <tr><td>O que o colega preencheu não aparece</td><td>As alterações chegam em até 1 minuto com internet. Feche e abra o app.</td></tr>
+  <tr><td>Selo vermelho "com erro"</td><td>Veja ☰ › Itens com erro, leia o motivo e reenvie depois de corrigir.</td></tr>
+  <? } ?>
+  <tr><td>"Esta escola não pertence às suas DREs"</td><td>Peça ao gestor para incluir a DRE no seu cadastro.</td></tr>
+</table>
+
+<div class="dica"><b>Precisa de ajuda?</b> Fale com o gestor da sua empresa ou o administrador do sistema.</div>
+<div class="rod">VistAR <?= c.versao || '' ?> · <?= c.consorcio || '' ?> · Manual do usuário</div>
+<? } ?>
+
+</body>
+</html>

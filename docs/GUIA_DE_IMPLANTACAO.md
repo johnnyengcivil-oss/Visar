@@ -13,7 +13,7 @@ Este guia é para quem **nunca programou**. Você só vai copiar e colar arquivo
 3. Baixe os arquivos do projeto
 4. Crie a planilha
 5. Abra o editor de código (Apps Script)
-6. Cole os 5 arquivos
+6. Cole os 6 arquivos
 7. Instale e autorize
 8. Crie seu acesso de administrador
 9. Publique o app (gerar o link)
@@ -24,6 +24,9 @@ Este guia é para quem **nunca programou**. Você só vai copiar e colar arquivo
 14. Como atualizar o app depois (sem mudar o link)
 15. Limites do Google, backup e segurança
 16. Mapa da planilha (o que é cada aba)
+17. Hierarquia, empresas e perfis de acesso
+18. Gestão de orçamentos
+19. Ferramentas do escritório: cadastros, assistente de roteiro, extração e personalização
 
 ---
 
@@ -67,7 +70,7 @@ O app **funciona sem internet** em campo: tudo fica guardado no celular e é env
 3. Clique no botão verde **Code** › **Download ZIP**.
 4. No seu computador, abra o arquivo baixado (clique duas vezes) e entre na pasta **`dist`**.
 
-Dentro de `dist` existem **5 arquivos**. São só eles que você vai usar:
+Dentro de `dist` existem **6 arquivos**. São só eles que você vai usar:
 
 | Arquivo | O que é |
 |---|---|
@@ -76,10 +79,11 @@ Dentro de `dist` existem **5 arquivos**. São só eles que você vai usar:
 | `Index.html` | Todo o app (telas) |
 | `RelatorioVistoria.html` | Modelo do relatório de vistoria (folha SME) |
 | `RelatorioCompleto.html` | Modelo do relatório técnico completo |
+| `Manual.html` | Modelo do manual do usuário e do guia rápido (anexados ao e-mail de boas-vindas) |
 
 > **Dica:** para copiar o conteúdo de um arquivo, abra-o com o **Bloco de Notas** (Windows: botão direito › Abrir com › Bloco de notas; Mac: TextEdit). Depois use **Ctrl+A** (selecionar tudo) e **Ctrl+C** (copiar). No Mac, troque Ctrl por **Cmd**.
 
-✅ **Confira:** você está vendo os 5 arquivos da pasta `dist`.
+✅ **Confira:** você está vendo os 6 arquivos da pasta `dist`.
 
 ---
 
@@ -103,7 +107,7 @@ Dentro de `dist` existem **5 arquivos**. São só eles que você vai usar:
 
 ---
 
-## 6. Cole os 5 arquivos
+## 6. Cole os 6 arquivos
 
 ### 6.1 · Arquivo de configurações (`appsscript.json`)
 
@@ -119,9 +123,9 @@ Dentro de `dist` existem **5 arquivos**. São só eles que você vai usar:
 1. Clique no arquivo **Código.gs** (o que já existia).
 2. Apague **tudo** que está dentro dele.
 3. Copie todo o conteúdo de `dist/Codigo.gs` e cole aqui.
-   *É um arquivo grande (cerca de 2.100 linhas). Isso é normal.*
+   *É um arquivo grande (cerca de 3.500 linhas). Isso é normal.*
 
-### 6.3 · Os 3 arquivos HTML
+### 6.3 · Os 4 arquivos HTML
 
 Para **cada um** dos arquivos abaixo:
 
@@ -135,6 +139,7 @@ Para **cada um** dos arquivos abaixo:
 | `Index` | `dist/Index.html` |
 | `RelatorioVistoria` | `dist/RelatorioVistoria.html` |
 | `RelatorioCompleto` | `dist/RelatorioCompleto.html` |
+| `Manual` | `dist/Manual.html` |
 
 > ⚠️ **Os nomes têm de ser idênticos**, com as letras maiúsculas iguais. `index` (minúsculo) ou `Index.html.html` **não funcionam**.
 
@@ -142,7 +147,7 @@ Para **cada um** dos arquivos abaixo:
 
 Pressione **Ctrl+S** (ou clique no ícone de disquete 💾).
 
-✅ **Confira:** à esquerda aparecem exatamente estes arquivos: `appsscript.json`, `Código.gs`, `Index.html`, `RelatorioCompleto.html` e `RelatorioVistoria.html`. Não há bolinha vermelha nem mensagem de erro no topo.
+✅ **Confira:** à esquerda aparecem exatamente estes arquivos: `appsscript.json`, `Código.gs`, `Index.html`, `Manual.html`, `RelatorioCompleto.html` e `RelatorioVistoria.html`. Não há bolinha vermelha nem mensagem de erro no topo.
 
 ---
 
@@ -297,14 +302,15 @@ No app, abra **☰ Menu › Usuários e acessos › Novo usuário** e preencha n
 - O usuário recebe **por e-mail** um código de 6 dígitos (válido por 72 h). O código também aparece na tela, para você repassar pessoalmente.
 - Ele abre o link › **Primeiro acesso** › informa a matrícula (ou e-mail) e o código › cria a própria senha.
 
-**Perfis:**
+**Perfis padrão** (detalhes na etapa 17):
 
-| Perfil | O que vê |
+| Perfil | O que vê e faz |
 |---|---|
-| `tecnico` | Faz vistorias com a sua equipe |
-| `supervisor` | Módulo de supervisão (painel, equipes ao vivo, validação, programação, usuários) e também o modo campo |
-| `coordenacao` | Igual ao supervisor |
-| `admin` | Tudo, inclusive criar outros administradores |
+| Administrador | Tudo, inclusive empresas, perfis de acesso e personalização |
+| Diretoria / Coordenação geral | Acompanha todas as empresas do consórcio (painéis, vistorias, orçamentos, extração) |
+| Gestão da empresa | Programação, equipes, usuários, validação de vistorias e aprovação de orçamentos **da sua empresa** |
+| Orçamentos | Escritório: elabora os orçamentos atribuídos a ele; consulta vistorias, relatórios e dados |
+| Vistoriador | Trabalho de campo com a sua equipe |
 
 Se alguém esquecer a senha: **Usuários › tocar no nome › Redefinir acesso**. Ou a própria pessoa usa **Esqueci a senha** na tela de login.
 
@@ -404,6 +410,17 @@ Quando receber uma versão nova dos arquivos:
 
 O link continua o mesmo. Nos celulares, basta fechar e abrir o app.
 
+### Atualizando da versão 1.1 para a 1.2
+
+A versão 1.2 traz um arquivo novo, o **Manual** (etapa 6.3). Faça assim:
+
+1. Cole por cima os arquivos `appsscript.json`, `Codigo.gs`, `Index`, `RelatorioVistoria` e `RelatorioCompleto`, e **crie** o arquivo HTML `Manual` (etapa 6.3).
+2. Salve e execute **`instalarVistAR`**. Ele cria as abas novas (**Empresas**, **Perfis**, **Orcamentos**, **OrcRevisoes**) e as colunas novas, sem apagar nada.
+3. Execute **`carregarEscolasIniciais`** para cadastrar as **131 EMEFs** da lista da SME (DREs Jaçanã/Tremembé, Freguesia/Brasilândia, Pirituba/Jaraguá e Butantã). Pode rodar de novo sem medo: escolas já cadastradas são atualizadas, não duplicadas.
+4. Publique a nova versão (passos 4 a 6 acima).
+5. No app, como administrador: **Cadastros › Empresas** › cadastre as 3 empresas do consórcio e marque as DREs de cada uma (etapa 17).
+6. Em **Usuários e acessos**, confira o perfil e a empresa de cada pessoa. Os perfis antigos são convertidos sozinhos: `tecnico` → Vistoriador, `supervisor` → Gestão da empresa, `coordenacao` → Diretoria.
+
 > ⚠️ **Não use "Nova implantação" para atualizar:** isso gera um link diferente e as equipes ficam no link antigo.
 
 ---
@@ -459,3 +476,75 @@ Cada vistoria ocupa em média **15 a 30 MB** (fotos + PDFs). Com 15 GB, cabem ce
 ---
 
 *VistAR · Consórcio Climatiza São Paulo · guia da versão 1.1*
+
+---
+
+## 17. Hierarquia, empresas e perfis de acesso
+
+O VistAR segue a estrutura do consórcio:
+
+| Nível | Quem | Enxerga |
+|---|---|---|
+| 5 · Administrador | Você | Tudo e todas as configurações |
+| 4 · Diretoria / Coordenação geral | Diretoria do consórcio | Todas as empresas e DREs |
+| 3 · Gestão da empresa | Gestores de cada empresa | Só a sua empresa: DREs, escolas, equipes, usuários, programação e orçamentos dela |
+| 2 · Orçamentos | Escritório | Os orçamentos atribuídos a ele, vistorias e relatórios da empresa |
+| 1 · Vistoriador | Campo | A sua equipe e as escolas das suas DREs |
+
+**Empresas.** Em **☰ Menu › Cadastros › Empresas**, cadastre cada empresa do consórcio e marque as DREs dela. Cada empresa ganha **uma pasta própria no Google Drive** (`VistAR/Empresas/<nome>`), onde ficam as fotos, os relatórios, os orçamentos e as extrações das suas escolas. O botão **Compartilhar pasta** dá acesso de leitura aos gestores e orçamentistas da empresa.
+
+**Regras que o sistema garante:**
+
+- Ninguém cria ou edita usuário de nível acima do seu.
+- A gestão de uma empresa só cadastra usuários, equipes e programação **dentro da própria empresa**.
+- Escolas fora das DREs permitidas não aparecem e não aceitam check-in.
+
+**Perfis personalizados.** Em **☰ Menu › Perfis de acesso** você vê as funções de cada perfil (por exemplo: *Validar vistorias*, *Extrair dados*, *Aprovar orçamentos*). É possível:
+
+- **Duplicar** um perfil padrão e ajustar as funções (ex.: "Orçamentos · só leitura");
+- **Editar** um perfil padrão e, se precisar, **Restaurar padrão** depois;
+- Escolher o **alcance**: tudo, a empresa, só algumas DREs ou só a equipe.
+
+O perfil Administrador sempre mantém acesso total, para você nunca ficar trancado do lado de fora.
+
+**Boas-vindas.** Todo usuário novo recebe um e-mail com o código de acesso, uma apresentação do sistema, o **guia rápido** e o **manual do usuário em PDF** (feito para o perfil dele). Os dois também ficam em **Configurações › Ajuda**.
+
+---
+
+## 18. Gestão de orçamentos
+
+Quando uma vistoria é **finalizada**, a escola entra automaticamente na fila de orçamentos.
+
+| Status | O que significa | Quem age |
+|---|---|---|
+| Aguardando atribuição | Vistoria finalizada, sem orçamentista | Gestão atribui um orçamentista e um prazo |
+| Em elaboração | Orçamentista trabalhando | Orçamentista envia valores e documentos |
+| Em aprovação | Revisão enviada | Gestão aprova ou devolve com parecer |
+| Em revisão | Devolvido pela gestão | Orçamentista envia nova revisão (v2, v3…) |
+| Orçamento finalizado | Aprovado | Gestão pode reabrir, se preciso |
+
+**Passo a passo:**
+
+1. **Gestão:** **☰ Menu › Orçamentos** › abra a escola › **Atribuir orçamentista** › escolha a pessoa e o prazo. Ela recebe um e-mail.
+2. **Orçamentista:** a aba **Orçamentos** mostra os seus. Abra › **Enviar orçamento** › preencha os valores por grupo (*Climatização*, *Adequação elétrica*, *Obras civis*, *Outros*) › **Anexar documentos** (planilha, PDF, memorial; até 10 MB cada) › **Enviar para aprovação**. Os arquivos vão para `Orçamentos/<escola>/v<n>` na pasta da empresa.
+3. **Gestão:** recebe um e-mail › abre o orçamento › **Aprovar** ou **Devolver para revisão** (dizendo o que precisa mudar).
+4. Cada envio fica guardado como uma **revisão**, com valores, documentos, parecer e datas. O histórico mostra quem fez o quê.
+
+O detalhe do orçamento mostra a **base técnica da vistoria** (área climatizável, carga térmica em TR, potência e se a entrada de energia comporta), com atalhos para o relatório completo e as fotos. Se a escola tiver uma nova vistoria finalizada (retorno), um orçamento ainda não iniciado é substituído pelo novo; um orçamento em andamento recebe um aviso no histórico.
+
+**Onde os orçamentos aparecem:**
+
+- no **Painel**: quantidade por status, valores em aprovação e finalizados, prazos atrasados;
+- na **Consulta de vistorias**: coluna e filtro de orçamento;
+- no **detalhe da vistoria**;
+- na **Extração de dados › Orçamentos**: uma linha por escola, com valores por grupo, revisão, orçamentista, prazos e links dos documentos (CSV ou Planilha Google).
+
+---
+
+## 19. Ferramentas do escritório
+
+- **Layout para computador:** em telas grandes, o app usa um menu lateral, tabelas e janelas centralizadas. No celular e no tablet, mantém as abas inferiores.
+- **Cadastros › Escolas:** busca por nome, código e bairro; filtros por DRE e situação; dados da SME (temperatura máxima, salas, áreas); **Nova escola**, **Editar**, **Inativar/Reativar** (com motivo; a escola sai da programação) e **Importar planilha** (Excel ou CSV: atualiza pelo código e cria as novas).
+- **Assistente de roteiro:** escolha a equipe e o ponto de partida › **Escolas próximas** sugere as mais perto › **Sugerir ordem** monta o caminho mais curto › arraste para reordenar › confira horários estimados (com almoço) e o mapa › **Salvar na programação**.
+- **Extração de dados:** vistorias, ambientes, aberturas, pontos elétricos, equipamentos, entrada de energia, pré-dimensionamento, pendências, fotos, escolas e orçamentos. Filtre por DRE, período e validação. Baixe em CSV (abre no Excel) ou gere uma Planilha Google na pasta da empresa.
+- **Personalização** (administrador): logo do consórcio, nome, CNPJ, contratante, contrato, objeto, vigência, metas e fatores de carga térmica por tipo de ambiente.

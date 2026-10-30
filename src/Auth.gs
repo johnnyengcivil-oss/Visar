@@ -149,7 +149,9 @@ function publicoUsuario_(u) {
   return {
     id: u.id, email: u.email, nome: u.nome, cargo: u.cargo, equipeId: u.equipeId, rg: u.rg,
     empresa: u.empresa, telefone: u.telefone, perfil: u.perfil || 'tecnico', dres: lista_(u.dres), fotoId: u.fotoId, matricula: u.matricula,
-    supervisor: ['supervisor', 'admin', 'coordenacao'].indexOf(u.perfil) >= 0,
+    perfilId: perfilDe_(u).id, perfilNome: perfilDe_(u).nome, nivel: perfilDe_(u).nivel, escopo: perfilDe_(u).escopo, perms: perfilDe_(u).permissoes,
+    empresaId: u.empresaId || '', empresaNome: (Db.find('Empresas', u.empresaId) || {}).nome || '',
+    supervisor: pode_(u, 'supervisao.painel'),
     iniciais: String(u.nome || '?').split(/\s+/).filter(String).map(s => s[0]).slice(0, 2).join('').toUpperCase()
   };
 }

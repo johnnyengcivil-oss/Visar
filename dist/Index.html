@@ -641,6 +641,95 @@ select.inp { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.
 .alerta { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; }
 .alerta:last-child { border-bottom: 0; }
 .lock { min-height: 100vh; background: var(--navy); color: #fff; display: grid; place-items: center; text-align: center; padding: 24px; }
+
+/* ═══════════ Telas maiores: tablets (2 colunas) e computadores (menu lateral + colunas) ═══════════ */
+.so-pc, .lado-extra { display: none !important; }
+.tabela-wrap { overflow-x: auto; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); }
+table.tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.tabela th { text-align: left; font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--muted); text-transform: uppercase; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--field); position: sticky; top: 0; white-space: nowrap; }
+table.tabela td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.tabela tr:hover td { background: var(--field); }
+table.tabela tr.inativa td { opacity: .55; }
+table.tabela td.n, table.tabela th.n { text-align: right; }
+.drag { cursor: grab; touch-action: none; user-select: none; }
+.drag.arrastando { opacity: .55; outline: 2px dashed var(--teal); }
+.rot-item { display: grid; grid-template-columns: 28px 30px 1fr auto; gap: 10px; align-items: center; background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 8px; box-shadow: var(--shadow); }
+.rot-item .num { width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.rot-item .pega { color: var(--muted-2); display: grid; place-items: center; }
+.rot-trecho { font-size: 12.5px; color: var(--muted); margin: -2px 0 8px 68px; }
+.perm-g { margin-top: 14px; } .perm-g b { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.cand { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cand:last-child { border-bottom: 0; }
+.ck { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--muted-2); display: grid; place-items: center; background: var(--card); }
+.ck.on { background: var(--teal); border-color: var(--teal); color: #fff; }
+
+/* ───── Orçamentos ───── */
+.grade-kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grade-kpi .kpi-mini b { font-size: 22px; }
+.orc-kpi { border: 0; font: inherit; color: inherit; cursor: pointer; }
+.orc-passos { display: flex; gap: 4px; margin: 10px 0 6px; }
+.orc-passos div { flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.2; }
+.orc-passos i { height: 6px; border-radius: 99px; background: var(--line); }
+.orc-passos .ok i { background: var(--green); } .orc-passos .ok { color: var(--ink-2); }
+.orc-passos .atual i { background: var(--c-and); } .orc-passos .atual { color: var(--ink); font-weight: 800; }
+.orc-rev { border-top: 1px solid var(--line); padding: 12px 0; }
+.orc-rev:first-of-type { border-top: 0; padding-top: 4px; }
+.orc-grupos { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.orc-grupos b { display: block; color: var(--ink); font-size: 14px; }
+.orc-arqs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.orc-arqs .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (min-width: 700px) {
+  #app { max-width: 920px; }
+  .view, .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; align-items: start; grid-auto-flow: row dense; }
+  .view > *, .grade > * { margin-top: 0 !important; margin-bottom: 0 !important; min-width: 0; }
+  .view > :not(section):not(.card):not(.sch):not(.pcard):not(.eq-card):not(.contact):not(.rot-item),
+  .grade > :not(section):not(.card):not(.sch):not(.pcard):not(.eq-card):not(.contact) { grid-column: 1 / -1; }
+  .view > .full, .grade > .full, .view > .prog-hero, .grade > .prog-hero { grid-column: 1 / -1; }
+  .view > button.btn { max-width: 440px; justify-self: center; width: 100%; }
+  .main { padding-left: 24px; padding-right: 24px; }
+  .gal3 { grid-template-columns: repeat(4, 1fr); }
+  .foot-in { max-width: 640px; }
+  .badge-card { max-width: 420px; margin-left: auto; margin-right: auto; }
+}
+
+@media (min-width: 1024px) {
+  .so-pc { display: revert !important; }
+  .so-cel { display: none !important; }
+  #app { max-width: none; }
+  body.com-lateral #app { margin-left: 256px; }
+  body.com-lateral .foot { left: 256px; }
+  .view, .grade { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+  .main { max-width: 1320px; margin: 0 auto; padding: 26px 32px 120px; }
+  .main.has-foot { padding-bottom: 130px; }
+  .hdr-top, .hdr-user { max-width: 1320px; margin-left: auto; margin-right: auto; }
+  body.com-lateral .hdr .logo, body.com-lateral .hdr .cons { display: none; }
+  body.com-lateral .hdr-top { border-bottom: 0; padding-bottom: 0; }
+  body.com-lateral .hdr { padding-top: 10px; }
+  .whdr > *, .lhdr { max-width: 1320px; margin-left: auto; margin-right: auto; }
+  /* Menu lateral */
+  .nav { top: 0; bottom: 0; left: 0; right: auto; width: 256px; border-top: 0; background: var(--navy); padding: 18px 12px; overflow-y: auto; }
+  .nav-in { display: flex; flex-direction: column; gap: 2px; max-width: none; }
+  .nav button { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 14px; border-radius: 12px; font-size: 14.5px; color: #C9D6E6; text-align: left; }
+  .nav button svg { width: 22px; height: 22px; }
+  .nav button:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .nav button.on { background: rgba(60,193,181,.18); color: #fff; }
+  .nav button .dot { position: static; margin-left: auto; }
+  .lado-extra { display: flex !important; }
+  .nav .lado-marca { display: flex !important; align-items: center; gap: 10px; color: #fff; padding: 6px 10px 18px; }
+  .nav .lado-marca .logo { font-size: 24px; }
+  .nav .lado-grupo { display: block !important; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: #7F93AE; font-weight: 700; padding: 16px 14px 6px; }
+  .fab { right: 36px; bottom: 32px; }
+  .stats { grid-column: 1 / -1; }
+  /* Folhas inferiores viram janelas centralizadas */
+  .sheet { top: 7vh; bottom: auto; border-radius: 20px; max-width: 640px; max-height: 86vh; animation: fade .2s; padding: 18px 26px 24px; }
+  .sheet .grab { display: none; }
+  .rel-stage { height: calc(100vh - 230px); }
+  .tl, .cal, .navper, .kpi3 { max-width: 980px; }
+  .grade.duas { grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.25fr); }
+  .grade-kpi { grid-template-columns: repeat(4, 1fr); }
+  .done-h + div { max-width: 980px; margin: 0 auto; }
+}
 </style>
 
 </head>
@@ -689,7 +778,7 @@ const ICONS = {
   checksq: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m8 12 3 3 5-6"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
   right: '<path d="m9 6 6 6-6 6"/>', left: '<path d="m15 6-6 6 6 6"/>', down: '<path d="m6 9 6 6 6-6"/>',
-  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', up: '<path d="m6 15 6-6 6 6"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
   menu: '<circle cx="12" cy="12" r="9.5"/><path d="M8 9.5h8M8 12.5h8M10 15.5h4"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
@@ -769,7 +858,7 @@ const IDB = (() => {
 /* ───── Chamada ao servidor (google.script.run) ───── */
 const Api = {
   /** Tempo máximo de espera (ms): ações que geram PDF ou e-mail demoram mais. */
-  limite(acao) { return /finalizar|pdf|enviarCopia|relatorio/.test(acao) ? 330000 : /uploadFoto|thumbs|galeria|painel/.test(acao) ? 120000 : 60000; },
+  limite(acao) { return /finalizar|pdf|enviarCopia|relatorio/.test(acao) ? 330000 : /uploadFoto|uploadDoc|thumbs|galeria|painel|extrair|orcamento/.test(acao) ? 120000 : 60000; },
   run(acao, payload) {
     return new Promise((res, rej) => {
       let fim = false;
@@ -1372,6 +1461,11 @@ const App = {
       console.error(e);
       out = { header: Views.hdrSimples('Ops'), body: '<div class="card"><b>Algo deu errado nesta tela.</b><p class="muted">' + esc(e.message) + '</p><button class="btn btn-navy" data-act="tab" data-to="home">Voltar ao início</button></div>' };
     }
+    // No computador, as áreas do menu mantêm o menu lateral visível.
+    const pc = window.matchMedia && matchMedia('(min-width: 1024px)').matches;
+    if (!out.nav && pc && typeof Secoes !== 'undefined' && App.data && r.name !== 'login' && r.name !== 'primeiro' &&
+      Secoes.principais().concat(Secoes.extras()).some(x => x[0] === r.name)) out.nav = r.name;
+    document.body.classList.toggle('com-lateral', !!out.nav && pc);
     $('#hdr').innerHTML = out.header || '';
     const main = $('#main');
     main.className = 'main' + (out.foot ? ' has-foot' : '') + (out.flush ? ' flush' : '');
@@ -2526,7 +2620,7 @@ const Views = {
   hdrApp() {
     const D = App.data || {}, u = D.usuario || {}, eq = D.equipe || {};
     return '<header class="hdr"><div class="hdr-top"><div class="logo">Vist<b>AR</b></div>' +
-      '<div class="cons">' + LOGO + '<span>Consórcio<b>' + esc(String((D.cfg || App.boot.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div></div>' +
+      '<div class="cons">' + Logo() + '<span>Consórcio<b>' + esc(String((D.cfg || App.boot.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div></div>' +
       '<div class="hdr-user"><span class="avatar">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" class="hidden" alt="">' : '') + esc(u.iniciais || '') + '</span>' +
       '<span><div class="nm">' + esc(u.nome || '') + '</div><div class="sub"><b>' + esc(eq.nome || '') + '</b>' + (eq.parceiro ? ' · com ' + esc(eq.parceiro) : '') + '</div></span>' +
       '<span class="sync hidden" data-sync style="margin-left:auto"></span>' +
@@ -2607,7 +2701,7 @@ const Views = {
   login() {
     const cfg = (App.boot && App.boot.cfg) || {};
     return {
-      body: '<div class="login"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:12px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+      body: '<div class="login"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:12px">' + Logo() + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
         '<form class="card" id="fLogin" autocomplete="on"><h3 style="margin:0 0 4px">Entrar</h3><p class="muted small" style="margin:0 0 14px">Use o e-mail cadastrado pela coordenação.</p>' +
         '<span class="lbl">E-mail</span><input class="inp" name="email" type="email" inputmode="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '">' +
         '<span class="lbl">Senha</span><input class="inp" name="senha" type="password" autocomplete="current-password" required>' +
@@ -2846,7 +2940,7 @@ const Views = {
     const dreAtual = V ? (App.escola(V.escolaId) || {}).dre : (u.dres || [])[0];
     return {
       header: '<header class="lhdr"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><h1>Credencial</h1><span class="sync hidden" data-sync style="margin-left:auto;background:var(--navy)"></span></header>',
-      body: '<div class="badge-card"><div class="slot"></div><div class="top">' + LOGO + '<span><small>CONSÓRCIO</small><b>' + esc(String((D.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+      body: '<div class="badge-card"><div class="slot"></div><div class="top">' + Logo() + '<span><small>CONSÓRCIO</small><b>' + esc(String((D.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
         '<button class="ph-id" data-act="fotoPerfil" aria-label="Trocar foto">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" alt="">' :
           '<svg viewBox="0 0 160 190" style="width:100%;height:100%"><circle cx="80" cy="74" r="34" fill="#9AAFC0"/><path d="M22 190c0-40 26-66 58-66s58 26 58 66z" fill="#9AAFC0"/></svg>') +
         '<span class="cam">' + I('camera', 18) + '</span></button>' +
@@ -3329,7 +3423,7 @@ Views.login = () => {
   const cfg = (App.boot && App.boot.cfg) || {};
   return {
     flush: true,
-    body: '<div class="login2"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:14px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+    body: '<div class="login2"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:14px">' + Logo() + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
       '<form class="card" id="fLogin" autocomplete="on"><h2 style="margin:0;font-size:28px">Entrar</h2><p class="muted" style="margin:4px 0 16px">Acesse com seu usuário do consórcio.</p>' +
       '<span class="lbl">E-mail ou matrícula</span><div class="in-ic">' + I('user', 20) + '<input class="inp" name="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '"></div>' +
       '<span class="lbl">Senha</span><div class="in-ic">' + I('lock', 20) + '<input class="inp" name="senha" type="password" autocomplete="current-password" required><button type="button" class="eye" data-act="olho" aria-label="Mostrar senha">' + I('eye', 20) + '</button></div>' +
@@ -3657,6 +3751,7 @@ const Painel = {
         Graf.legenda() + '</section>' +
       '<section class="card"><h3 style="margin:0">Produtividade por equipe</h3><div class="muted small">Escolas concluídas no período</div>' +
         d.porEquipe.map(x => '<div class="hbar" style="display:grid;grid-template-columns:90px 1fr 70px;gap:10px;align-items:center"><b>' + esc(x.nome) + '</b><div class="tr"><i style="width:' + x.pct * 100 + '%;background:var(--teal)"></i></div><b style="text-align:right">' + x.n + ' · ' + pct(x.pct) + '</b></div>').join('') + '</section>' +
+      (d.orcamentos && Views.orcPainel ? Views.orcPainel(d.orcamentos) : '') +
       '<section class="card"><div class="card-h"><h3>Mapa das unidades</h3></div>' + Graf.mapa(d.mapa) + Graf.legenda() + '</section>';
   }
 };
@@ -3764,6 +3859,7 @@ Views.vistoria = p => ({
         (r.pendencias.length ? '<section class="card"><div class="kh">Pendências registradas</div>' + r.pendencias.map(x => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)"></i><span><b>' + esc(x.descricao) + '</b><small>' + esc(ROTULO_ETAPA[x.etapa] || x.etapa) + '</small></span></div>').join('') + '</section>' : '') +
         '<section class="card"><div class="kh">Assinaturas e relatórios</div>' + r.assinaturas.map(a => '<div class="doc-row"><span><b>' + esc(a.nome) + '</b><small>' + (a.ok ? 'Assinado em ' + dataBR(a.em, true) + ' · ' + hora(a.em) : 'Sem assinatura') + '</small></span><span class="badge ' + (a.ok ? 'b-green">Assinado' : 'b-amber">Pendente') + '</span></div>').join('') +
           '<div class="doc-row"><span><b>Cópia enviada à unidade</b><small>' + (r.copia ? dataBR(r.copia.em, true) + ' · ' + hora(r.copia.em) + ' · ' + esc(r.copia.para) : 'Ainda não enviada') + '</small></span><span class="badge ' + (r.copia ? 'b-green">Enviada' : 'b-gray">Pendente') + '</span></div></section>' +
+        (Views.orcCartao ? Views.orcCartao(r.orcamento) : '') +
         '<section class="card"><div class="kh">Validação da supervisão</div><div class="doc-row"><span><b>' + ({ aprovada: 'Aprovada', correcao: 'Correção solicitada', pendente: 'Aguardando validação' })[val.status] + '</b><small>' +
           esc([val.por, val.em ? dataBR(val.em, true) : '', val.nota].filter(Boolean).join(' · ') || 'A supervisão confere a vistoria e aprova ou pede correção.') + '</small></span><span class="badge ' + ({ aprovada: 'b-green', correcao: 'b-red', pendente: 'b-amber' })[val.status] + '">' + ({ aprovada: 'OK', correcao: 'Corrigir', pendente: 'Pendente' })[val.status] + '</span></div>' +
           (r.podeValidar && fin ? '<div class="grid2 mt"><button class="btn btn-out-red" data-act="validar" data-id="' + r.id + '" data-d="correcao">Pedir correção</button><button class="btn btn-teal" data-act="validar" data-id="' + r.id + '" data-d="aprovada">' + I('check', 18) + ' Aprovar</button></div>' : '') + '</section>' +
@@ -4705,6 +4801,1085 @@ Object.assign(Act, {
   },
   eqFoco(el) { const c = $('#eq-' + el.dataset.id); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
   eqMapa(el) { abrirExterno('https://www.google.com/maps/search/?api=1&query=' + el.dataset.lat + ',' + el.dataset.lng); }
+});
+</script>
+
+  <script>
+'use strict';
+/* ═══════════════════════ VistAR · gestão e administração ═══════════════════════
+   Menu por perfil (lateral no computador), cadastros de escolas/DREs/empresas,
+   equipes, usuários, perfis de acesso, personalização, extração de dados,
+   consulta de vistorias e assistente de roteiro. */
+
+const eu = () => ((App.data || {}).usuario || {});
+/** Permissão do perfil (servidor antigo sem "perms": deduz pelo papel). */
+App.pode = cap => {
+  const u = eu();
+  if (u.perms) return u.perms.indexOf(cap) >= 0;
+  const base = ['campo.vistoriar', 'escolas.ver', 'programacao.ver', 'fotos.ver'];
+  return base.indexOf(cap) >= 0 || (u.supervisor && cap !== 'config.editar' && cap !== 'perfis.gerenciar' && cap !== 'empresas.gerenciar');
+};
+App.escritorio = () => !App.pode('campo.vistoriar') && !App.pode('supervisao.painel');
+const opcoes = (lista, sel, vazio) => (vazio !== undefined ? '<option value="">' + esc(vazio) + '</option>' : '') + lista.map(o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(sel) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('');
+const campo = (id, rot, val, o) => '<div class="fld"><span class="lbl">' + rot + '</span><input class="inp" id="' + id + '" value="' + esc(val === undefined || val === null ? '' : val) + '"' + (o && o.type ? ' type="' + o.type + '"' : '') + (o && o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + (o && o.im ? ' inputmode="' + o.im + '"' : '') + '></div>';
+const valor = id => { const el = $('#' + id); return el ? el.value.trim() : undefined; };
+
+/* ───── Logo personalizável ───── */
+function Logo(alto) {
+  const l = ((App.data || {}).cfg || (App.boot || {}).cfg || {}).logo;
+  return l ? '<img src="' + l + '" alt="Logo" style="height:' + (alto || 42) + 'px;max-width:140px;object-fit:contain">' : LOGO;
+}
+
+/* ═════════════ Seções do app conforme o perfil ═════════════ */
+const Secoes = {
+  /** Abas principais (barra inferior no celular). */
+  principais() {
+    if (App.supervisor()) return [['home', 'chart', 'Painel'], ['equipesSup', 'users', 'Equipes']].concat(App.pode('vistorias.validar') ? [['validar', 'shield', 'Validar']] : [['escolas', 'school', 'Escolas']]).concat([['pendencias', 'checksq', 'Pendências']]);
+    if (App.escritorio()) return [['home', 'chart', 'Painel']].concat(App.verOrcamentos() ? [['orcamentos', 'money', 'Orçamentos']] : []).concat([['consulta', 'file', 'Vistorias']])
+      .concat(App.verOrcamentos() ? [] : App.pode('extracao.usar') ? [['extracao', 'download', 'Extração']] : []).concat([['cadastro', 'school', 'Escolas']]);
+    return [['home', 'home', 'Início'], ['escolas', 'school', 'Escolas'], ['fotos', 'image', 'Fotos'], ['pendencias', 'checksq', 'Pendências']];
+  },
+  /** Demais áreas (menu ☰ no celular e menu lateral no computador). */
+  extras() {
+    const p = App.pode, l = [];
+    const add = (cond, r, ic, t, s, g) => { if (cond) l.push([r, ic, t, s, g]); };
+    add(p('programacao.ver'), 'programacao', 'calendar', 'Programação', 'Dia, semana e mês', 'Operação');
+    add(p('programacao.editar'), 'assistente', 'pin', 'Assistente de roteiro', 'Escolas próximas, ordem e horários', 'Operação');
+    add(p('escolas.ver') && App.supervisor(), 'escolas', 'chart', 'Painel do contrato', 'Avanço por DRE e equipe', 'Operação');
+    add(App.verOrcamentos(), 'orcamentos', 'money', 'Orçamentos', 'Atribuição, revisões, aprovação e valores', 'Orçamentos');
+    add(p('vistorias.consultar'), 'consulta', 'file', 'Consulta de vistorias', 'Relatórios e versões', 'Dados');
+    add(p('extracao.usar'), 'extracao', 'download', 'Extração de dados', 'Ambientes, pontos, pré-dimensionamento…', 'Dados');
+    add(p('fotos.ver') && (App.supervisor() || App.escritorio()), 'fotos', 'image', 'Fotos', 'Galeria por escola', 'Dados');
+    add(p('escolas.ver'), 'cadastro', 'school', 'Cadastros', 'Escolas, DREs' + (p('empresas.gerenciar') ? ' e empresas' : ''), 'Cadastros');
+    add(p('equipes.editar'), 'equipesCad', 'users', 'Equipes', 'Membros, base e DREs', 'Cadastros');
+    add(p('usuarios.gerenciar'), 'usuarios', 'user', 'Usuários e acessos', 'Cadastro e códigos de acesso', 'Cadastros');
+    add(p('perfis.gerenciar'), 'perfis', 'shield', 'Perfis de acesso', 'Funções de cada perfil', 'Administração');
+    add(p('config.editar'), 'personalizar', 'settings', 'Personalização', 'Logo, contrato e premissas', 'Administração');
+    add(true, 'credencial', 'user', 'Credencial', 'Crachá, supervisor e DREs', 'Conta');
+    add(true, 'configuracoes', 'settings', 'Configurações', 'Texto, tema, fotos, ajuda', 'Conta');
+    add(true, 'falhas', 'alert', 'Itens com erro' + (Sync.nFalhas ? ' · ' + Sync.nFalhas : ''), 'Envios recusados', 'Conta');
+    const principais = this.principais().map(x => x[0]);
+    return l.filter(x => principais.indexOf(x[0]) < 0);
+  }
+};
+
+Views.nav = function (sel) {
+  const prin = Secoes.principais(), extras = Secoes.extras();
+  const n = (App._sup || {}).aValidar || 0, pend = !App.supervisor() && !App.escritorio() ? Views.listaPendencias().length : 0;
+  const u = eu();
+  const botao = (x, extra) => '<button class="' + (sel === x[0] ? 'on' : '') + (extra ? ' lado-extra' : '') + '" data-act="' + (extra ? 'menuIr' : 'tab') + '" data-to="' + x[0] + '">' + I(x[1], 26, 1.8) + x[2] +
+    (x[0] === 'validar' && n ? '<span class="dot">' + n + '</span>' : '') + (x[0] === 'pendencias' && pend ? '<span class="dot">' + pend + '</span>' : '') + '</button>';
+  let grupo = '';
+  return '<nav class="nav"><div class="nav-in">' +
+    '<div class="lado-marca so-pc"><span class="logo">Vist<b>AR</b></span></div>' +
+    prin.map(x => botao(x)).join('') +
+    extras.map(x => (x[4] !== grupo ? '<span class="lado-grupo so-pc">' + esc(grupo = x[4]) + '</span>' : '') + botao(x, true)).join('') +
+    (u.supervisor ? '<button class="lado-extra" data-act="modo">' + I('swap', 22) + (App.supervisor() ? 'Modo campo' : 'Voltar à supervisão') + '</button>' : '') +
+    '<button class="lado-extra" data-act="sair">' + I('logout', 22) + 'Sair</button></div></nav>';
+};
+
+Views.menu = () => {
+  const u = eu();
+  const it = (act, ic, t, s, extra) => '<button class="opt" data-act="' + act + '"' + (extra || '') + '><span class="ic">' + I(ic, 20) + '</span><span>' + t + (s ? '<small>' + s + '</small>' : '') + '</span></button>';
+  Sheet.open('<div class="row" style="margin-bottom:6px"><span class="avatar">' + esc(u.iniciais || '') + '</span><span><b>' + esc(u.nome || '') + '</b><div class="muted small">' + esc([u.perfilNome || u.cargo, u.empresaNome].filter(Boolean).join(' · ')) + '</div></span></div>' +
+    (u.supervisor ? it('modo', 'swap', App.supervisor() ? 'Ir para o modo campo' : 'Voltar à supervisão', App.supervisor() ? 'Fazer vistorias com sua equipe' : 'Painel, equipes e validação') : '') +
+    Secoes.extras().map(x => it('menuIr', x[1], x[2], x[3], ' data-to="' + x[0] + '"')).join('') + it('sair', 'logout', 'Sair da conta', ''));
+};
+
+/* Início do escritório (Orçamentos): o painel do contrato. */
+Views.home = (orig => function (p) {
+  if (App.data && App.escritorio()) { const v = Views.escolas(); v.nav = 'home'; return v; }
+  return orig(p);
+})(Views.home);
+
+/* ═════════════ Cadastros: escolas, DREs e empresas ═════════════ */
+const SIT_ROT = { concluida: ['b-green', 'Concluída'], andamento: ['b-blue', 'Em andamento'], agendada: ['b-amber', 'Agendada'], retorno: ['b-red', 'Retorno'], nao_iniciada: ['b-gray', 'Não iniciada'] };
+Views.cadastro = () => {
+  const st = App._cad = App._cad || { aba: 'escolas', busca: '', dre: '', sit: '', ativas: 'sim' };
+  const abas = [['escolas', 'Escolas'], ['dres', 'DREs']].concat(App.pode('empresas.gerenciar') ? [['empresas', 'Empresas']] : []);
+  return {
+    header: Views.hdrNavy('Cadastros', st.aba === 'escolas' ? 'Escolas' : st.aba === 'dres' ? 'DREs' : 'Empresas do consórcio'),
+    body: '<div class="segbar full">' + abas.map(a => '<button class="' + (st.aba === a[0] ? 'on' : '') + '" data-act="cadAba" data-v="' + a[0] + '">' + a[1] + '</button>').join('') + '</div><div id="cadBox" class="full">' + SKEL + '</div>',
+    nav: App.escritorio() ? 'cadastro' : null,
+    after() {
+      if (st.aba === 'empresas') return Dados.obter('empresas', 'empresas', {}, (r, c, e) => encher('#cadBox', r ? Views.empresasHtml(r) : erroBox(e)), { semLS: true });
+      Dados.obter('cadastro', 'cadastroEscolas', {}, (r, c, e) => { App._cadDados = r; if (!r) return encher('#cadBox', erroBox(e)); Views.cadRender(); }, { semLS: true });
+    }
+  };
+};
+Views.cadRender = () => {
+  const r = App._cadDados, st = App._cad;
+  if (!r || !$('#cadBox')) return;
+  if (st.aba === 'dres') {
+    encher('#cadBox', (r.podeDres ? '<div class="row" style="justify-content:flex-end;margin-bottom:12px"><button class="btn btn-navy btn-sm" data-act="dreForm">' + I('plus', 18) + ' Nova DRE</button></div>' : '') +
+      '<div class="grade">' + r.dres.map(d => '<section class="card"><div class="card-h"><h3>' + esc(d.nome || d.id) + '</h3>' + (d.sigla ? '<span class="badge b-gray">' + esc(d.sigla) + '</span>' : '') + '</div>' +
+        '<div class="muted small">' + esc(d.empresa || 'Sem empresa vinculada') + ' · ' + plural(r.escolas.filter(e => e.dre === d.id).length, 'escola') + '</div>' +
+        (d.engenheiroNome ? '<div class="doc-row"><span><b>' + esc(d.engenheiroNome) + '</b><small>' + esc([d.engenheiroCargo, d.engenheiroTel, d.engenheiroEmail].filter(Boolean).join(' · ')) + '</small></span></div>' : '') +
+        (r.podeDres ? '<button class="btn btn-out btn-sm mt" style="width:100%" data-act="dreForm" data-id="' + esc(d.id) + '">' + I('edit', 16) + ' Editar</button>' : '') + '</section>').join('') + '</div>');
+    return;
+  }
+  const q = norm(st.busca);
+  const l = r.escolas.filter(e => (!st.dre || e.dre === st.dre) && (!st.sit || e.situacao === st.sit) && (st.ativas === 'todas' || (st.ativas === 'sim') === e.ativo) &&
+    (!q || norm([e.nome, e.cie, e.bairro, e.logradouro, e.distrito].join(' ')).indexOf(q) >= 0));
+  const sit = e => { const s = SIT_ROT[e.situacao] || SIT_ROT.nao_iniciada; return '<span class="badge ' + s[0] + '">' + s[1] + '</span>'; };
+  encher('#cadBox',
+    '<div class="search">' + I('search', 20) + '<input class="inp" id="cadBusca" placeholder="Buscar por nome, código, bairro…" value="' + esc(st.busca) + '"></div>' +
+    '<div class="fchips">' + [['', 'Todas as DREs']].concat(r.dres.map(d => [d.id, d.id])).map(x => '<button class="chip dark' + (st.dre === x[0] ? ' on' : '') + '" data-act="cadSet" data-k="dre" data-v="' + esc(x[0]) + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
+    '<div class="fchips">' + [['', 'Qualquer situação']].concat(Object.keys(SIT_ROT).map(k => [k, SIT_ROT[k][1]])).map(x => '<button class="chip' + (st.sit === x[0] ? ' on' : '') + '" data-act="cadSet" data-k="sit" data-v="' + x[0] + '">' + x[1] + '</button>').join('') +
+      (r.podeEditar ? [['sim', 'Ativas'], ['nao', 'Inativas'], ['todas', 'Ativas e inativas']].map(x => '<button class="chip' + (st.ativas === x[0] ? ' on' : '') + '" data-act="cadSet" data-k="ativas" data-v="' + x[0] + '">' + x[1] + '</button>').join('') : '') + '</div>' +
+    '<div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:12px"><b>' + plural(l.length, 'escola') + '</b><span class="row" style="gap:8px">' +
+      (r.podeEditar ? '<button class="btn btn-out btn-sm" data-act="importar">' + I('download', 18) + ' Importar planilha</button><button class="btn btn-navy btn-sm" data-act="escolaForm">' + I('plus', 18) + ' Nova escola</button>' : '') + '</span></div>' +
+    '<div class="tabela-wrap so-pc"><table class="tabela"><tr><th>Escola</th><th>Código</th><th>DRE</th><th>Endereço</th><th class="n">Ambientes</th><th class="n">Temp. máx.</th><th>Situação</th><th></th></tr>' +
+      l.slice(0, 400).map(e => '<tr class="' + (e.ativo ? '' : 'inativa') + '"><td><b>' + esc(e.nome) + '</b>' + (e.ativo ? '' : '<br><span class="small c-red">Inativa' + (e.motivoInativacao ? ' · ' + esc(e.motivoInativacao) : '') + '</span>') + '</td><td>' + esc(e.cie || '') + '</td><td>' + esc(e.dre) + '</td>' +
+        '<td>' + esc([e.logradouro, e.numero].filter(Boolean).join(', ')) + '<br><span class="muted small">' + esc(e.bairro || '') + '</span></td><td class="n">' + esc(e.ambientesPrevistos || '') + '</td><td class="n">' + (e.tempMax ? fmt(e.tempMax, 1) + '°' : '') + '</td><td>' + sit(e) + '</td>' +
+        '<td style="white-space:nowrap"><button class="btn btn-out btn-sm" data-act="escolaAbrir" data-id="' + esc(e.id) + '">Ver</button> ' + (r.podeEditar ? '<button class="btn btn-out btn-sm" data-act="escolaForm" data-id="' + esc(e.id) + '">Editar</button>' : '') + '</td></tr>').join('') +
+    '</table></div>' +
+    '<div class="so-cel">' + l.slice(0, 200).map(e => '<button class="sch" data-act="' + (r.podeEditar ? 'escolaForm' : 'escolaAbrir') + '" data-id="' + esc(e.id) + '"' + (e.ativo ? '' : ' style="opacity:.6"') + '><span style="flex:1;min-width:0"><h4>' + esc(e.nome) + '</h4>' +
+      '<div class="ad">' + esc([e.cie, e.dre, e.bairro].filter(Boolean).join(' · ')) + '</div><div class="tags">' + sit(e) + (e.ativo ? '' : '<span class="badge b-red">Inativa</span>') + (e.tempMax ? '<span class="tag b-gray">' + fmt(e.tempMax, 1) + '°C</span>' : '') + '</div></span><span class="chev">' + I('right') + '</span></button>').join('') + '</div>' +
+    (l.length > 400 ? '<p class="muted small">Mostrando as primeiras 400. Refine a busca.</p>' : ''));
+  const b = $('#cadBusca');
+  if (b) b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => { const p = b.selectionStart; Views.cadRender(); const n = $('#cadBusca'); n.focus(); n.setSelectionRange(p, p); }, 200); };
+};
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+Views.escolaForm = e => {
+  const r = App._cadDados;
+  e = e || { ativo: true };
+  Sheet.open('<h3>' + (e.id ? 'Editar escola' : 'Nova escola') + '</h3>' +
+    campo('esNome', 'Nome', e.nome, { ph: 'EMEF …' }) +
+    F.row(campo('esCie', 'Código EOL/CIE', e.cie, { im: 'numeric' }), campo('esInep', 'Código INEP', e.inep, { im: 'numeric' })) +
+    '<div class="grid2" style="align-items:end"><div class="fld"><span class="lbl">DRE</span><select class="inp" id="esDre">' + opcoes(r.dres.map(d => [d.id, d.nome || d.id]), e.dre, 'Escolha') + '</select></div>' + campo('esTipo', 'Tipo', e.tipoUnidade || 'EMEF') + '</div>' +
+    campo('esLog', 'Logradouro', e.logradouro) + F.row(campo('esNum', 'Número', e.numero), campo('esCep', 'CEP', e.cep)) +
+    F.row(campo('esBairro', 'Bairro', e.bairro), campo('esDistrito', 'Distrito', e.distrito)) +
+    '<div class="grid3" style="align-items:end">' + campo('esLat', 'Latitude', e.lat, { im: 'decimal' }) + campo('esLng', 'Longitude', e.lng, { im: 'decimal' }) + '<button class="btn btn-out btn-sm" style="margin-bottom:2px" data-act="geocod">' + I('pin', 16) + ' Pelo endereço</button></div>' +
+    F.row(campo('esDiretor', 'Diretor(a)', e.diretor), campo('esTel', 'Telefone', e.telefone, { type: 'tel' })) +
+    F.row(campo('esEmail', 'E-mail', e.email, { type: 'email' }), campo('esAmb', 'Ambientes previstos', e.ambientesPrevistos, { im: 'numeric' })) +
+    '<div class="fld"><span class="lbl">Observações</span><textarea class="inp" id="esObs">' + esc(e.obs || '') + '</textarea></div>' +
+    '<button class="btn btn-navy mt" id="esOk">Salvar escola</button>' +
+    (e.id ? '<button class="btn mt ' + (e.ativo ? 'btn-out-red' : 'btn-out-teal') + '" id="esAtiva">' + (e.ativo ? 'Inativar (tirar da lista de vistorias)' : 'Reativar escola') + '</button><button class="btn btn-out mt" data-act="escolaAbrir" data-id="' + esc(e.id) + '">Ver ficha da escola</button>' : ''));
+  Act._escolaEd = e;
+  $('#esOk').onclick = async () => {
+    carregando($('#esOk'), true);
+    try {
+      await Api.run('salvarEscola', { escola: { id: e.id || '', nome: valor('esNome'), cie: valor('esCie'), inep: valor('esInep'), dre: valor('esDre'), tipoUnidade: valor('esTipo'), logradouro: valor('esLog'),
+        numero: valor('esNum'), cep: valor('esCep'), bairro: valor('esBairro'), distrito: valor('esDistrito'), lat: valor('esLat'), lng: valor('esLng'), diretor: valor('esDiretor'),
+        telefone: valor('esTel'), email: valor('esEmail'), ambientesPrevistos: valor('esAmb'), obs: valor('esObs') } });
+      Sheet.close(true); toast('Escola salva', 'ok'); Dados.limpar('cadastro'); App.refresh(); App.rerender();
+    } catch (x) { carregando($('#esOk'), false); toast(x.message, 'err', 4000); }
+  };
+  if ($('#esAtiva')) $('#esAtiva').onclick = () => {
+    const enviar = async motivo => {
+      try { await Api.run('ativarEscola', { id: e.id, ativo: !e.ativo, motivo: motivo }); Sheet.close(true); toast(e.ativo ? 'Escola inativada' : 'Escola reativada', 'ok'); Dados.limpar('cadastro'); App.refresh(); App.rerender(); }
+      catch (x) { toast(x.message, 'err', 4000); }
+    };
+    if (!e.ativo) return enviar('');
+    Sheet.open('<h3>Inativar ' + esc(e.nome) + '?</h3><p class="muted small">Ela sai da lista de vistorias, do roteiro e do painel. As vistorias já feitas continuam guardadas, e dá para reativar depois.</p>' +
+      campo('esMotivo', 'Motivo', '', { ph: 'Ex.: fora do escopo do contrato, unidade fechada' }) + '<button class="btn btn-red mt" id="esInOk">Inativar escola</button>');
+    $('#esInOk').onclick = () => enviar(valor('esMotivo'));
+  };
+};
+
+Views.dreForm = d => {
+  const r = App._cadDados || {};
+  d = d || {};
+  Sheet.open('<h3>' + (d.id ? 'Editar DRE' : 'Nova DRE') + '</h3>' +
+    (d.id ? '<p class="muted small">Identificador: <b>' + esc(d.id) + '</b></p>' : campo('drId', 'Nome curto (identificador)', '', { ph: 'Ex.: Butantã' })) +
+    F.row(campo('drNome', 'Nome completo', d.nome, { ph: 'DRE Butantã' }), campo('drSigla', 'Sigla', d.sigla, { ph: 'BT' })) +
+    '<div class="fld"><span class="lbl">Empresa do consórcio responsável</span><select class="inp" id="drEmp">' + opcoes((r.empresas || []).map(x => [x.id, x.nome]), d.empresaId, 'Sem empresa') + '</select></div>' +
+    F.row(campo('drEng', 'Engenheiro(a) da DRE', d.engenheiroNome), campo('drTel', 'Telefone', d.engenheiroTel, { type: 'tel' })) +
+    campo('drMail', 'E-mail (recebe as cobranças)', d.engenheiroEmail, { type: 'email' }) +
+    '<button class="btn btn-navy mt" id="drOk">Salvar DRE</button>');
+  $('#drOk').onclick = async () => {
+    try {
+      await Api.run('salvarDre', { dre: { id: d.id || '', nomeCurto: valor('drId'), nome: valor('drNome'), sigla: valor('drSigla'), empresaId: valor('drEmp'), engenheiroNome: valor('drEng'),
+        engenheiroCargo: d.engenheiroCargo || 'Engenheiro DRE', engenheiroTel: valor('drTel'), engenheiroEmail: valor('drMail') } });
+      Sheet.close(true); toast('DRE salva', 'ok'); Dados.limpar('cadastro'); App.refresh(); App.rerender();
+    } catch (x) { toast(x.message, 'err', 4000); }
+  };
+};
+
+Views.empresasHtml = l => '<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="muted small">Cada empresa do consórcio tem suas DREs, seus usuários e uma pasta própria no Drive para fotos, relatórios e extrações.</span>' +
+  '<button class="btn btn-navy btn-sm" data-act="empresaForm">' + I('plus', 18) + ' Nova empresa</button></div><div class="grade">' +
+  (l.length ? l.map(e => '<section class="card"><div class="card-h"><h3>' + esc(e.nome) + '</h3>' + (e.sigla ? '<span class="badge b-teal">' + esc(e.sigla) + '</span>' : '') + '</div>' +
+    '<div class="muted small">' + esc([e.cnpj ? 'CNPJ ' + e.cnpj : '', plural(e.usuarios, 'usuário'), e.emailGestao].filter(Boolean).join(' · ')) + '</div>' +
+    '<div class="chips sm mt">' + (e.dres.length ? e.dres.map(d => '<span class="chip">' + esc(d) + '</span>').join('') : '<span class="muted small">Nenhuma DRE vinculada</span>') + '</div>' +
+    '<div class="grid3 mt"><button class="btn btn-out btn-sm" style="width:100%" data-act="empresaForm" data-id="' + e.id + '">Editar</button>' +
+    (e.pastaUrl ? '<button class="btn btn-out btn-sm" style="width:100%" data-act="abrirUrl" data-url="' + esc(e.pastaUrl) + '">Pasta</button>' : '<span></span>') +
+    '<button class="btn btn-out btn-sm" style="width:100%" data-act="empresaCompartilhar" data-id="' + e.id + '">Compartilhar</button></div></section>').join('') :
+    '<div class="empty">Nenhuma empresa cadastrada. Cadastre as 3 empresas do consórcio e vincule as DREs de cada uma.</div>') + '</div>';
+
+Views.empresaForm = async e => {
+  e = e || { dres: [] };
+  let dres = [];
+  try { dres = (await Api.run('cadastroEscolas', {})).dres; } catch (x) { /* sem lista */ }
+  Sheet.open('<h3>' + (e.id ? 'Editar empresa' : 'Nova empresa') + '</h3>' + campo('emNome', 'Razão social / nome', e.nome) + F.row(campo('emSigla', 'Sigla', e.sigla, { ph: 'Ex.: ASE' }), campo('emCnpj', 'CNPJ', e.cnpj)) +
+    campo('emMail', 'E-mail da gestão da empresa', e.emailGestao, { type: 'email' }) +
+    '<span class="lbl">DREs atendidas por esta empresa</span><div class="chips" id="emDres">' + dres.map(d => '<button class="chip' + ((e.dres || []).indexOf(d.id) >= 0 ? ' on' : '') + '" data-v="' + esc(d.id) + '" onclick="this.classList.toggle(\'on\')">' + esc(d.id) + (d.empresa && (e.dres || []).indexOf(d.id) < 0 ? ' · ' + esc(d.empresa) : '') + '</button>').join('') + '</div>' +
+    '<button class="btn btn-navy mt" id="emOk">Salvar empresa</button>');
+  $('#emOk').onclick = async () => {
+    try { await Api.run('salvarEmpresa', { empresa: { id: e.id || '', nome: valor('emNome'), sigla: valor('emSigla'), cnpj: valor('emCnpj'), emailGestao: valor('emMail'), dres: $$('#emDres .chip.on').map(c => c.dataset.v) } });
+      Sheet.close(true); toast('Empresa salva · pasta própria criada no Drive', 'ok'); Dados.limpar('empresas'); Dados.limpar('cadastro'); App.refresh(); App.rerender(); }
+    catch (x) { toast(x.message, 'err', 4000); }
+  };
+};
+
+/* ───── Importar planilha (Excel ou CSV) ───── */
+const COLUNAS_IMPORT = {
+  nome: ['nome', 'nome da unidade', 'unidade', 'escola', 'nome da escola'], cie: ['cie', 'cod. eol', 'cód. eol', 'codigo eol', 'código eol', 'eol', 'codigo', 'código', 'cod', 'código cie'],
+  inep: ['inep', 'cod. inep', 'cód. inep'], tipoUnidade: ['tipo'], dre: ['dre', 'diretoria regional', 'diretoria'], logradouro: ['logradouro', 'endereco', 'endereço', 'rua'],
+  numero: ['nº', 'n°', 'numero', 'número', 'num'], bairro: ['bairro'], cep: ['cep'], distrito: ['distrito'], subprefeitura: ['subprefeitura'], telefone: ['telefone', 'telefone 1', 'fone'],
+  telefone2: ['telefone 2'], email: ['email', 'e-mail'], diretor: ['diretor', 'diretor(a)', 'diretora'], lat: ['latitude', 'lat'], lng: ['longitude', 'lng', 'long'],
+  ambientesPrevistos: ['total de ambientes (qtd)', 'ambientes', 'total ambientes', 'ambientes previstos'], areaAmbientes: ['área total ambientes (m²)', 'area total ambientes (m2)', 'área total (m²)'],
+  salas: ['salas de aula (qtd)', 'salas de aula'], areaSalas: ['área salas de aula (m²)'], tempMax: ['temp. máx. média 2016-2021 (°c)', 'temperatura', 'temp. máx. média (°c)'],
+  ordemSme: ['ordem na lista sme', 'ordem', 'prioridade'], obsSme: ['observação sme', 'observação', 'observacao'], notas: ['notas'], padraoConstrutivo: ['padrão construtivo']
+};
+function mapearLinha(cab, linha) {
+  const o = {};
+  cab.forEach((c, i) => {
+    const n = norm(c).trim();
+    Object.keys(COLUNAS_IMPORT).forEach(k => { if (o[k] === undefined && COLUNAS_IMPORT[k].some(x => norm(x) === n)) o[k] = linha[i] === null || linha[i] === undefined ? '' : linha[i]; });
+  });
+  if (o.cie !== undefined) o.cie = String(o.cie).replace(/\.0$/, '');
+  if (o.nome && o.tipoUnidade && norm(o.nome).indexOf(norm(o.tipoUnidade)) !== 0) o.nome = o.tipoUnidade + ' ' + o.nome;
+  return o;
+}
+function carregarScript(src) {
+  return new Promise((res, rej) => { if (window.XLSX) return res(); const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Não foi possível carregar o leitor de Excel (sem internet?). Salve como CSV e tente de novo.')); document.head.appendChild(s); });
+}
+Views.importar = () => {
+  const r = App._cadDados || {};
+  Sheet.open('<h3>Importar escolas de planilha</h3><p class="muted small">Excel (.xlsx) ou CSV. A primeira linha deve ter os nomes das colunas (ex.: DRE, Cód. EOL, Nome da Unidade, Logradouro, Nº, Bairro, CEP, Telefone, Latitude, Longitude). ' +
+    'Escolas com o mesmo código são <b>atualizadas</b>; as novas são criadas. DREs que ainda não existem são criadas.</p>' +
+    ((r.empresas || []).length ? '<span class="lbl">Empresa para as DREs novas</span><select class="inp" id="imEmp">' + opcoes(r.empresas.map(x => [x.id, x.nome]), '', 'Nenhuma (vincular depois)') + '</select>' : '') +
+    '<label class="btn btn-out-teal mt" style="cursor:pointer">' + I('download', 18) + ' Escolher arquivo<input type="file" id="imArq" accept=".xlsx,.xls,.csv,.txt" class="hidden"></label><div id="imPrev" class="mt"></div>');
+  $('#imArq').onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    encher('#imPrev', '<div class="skel" style="height:80px"></div>');
+    try {
+      let linhas;
+      if (/\.(xlsx|xls)$/i.test(f.name)) {
+        await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+        // Usa a aba que tiver mais linhas com "nome"/"unidade" no cabeçalho.
+        const abas = wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' })).filter(a => a.length);
+        const pontua = a => { const i = a.findIndex(l => l.some(c => /nome|unidade|escola/i.test(String(c)))); return i < 0 ? -1 : a.length - i; };
+        linhas = abas.sort((a, b) => pontua(b) - pontua(a))[0] || [];
+      } else {
+        const txt = await f.text();
+        const sep = (txt.split('\n')[0].match(/;/g) || []).length > (txt.split('\n')[0].match(/,/g) || []).length ? ';' : txt.indexOf('\t') >= 0 ? '\t' : ',';
+        linhas = txt.split(/\r?\n/).filter(String).map(l => l.split(sep).map(c => c.replace(/^"|"$/g, '')));
+      }
+      const iCab = linhas.findIndex(l => l.some(c => /nome|unidade|escola/i.test(String(c))));
+      if (iCab < 0) throw new Error('Não encontrei a linha de cabeçalho (com "Nome" ou "Unidade").');
+      const cab = linhas[iCab];
+      const dados = linhas.slice(iCab + 1).map(l => mapearLinha(cab, l)).filter(o => o.nome);
+      const reconhecidas = Object.keys(COLUNAS_IMPORT).filter(k => cab.some(c => COLUNAS_IMPORT[k].some(x => norm(x) === norm(c).trim())));
+      App._import = dados;
+      encher('#imPrev', '<div class="warn-box" style="margin:0;background:var(--teal-l);color:var(--teal-d)"><b>' + plural(dados.length, 'escola encontrada', 'escolas encontradas') + '</b> · colunas reconhecidas: ' + esc(reconhecidas.join(', ')) + '</div>' +
+        '<div class="tabela-wrap mt" style="max-height:220px;overflow:auto"><table class="tabela"><tr><th>Nome</th><th>Código</th><th>DRE</th><th>Bairro</th></tr>' + dados.slice(0, 8).map(o => '<tr><td>' + esc(o.nome) + '</td><td>' + esc(o.cie || '') + '</td><td>' + esc(o.dre || '') + '</td><td>' + esc(o.bairro || '') + '</td></tr>').join('') + '</table></div>' +
+        '<button class="btn btn-navy mt" id="imOk">Importar ' + dados.length + ' escolas</button>');
+      $('#imOk').onclick = async () => {
+        const b = $('#imOk'); carregando(b, true, 'Importando');
+        const tot = { criadas: 0, atualizadas: 0, dresCriadas: 0, erros: [] };
+        try {
+          for (let i = 0; i < dados.length; i += 150) {
+            const r2 = await Api.run('importarEscolas', { linhas: dados.slice(i, i + 150), empresaId: $('#imEmp') ? $('#imEmp').value : '' });
+            ['criadas', 'atualizadas', 'dresCriadas'].forEach(k => { tot[k] += r2[k]; }); tot.erros = tot.erros.concat(r2.erros);
+            b.innerHTML = '<span class="spin"></span>' + Math.min(i + 150, dados.length) + ' de ' + dados.length;
+          }
+          encher('#imPrev', '<div class="warn-box" style="margin:0;background:var(--green-l);color:var(--green)"><b>Importação concluída:</b> ' + tot.criadas + ' novas, ' + tot.atualizadas + ' atualizadas, ' + tot.dresCriadas + ' DREs criadas.</div>' +
+            (tot.erros.length ? '<div class="warn-box">' + esc(tot.erros.slice(0, 15).join(' · ')) + (tot.erros.length > 15 ? '…' : '') + '</div>' : ''));
+          Dados.limpar('cadastro'); App.refresh(); setTimeout(() => App.rerender(), 300);
+        } catch (x) { carregando(b, false); toast(x.message, 'err', 5000); }
+      };
+    } catch (x) { encher('#imPrev', '<div class="warn-box" style="margin:0;background:var(--red-l);color:var(--red)">' + esc(x.message) + '</div>'); }
+  };
+};
+
+/* ═════════════ Equipes ═════════════ */
+Views.equipesCad = () => ({
+  header: Views.hdrNavy('Cadastros', 'Equipes'),
+  body: '<div class="row full" style="justify-content:flex-end"><button class="btn btn-navy btn-sm" data-act="equipeForm">' + I('plus', 18) + ' Nova equipe</button></div><div id="eqcBox" class="full">' + SKEL + '</div>',
+  after() {
+    Dados.obter('equipesCad', 'equipesCad', {}, (r, c, e) => {
+      App._eqc = r;
+      encher('#eqcBox', !r ? erroBox(e) : '<div class="grade">' + r.equipes.map(q => '<section class="card"' + (q.ativo ? '' : ' style="opacity:.6"') + '><div class="card-h"><h3>' + esc(q.nome) + '</h3>' + (q.empresa ? '<span class="badge b-teal">' + esc(q.empresa) + '</span>' : '') + '</div>' +
+        (q.pessoas.length ? q.pessoas.map(x => '<div class="doc-row"><span class="avatar" style="width:32px;height:32px;font-size:12px">' + esc(x.nome.split(' ').map(s => s[0]).slice(0, 2).join('')) + '</span><span><b>' + esc(x.nome) + '</b><small>' + esc(x.perfil) + '</small></span></div>').join('') : '<p class="muted small">Sem integrantes.</p>') +
+        '<div class="muted small mt">' + esc([q.supervisorNome ? 'Supervisor: ' + q.supervisorNome : '', q.dres ? 'DREs: ' + q.dres : '', q.baseNome ? 'Base: ' + q.baseNome : ''].filter(Boolean).join(' · ')) + '</div>' +
+        '<button class="btn btn-out btn-sm mt" style="width:100%" data-act="equipeForm" data-id="' + q.id + '">' + I('edit', 16) + ' Editar</button></section>').join('') + '</div>');
+    }, { semLS: true });
+  }
+});
+Views.equipeForm = q => {
+  const r = App._eqc;
+  q = q || { ativo: true, pessoas: [] };
+  const membros = q.pessoas.map(x => x.id);
+  Sheet.open('<h3>' + (q.id ? 'Editar equipe' : 'Nova equipe') + '</h3>' + campo('eqNome', 'Nome', q.nome, { ph: 'Equipe 04' }) +
+    (r.empresas.length > 1 ? '<div class="fld"><span class="lbl">Empresa</span><select class="inp" id="eqEmp">' + opcoes(r.empresas.map(x => [x.id, x.nome]), q.empresaId, 'Sem empresa') + '</select></div>' : '') +
+    '<span class="lbl">Integrantes</span><div class="chips" id="eqMembros">' + r.usuarios.filter(x => x.nivel === 'vistoriador' || x.nivel === 'gestor').map(x => '<button class="chip' + (membros.indexOf(x.id) >= 0 ? ' on' : '') + '" data-v="' + x.id + '" onclick="this.classList.toggle(\'on\')">' + esc(x.nome) + (x.equipeId && x.equipeId !== q.id ? ' ·' : '') + '</button>').join('') + '</div>' +
+    '<p class="muted small">Quem já está em outra equipe (marcado com ·) muda para esta ao salvar.</p>' +
+    F.row(campo('eqSup', 'Supervisor', q.supervisorNome), campo('eqSupTel', 'Telefone do supervisor', q.supervisorTel, { type: 'tel' })) +
+    '<span class="lbl">DREs de atuação</span><div class="chips" id="eqDres">' + r.dres.map(d => '<button class="chip' + (String(q.dres || '').split(',').map(s => s.trim()).indexOf(d) >= 0 ? ' on' : '') + '" data-v="' + esc(d) + '" onclick="this.classList.toggle(\'on\')">' + esc(d) + '</button>').join('') + '</div>' +
+    '<div class="grid3" style="align-items:end">' + campo('eqBase', 'Base (ponto de partida)', q.baseNome, { ph: 'Ex.: escritório Penha' }) + campo('eqLat', 'Latitude', q.baseLat, { im: 'decimal' }) + campo('eqLng', 'Longitude', q.baseLng, { im: 'decimal' }) + '</div>' +
+    '<button class="btn btn-out btn-sm mt" data-act="eqAqui">' + I('pin', 16) + ' Usar minha localização como base</button>' +
+    (q.id ? '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="eqAtiva"' + (q.ativo ? ' checked' : '') + ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span class="t">Equipe ativa</span></label>' : '') +
+    '<button class="btn btn-navy mt" id="eqOk">Salvar equipe</button>');
+  $('#eqOk').onclick = async () => {
+    try { await Api.run('salvarEquipe', { equipe: { id: q.id || '', nome: valor('eqNome'), empresaId: valor('eqEmp'), membros: $$('#eqMembros .chip.on').map(c => c.dataset.v), supervisorNome: valor('eqSup'),
+      supervisorTel: valor('eqSupTel'), dres: $$('#eqDres .chip.on').map(c => c.dataset.v), baseNome: valor('eqBase'), baseLat: valor('eqLat'), baseLng: valor('eqLng'), ativo: $('#eqAtiva') ? $('#eqAtiva').checked : true } });
+      Sheet.close(true); toast('Equipe salva', 'ok'); Dados.limpar('equipesCad'); App.refresh(); App.rerender(); }
+    catch (x) { toast(x.message, 'err', 4000); }
+  };
+};
+
+/* ═════════════ Usuários e acessos (perfil, empresa, equipe, DREs) ═════════════ */
+Views.usuarios = () => {
+  const st = App._uf = App._uf || { busca: '', perfil: '', status: '' };
+  return {
+    header: Views.hdrNavy('Cadastros', 'Usuários e acessos'),
+    body: '<div class="search full">' + I('search', 20) + '<input class="inp" id="uBusca" placeholder="Buscar por nome, e-mail ou matrícula" value="' + esc(st.busca) + '"></div><div id="uFiltros" class="full"></div><div id="uBox" class="full">' + SKEL + '</div>',
+    fab: '<button class="fab" data-act="usuarioNovo">' + I('plus', 22) + ' Novo usuário</button>',
+    after() {
+      const b = $('#uBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.usuariosRender(), 150); };
+      Dados.obter('usuarios', 'usuarios', {}, (r, c, e) => { App._usr = r; if (!r) return encher('#uBox', erroBox(e)); App._equipesLista = r.equipes; Views.usuariosRender(); }, { semLS: true });
+    }
+  };
+};
+Views.usuariosRender = () => {
+  const r = App._usr, st = App._uf;
+  if (!r || !$('#uBox')) return;
+  encher('#uFiltros', '<div class="fchips">' + [['', 'Todos os perfis']].concat(r.perfis.map(p => [p.id, p.nome])).map(x => '<button class="chip dark' + (st.perfil === x[0] ? ' on' : '') + '" data-act="uFiltro" data-k="perfil" data-v="' + x[0] + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
+    '<div class="fchips">' + [['', 'Qualquer situação'], ['ativo', 'Ativos'], ['pendente', 'Aguardando 1º acesso'], ['inativo', 'Desativados']].map(x => '<button class="chip' + (st.status === x[0] ? ' on' : '') + '" data-act="uFiltro" data-k="status" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>');
+  const q = norm(st.busca);
+  const eq = id => (r.equipes.find(e => e.id === id) || {}).nome || '';
+  const emp = id => (r.empresas.find(e => e.id === id) || {}).nome || '';
+  const l = r.usuarios.filter(x => (!q || norm(x.nome + ' ' + x.email + ' ' + x.matricula).indexOf(q) >= 0) && (!st.perfil || x.perfilId === st.perfil) &&
+    (!st.status || (st.status === 'ativo' ? x.ativo && x.ativado : st.status === 'pendente' ? x.ativo && !x.ativado : !x.ativo)));
+  const sit = x => !x.ativo ? '<span class="badge b-red">Desativado</span>' : x.ativado ? '<span class="badge b-green">Ativo' + (x.ultimoAcesso ? ' · ' + haQuanto(x.ultimoAcesso) : '') + '</span>' : '<span class="badge b-amber">Aguardando 1º acesso</span>';
+  encher('#uBox', '<div class="muted small" style="margin:0 4px 10px">' + plural(l.length, 'usuário') + '</div>' +
+    '<div class="tabela-wrap so-pc"><table class="tabela"><tr><th>Nome</th><th>Matrícula</th><th>E-mail</th><th>Perfil</th><th>Empresa</th><th>Equipe</th><th>Situação</th><th></th></tr>' +
+      l.map(x => '<tr class="' + (x.ativo ? '' : 'inativa') + '"><td><b>' + esc(x.nome) + '</b><br><span class="muted small">' + esc(x.cargo || '') + '</span></td><td>' + esc(x.matricula || '') + '</td><td>' + esc(x.email || '') + '</td><td>' + esc(x.perfilNome) + '</td><td>' + esc(emp(x.empresaId)) + '</td><td>' + esc(eq(x.equipeId)) + '</td><td>' + sit(x) + '</td>' +
+        '<td><button class="btn btn-out btn-sm" data-act="usuarioEditar" data-id="' + x.id + '">Editar</button></td></tr>').join('') + '</table></div>' +
+    '<div class="so-cel">' + l.map(x => '<button class="sch" data-act="usuarioEditar" data-id="' + x.id + '"><span class="avatar" style="' + (x.ativo ? '' : 'background:var(--muted-2)') + '">' + esc(String(x.nome).split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()) + '</span>' +
+      '<span style="flex:1;min-width:0"><b style="font-size:16px">' + esc(x.nome) + '</b><div class="muted small">' + esc([x.matricula ? 'Mat. ' + x.matricula : '', x.email].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="tags" style="margin-top:6px"><span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc(x.perfilNome) + '</span>' + (eq(x.equipeId) ? '<span class="tag b-gray" style="font-size:12px;padding:3px 9px">' + esc(eq(x.equipeId)) + '</span>' : '') + sit(x) + '</div></span><span class="chev">' + I('right') + '</span></button>').join('') + '</div>');
+};
+Views.formUsuario = x => {
+  const r = App._usr;
+  x = x || { perfilId: 'vistoriador', ativo: true, empresaId: r.minhaEmpresa, dres: '' };
+  const dres = String(x.dres || '').split(',').map(s => s.trim()).filter(Boolean);
+  const desenhar = () => {
+    const empSel = $('#usEmp') ? $('#usEmp').value : (x.empresaId || r.minhaEmpresa);
+    const eqs = r.equipes.filter(e => !empSel || !e.empresaId || e.empresaId === empSel);
+    const ds = r.dres.filter(d => !empSel || !d.empresaId || d.empresaId === empSel);
+    $('#usEqBox').innerHTML = '<span class="lbl">Equipe</span><select class="inp" id="usEq">' + opcoes(eqs.map(e => [e.id, e.nome]), x.equipeId, 'Sem equipe') + '</select>';
+    $('#usDresBox').innerHTML = '<span class="lbl">DREs atribuídas <small class="muted">(vazio = todas da empresa)</small></span><div class="chips" id="usDres">' + ds.map(d => '<button class="chip' + (dres.indexOf(d.id) >= 0 ? ' on' : '') + '" data-v="' + esc(d.id) + '" onclick="this.classList.toggle(\'on\')">' + esc(d.id) + '</button>').join('') + '</div>';
+  };
+  Sheet.open('<h3>' + (x.id ? 'Editar usuário' : 'Novo usuário') + '</h3>' +
+    campo('usNome', 'Nome completo', x.nome) + F.row(campo('usMat', 'Matrícula', x.matricula, { im: 'numeric' }), campo('usRg', 'RG', x.rg)) +
+    campo('usEmail', 'E-mail (recebe o código e o manual)', x.email, { type: 'email' }) +
+    F.row(campo('usCargo', 'Cargo', x.cargo), campo('usTel', 'Telefone', x.telefone, { type: 'tel' })) +
+    '<div class="fld"><span class="lbl">Perfil de acesso</span><select class="inp" id="usPerfil">' + opcoes(r.perfis.map(p => [p.id, p.nome]), x.perfilId) + '</select><div class="muted small" id="usPerfilDesc"></div></div>' +
+    (r.escopoTudo ? '<div class="fld"><span class="lbl">Empresa</span><select class="inp" id="usEmp">' + opcoes(r.empresas.map(e => [e.id, e.nome]), x.empresaId, 'Consórcio (sem empresa)') + '</select></div>' : '') +
+    '<div class="fld" id="usEqBox"></div><div class="fld" id="usDresBox"></div>' +
+    (x.id ? '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="usAtivo"' + (x.ativo ? ' checked' : '') + ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span class="t">Acesso ativo</span></label>' : '') +
+    '<button class="btn btn-navy mt" id="usOk">' + (x.id ? 'Salvar' : 'Criar e enviar boas-vindas') + '</button>' +
+    (x.id ? '<button class="btn btn-out mt" id="usCod">' + I('lock', 18) + ' ' + (x.ativado ? 'Redefinir acesso (novo código)' : 'Reenviar código e manual') + '</button>' : '') +
+    '<p class="muted small" style="margin-top:10px">O e-mail de boas-vindas leva a apresentação do sistema, o código de 6 dígitos (72 h), o guia rápido e o manual do perfil em PDF.</p>');
+  desenhar();
+  const desc = () => { const p = r.perfis.find(y => y.id === $('#usPerfil').value) || {}; $('#usPerfilDesc').textContent = 'Escopo: ' + ({ tudo: 'todas as empresas', empresa: 'empresa do usuário', dres: 'DREs atribuídas', equipe: 'própria equipe' })[p.escopo] || ''; };
+  desc();
+  $('#usPerfil').onchange = desc;
+  if ($('#usEmp')) $('#usEmp').onchange = desenhar;
+  $('#usOk').onclick = async () => {
+    const b = $('#usOk'); carregando(b, true);
+    try {
+      const nome = valor('usNome');
+      const res = await Api.run('salvarUsuario', { id: x.id || '', nome: nome, matricula: valor('usMat'), email: valor('usEmail'), rg: valor('usRg'), cargo: valor('usCargo'), telefone: valor('usTel'),
+        perfilId: valor('usPerfil'), empresaId: $('#usEmp') ? valor('usEmp') : undefined, equipeId: valor('usEq'), dres: $$('#usDres .chip.on').map(c => c.dataset.v), ativo: $('#usAtivo') ? $('#usAtivo').checked : true });
+      Sheet.close(true); Dados.limpar('usuarios'); App.rerender();
+      if (res.codigo) Views.mostrarCodigo(nome, res.codigo); else toast('Usuário salvo', 'ok');
+    } catch (e) { carregando(b, false); toast(e.message, 'err', 4000); }
+  };
+  if ($('#usCod')) $('#usCod').onclick = async () => {
+    if (x.ativado && !(await confirmar({ titulo: 'Redefinir o acesso de ' + x.nome + '?', texto: 'A senha atual deixa de valer e o usuário cria outra com o novo código.', sim: 'Redefinir', perigo: true }))) return;
+    try { const r2 = await Api.run('novoCodigo', { id: x.id, bloquearSenha: !!x.ativado }); Dados.limpar('usuarios'); App.rerender(); Views.mostrarCodigo(x.nome, r2.codigo); }
+    catch (e) { toast(e.message, 'err'); }
+  };
+};
+
+/* ═════════════ Perfis de acesso ═════════════ */
+Views.perfis = () => ({
+  header: Views.hdrNavy('Administração', 'Perfis de acesso'),
+  body: '<p class="intro full">Os <b>perfis padrão</b> ficam protegidos: dá para ajustar as funções e voltar ao original com "Restaurar padrão". Para um caso especial, use <b>Duplicar</b> e crie um perfil personalizado.</p><div id="pfBox" class="full">' + SKEL + '</div>',
+  after() {
+    Dados.obter('perfis', 'perfis', {}, (r, c, e) => {
+      App._pf = r;
+      encher('#pfBox', !r ? erroBox(e) : '<div class="grade">' + r.perfis.map(p => '<section class="card"><div class="card-h"><h3>' + esc(p.nome) + '</h3>' + (p.padrao ? '<span class="badge b-navy">Padrão</span>' : '<span class="badge b-teal">Personalizado</span>') + '</div>' +
+        '<div class="muted small">' + esc(r.niveis[p.nivel] + ' · escopo: ' + r.escopos[p.escopo] + ' · ' + plural(p.usuarios, 'usuário')) + '</div><p class="small" style="margin:8px 0">' + esc(p.descricao || '') + '</p>' +
+        '<div class="chips sm">' + p.permissoes.map(c => '<span class="chip">' + esc((r.caps.find(x => x[0] === c) || [0, 0, c])[2].split(' (')[0]) + '</span>').join('') + '</div>' +
+        '<div class="grid3 mt"><button class="btn btn-out btn-sm" style="width:100%" data-act="perfilForm" data-id="' + p.id + '">Editar</button><button class="btn btn-out btn-sm" style="width:100%" data-act="perfilDuplicar" data-id="' + p.id + '">Duplicar</button>' +
+        (p.padrao ? '<button class="btn btn-out btn-sm" style="width:100%" data-act="perfilRestaurar" data-id="' + p.id + '">Restaurar padrão</button>' : '<button class="btn btn-out-red btn-sm" style="width:100%" data-act="perfilExcluir" data-id="' + p.id + '">Excluir</button>') + '</div></section>').join('') + '</div>');
+    }, { semLS: true });
+  }
+});
+Views.perfilForm = p => {
+  const r = App._pf;
+  const grupos = [];
+  r.caps.forEach(c => { if (grupos.indexOf(c[1]) < 0) grupos.push(c[1]); });
+  Sheet.open('<h3>' + (p.id ? 'Editar perfil' : 'Novo perfil') + '</h3>' + campo('pfNome', 'Nome', p.nome) + campo('pfDesc', 'Descrição', p.descricao) +
+    F.row('<div class="fld"><span class="lbl">Nível na hierarquia</span><select class="inp" id="pfNivel"' + (p.padrao ? ' disabled' : '') + '>' + opcoes(Object.keys(r.niveis).map(k => [k, r.niveis[k]]), p.nivel) + '</select></div>',
+      '<div class="fld"><span class="lbl">Escopo (o que enxerga)</span><select class="inp" id="pfEscopo">' + opcoes(Object.keys(r.escopos).map(k => [k, r.escopos[k]]), p.escopo) + '</select></div>') +
+    grupos.map(g => '<div class="perm-g"><b>' + esc(g) + '</b>' + r.caps.filter(c => c[1] === g).map(c => '<label class="check" style="cursor:pointer"><input type="checkbox" class="pfCap" value="' + c[0] + '"' + (p.permissoes.indexOf(c[0]) >= 0 ? ' checked' : '') +
+      ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto;flex:none"><span>' + esc(c[2]) + '</span></label>').join('') + '</div>').join('') +
+    '<button class="btn btn-navy mt" id="pfOk">Salvar perfil</button>');
+  $('#pfOk').onclick = async () => {
+    try { await Api.run('salvarPerfil', { id: p.id || '', nome: valor('pfNome'), descricao: valor('pfDesc'), nivel: $('#pfNivel').value, escopo: $('#pfEscopo').value, permissoes: $$('.pfCap').filter(c => c.checked).map(c => c.value) });
+      Sheet.close(true); toast('Perfil salvo · vale no próximo acesso de cada usuário', 'ok', 3000); Dados.limpar('perfis'); App.rerender(); }
+    catch (x) { toast(x.message, 'err', 4000); }
+  };
+};
+
+/* ═════════════ Personalização ═════════════ */
+Views.personalizar = () => ({
+  header: Views.hdrNavy('Administração', 'Personalização'),
+  body: '<div id="psBox" class="full">' + SKEL + '</div>',
+  foot: '<button class="btn btn-navy" data-act="psSalvar">Salvar personalização</button>', footOne: true,
+  after() {
+    Dados.obter('configAdmin', 'configAdmin', {}, (r, c, e) => {
+      if (!r) return encher('#psBox', erroBox(e));
+      App._ps = { logo: r.logo, fatores: r.fatores };
+      const grupos = [['Consórcio e contrato', ['CONSORCIO', 'CONSORCIO_CNPJ', 'CONTRATANTE', 'CONTRATO', 'CONTRATO_OBJETO', 'CONTRATO_VIGENCIA', 'LOTE', 'EMPRESA', 'RESPONSAVEL_TECNICO', 'RESPONSAVEL_TECNICO_CARGO', 'SISTEMA_PREVISTO']],
+        ['E-mails e metas', ['EMAIL_COPIA_CONSORCIO', 'EMAIL_COORDENACAO', 'ENVIO_AUTOMATICO_COPIA', 'META_INICIO', 'META_DATA']], ['Campo e segurança', ['RAIO_CHECKIN_M', 'TOKEN_DIAS']], ['Premissas técnicas', ['KW_POR_TR']]];
+      const v = {}; r.valores.forEach(x => { v[x.chave] = x; });
+      encher('#psBox', '<div class="grade"><section class="card"><div class="card-h"><h3>Logo do consórcio</h3></div><div id="psLogo" style="min-height:70px;display:grid;place-items:center;background:var(--navy);border-radius:12px;padding:12px">' +
+          (r.logo ? '<img src="' + r.logo + '" style="max-height:60px;max-width:220px">' : LOGO) + '</div>' +
+          '<div class="grid2 mt"><label class="btn btn-out btn-sm" style="cursor:pointer;width:100%">' + I('image', 16) + ' Trocar logo<input type="file" accept="image/*" id="psArq" class="hidden"></label><button class="btn btn-out btn-sm" style="width:100%" data-act="psSemLogo">Usar logo padrão</button></div>' +
+          '<p class="muted small">Aparece no app, nos e-mails e nos relatórios. Use uma imagem horizontal; o app reduz o tamanho automaticamente.</p></section>' +
+        grupos.map(g => '<section class="card"><div class="card-h"><h3>' + g[0] + '</h3></div>' + g[1].map(k => v[k] ? '<div class="fld"><span class="lbl">' + esc(v[k].descricao || k) + '</span><input class="inp psCfg" data-chave="' + k + '" value="' + esc(v[k].valor) + '"></div>' : '').join('') + '</section>').join('') +
+        '<section class="card"><div class="card-h"><h3>Fatores de carga (BTU/h por m²)</h3></div><p class="muted small">Premissas do pré-dimensionamento por tipo de ambiente climatizável.</p>' +
+          Object.keys(r.fatores).map(t => '<div class="row" style="justify-content:space-between;padding:4px 0"><span>' + esc(t) + '</span><input class="inp psFator" data-t="' + esc(t) + '" value="' + r.fatores[t] + '" inputmode="numeric" style="width:110px;text-align:right"></div>').join('') + '</section></div>');
+      $('#psArq').onchange = async ev => {
+        const f = ev.target.files[0]; if (!f) return;
+        const img = await Camera.carregar(f);
+        const esc2 = Math.min(1, 360 / img.width, 120 / img.height);
+        const cv = document.createElement('canvas'); cv.width = Math.round(img.width * esc2); cv.height = Math.round(img.height * esc2);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        let d = cv.toDataURL('image/png');
+        if (d.length > 44000) d = cv.toDataURL('image/jpeg', 0.85);
+        App._ps.logo = d;
+        $('#psLogo').innerHTML = '<img src="' + d + '" style="max-height:60px;max-width:220px">';
+      };
+    }, { semLS: true });
+  }
+});
+
+/* ═════════════ Consulta de vistorias ═════════════ */
+Views.consulta = () => {
+  const st = App._cons = App._cons || { busca: '', status: '', orc: '' };
+  return {
+    header: App.escritorio() ? Views.hdrApp() : Views.hdrNavy('Dados', 'Consulta de vistorias'),
+    body: '<div class="search full">' + I('search', 20) + '<input class="inp" id="cBusca" placeholder="Buscar escola, código ou equipe" value="' + esc(st.busca) + '"></div>' +
+      '<div class="fchips full">' + [['', 'Todas'], ['finalizada', 'Finalizadas'], ['cancelada', 'Canceladas'], ['pendente', 'A validar'], ['aprovada', 'Aprovadas']].map(x => '<button class="chip dark' + (st.status === x[0] ? ' on' : '') + '" data-act="consSet" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+      (App.verOrcamentos() ? '<div class="fchips full">' + [['', 'Qualquer orçamento'], ['sem', 'Sem orçamento']].concat(ORC_ORDEM.map(k => [k, ORC_ST[k][0]])).map(x => '<button class="chip' + (st.orc === x[0] ? ' on' : '') + '" data-act="consOrc" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' : '') +
+      '<div id="consBox" class="full">' + SKEL + '</div>',
+    nav: App.escritorio() ? 'consulta' : null,
+    after() {
+      const b = $('#cBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.consRender(), 150); };
+      Dados.obter('consulta', 'consultaVistorias', {}, (r, c, e) => { App._consD = r; if (!r) return encher('#consBox', erroBox(e)); Views.consRender(); });
+    }
+  };
+};
+Views.consRender = () => {
+  const l0 = App._consD, st = App._cons;
+  if (!l0 || !$('#consBox')) return;
+  const q = norm(st.busca);
+  const l = l0.filter(v => (!q || norm(v.escola + ' ' + v.codigo + ' ' + v.equipe).indexOf(q) >= 0) && (!st.status || v.status === st.status || (v.status === 'finalizada' && v.validacao === st.status)) &&
+    (!st.orc || (st.orc === 'sem' ? !v.orcamento : v.orcamento && v.orcamento.status === st.orc)));
+  const verOrc = App.verOrcamentos();
+  const orcCel = v => v.orcamento ? orcBadge(v.orcamento.status) + (v.orcamento.valor ? '<br><span class="muted small">' + brl(v.orcamento.valor) + '</span>' : '') : '<span class="muted small">—</span>';
+  const badge = v => v.status === 'cancelada' ? '<span class="badge b-red">Cancelada</span>' : ({ aprovada: '<span class="badge b-green">Aprovada</span>', correcao: '<span class="badge b-red">Correção</span>', pendente: '<span class="badge b-amber">A validar</span>' })[v.validacao];
+  encher('#consBox', '<div class="muted small" style="margin:0 4px 10px">' + plural(l.length, 'vistoria') + '</div>' +
+    '<div class="tabela-wrap so-pc"><table class="tabela"><tr><th>Vistoria</th><th>Escola</th><th>DRE</th><th>Equipe</th><th>Data</th><th class="n">Ambientes</th><th class="n">Fotos</th><th>Situação</th>' + (verOrc ? '<th>Orçamento</th>' : '') + '<th></th></tr>' +
+      l.map(v => '<tr><td><b>' + esc(v.codigo) + '</b>' + (Number(v.versao) > 1 ? '<br><span class="muted small">versão ' + v.versao + '</span>' : '') + '</td><td>' + esc(v.escola) + '</td><td>' + esc(v.dre) + '</td><td>' + esc(v.equipe) + '</td><td>' + dataBR(v.checkout || v.checkin, true) + '</td>' +
+        '<td class="n">' + (v.resumo.ambientes || '') + '</td><td class="n">' + (v.resumo.fotos || '') + '</td><td>' + badge(v) + '</td>' + (verOrc ? '<td>' + orcCel(v) + '</td>' : '') + '<td><button class="btn btn-out btn-sm" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: v.id }) + '\'>Abrir</button></td></tr>').join('') + '</table></div>' +
+    '<div class="so-cel">' + l.map(v => '<button class="sch" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: v.id }) + '\'><span style="flex:1;min-width:0"><h4>' + esc(v.escola) + '</h4><div class="ad">' + esc(v.codigo + ' · ' + v.equipe + ' · ' + dataBR(v.checkout || v.checkin, true)) + '</div><div class="tags">' + badge(v) + (v.orcamento ? orcBadge(v.orcamento.status) : '') + '</div></span><span class="chev">' + I('right') + '</span></button>').join('') + '</div>');
+};
+
+/* ═════════════ Extração de dados ═════════════ */
+const CONJ = [['vistorias', 'Vistorias (resumo)'], ['ambientes', 'Ambientes'], ['aberturas', 'Aberturas'], ['pontos', 'Pontos elétricos'], ['equipamentos', 'Equipamentos'],
+  ['entrada', 'Entrada e elétrica'], ['predim', 'Pré-dimensionamento'], ['pendencias', 'Pendências'], ['fotos', 'Fotos'], ['escolas', 'Cadastro de escolas'], ['orcamentos', 'Orçamentos']];
+Views.extracao = () => {
+  const f = App._ex = App._ex || { conjunto: 'ambientes', dre: '', de: '', ate: '', validacao: '', todasVersoes: false };
+  const D = App.data || {};
+  return {
+    header: App.escritorio() ? Views.hdrApp() : Views.hdrNavy('Dados', 'Extração de dados'),
+    body: '<section class="card full"><div class="card-h"><h3>O que extrair</h3></div><div class="chips">' + CONJ.map(c => '<button class="chip' + (f.conjunto === c[0] ? ' on' : '') + '" data-act="exSet" data-k="conjunto" data-v="' + c[0] + '">' + c[1] + '</button>').join('') + '</div>' +
+      '<div class="grid3 mt" style="align-items:end"><div class="fld"><span class="lbl">DRE</span><select class="inp" id="exDre">' + opcoes((D.dres || []).map(d => [d.id, d.id]), f.dre, 'Todas') + '</select></div>' +
+      campo('exDe', 'De', f.de, { type: 'date' }) + campo('exAte', 'Até', f.ate, { type: 'date' }) + '</div>' +
+      '<div class="grid2 mt" style="align-items:end"><div class="fld"><span class="lbl">Validação</span><select class="inp" id="exVal">' + opcoes([['aprovada', 'Só aprovadas'], ['pendente', 'A validar'], ['correcao', 'Com correção']], f.validacao, 'Todas') + '</select></div>' +
+      '<label class="check" style="cursor:pointer"><input type="checkbox" id="exVers"' + (f.todasVersoes ? ' checked' : '') + ' style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"><span>Incluir versões anteriores (retornos)</span></label></div>' +
+      '<div class="grid3 mt"><button class="btn btn-navy" data-act="exVer">' + I('eye', 18) + ' Visualizar</button><button class="btn btn-out-teal" data-act="exCsv">' + I('download', 18) + ' Baixar CSV (Excel)</button><button class="btn btn-out" data-act="exPlanilha">' + I('file', 18) + ' Gerar Planilha Google</button></div>' +
+      '<p class="muted small">Por padrão vem a última vistoria finalizada de cada escola do seu escopo. A Planilha Google fica salva na pasta da sua empresa no Drive.</p></section>' +
+      '<div id="exBox" class="full"></div>',
+    nav: App.escritorio() ? 'extracao' : null
+  };
+};
+Views.exFiltros = () => {
+  const f = App._ex;
+  f.dre = valor('exDre'); f.de = valor('exDe'); f.ate = valor('exAte'); f.validacao = valor('exVal'); f.todasVersoes = $('#exVers').checked;
+  return { conjunto: f.conjunto, filtros: { dre: f.dre, de: f.de, ate: f.ate, validacao: f.validacao, todasVersoes: f.todasVersoes } };
+};
+function csvDe(t) {
+  const c = v => { const s = v === null || v === undefined ? '' : typeof v === 'number' ? String(v).replace('.', ',') : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return '﻿' + [t.colunas].concat(t.linhas).map(l => l.map(c).join(';')).join('\r\n');
+}
+
+/* ═════════════ Assistente de roteiro ═════════════ */
+const kmEntre = (a, b) => a && b && a.lat && b.lat ? Geo.dist(a.lat, a.lng, b.lat, b.lng) / 1000 * 1.3 : 0;
+const Roteiro = {
+  /** Duração estimada da vistoria: 60 min + 4 min por ambiente previsto (máx. 5 h). */
+  duracao: e => Math.min(300, Math.max(90, Math.round((60 + 4 * (Number(e.ambientes) || 15)) / 15) * 15)),
+  minutosViagem: km => Math.max(5, Math.round(km / 22 * 60)),
+  /** Vizinho mais próximo a partir do ponto de partida. */
+  ordenar(lista, inicio) {
+    const resto = lista.slice(), out = [];
+    let atual = inicio || resto[0];
+    while (resto.length) {
+      resto.sort((a, b) => kmEntre(atual, a) - kmEntre(atual, b));
+      atual = resto.shift(); out.push(atual);
+    }
+    return out;
+  },
+  /** Horários com deslocamento e almoço (12h–13h). */
+  horarios(lista, inicioHHMM, partida) {
+    let t = minutos(inicioHHMM) || 510, ant = partida;
+    return lista.map((e, i) => {
+      const km = kmEntre(ant, e), viagem = i || partida ? Roteiro.minutosViagem(km) : 0;
+      t += viagem;
+      if (t > 690 && t < 780) t = 780;
+      const ini = t, fim = t + Roteiro.duracao(e);
+      t = fim; ant = e;
+      return { e: e, km: km, viagem: viagem, ini: hm(ini), fim: hm(fim) };
+    });
+  }
+};
+Views.assistente = p => {
+  const A = App._as = App._as || { equipeId: '', data: somaD(hojeISO(), 1), inicio: '08:30', porDia: 2, ordem: 'distancia', dre: '', busca: '', sel: [], partida: 'base', dias: [] };
+  return {
+    header: Views.hdrNavy('Programação', 'Assistente de roteiro'),
+    body: '<div id="asBox" class="full">' + SKEL + '</div>',
+    after() {
+      Dados.obter('candidatos', 'candidatos', {}, (r, c, e) => {
+        if (!r) return encher('#asBox', erroBox(e));
+        App._asD = r;
+        if (!A.equipeId && r.equipes[0]) A.equipeId = r.equipes[0].id;
+        Views.asRender();
+      }, { semLS: true });
+    }
+  };
+};
+Views.asPartida = () => {
+  const A = App._as, r = App._asD;
+  const eq = r.equipes.find(x => x.id === A.equipeId) || {};
+  if (A.partida === 'base' && eq.base) return Object.assign({ nome: eq.base.nome || 'Base da equipe' }, eq.base);
+  if (A.partida === 'gps' && Geo.last) return { nome: 'Minha localização', lat: Geo.last.lat, lng: Geo.last.lng };
+  return null;
+};
+Views.asRender = () => {
+  const A = App._as, r = App._asD;
+  if (!r || !$('#asBox')) return;
+  const partida = Views.asPartida();
+  const ref = partida || (A.sel.length ? r.escolas.find(e => e.id === A.sel[0]) : null);
+  const q = norm(A.busca);
+  let cand = r.escolas.filter(e => A.sel.indexOf(e.id) < 0 && (!A.dre || e.dre === A.dre) && (!q || norm(e.nome + ' ' + e.bairro).indexOf(q) >= 0));
+  const ultimo = A.sel.length ? r.escolas.find(e => e.id === A.sel[A.sel.length - 1]) : ref;
+  cand.forEach(e => { e._km = kmEntre(ultimo, e); });
+  cand.sort((a, b) => A.ordem === 'prioridade' ? (a.ordemSme || 999) - (b.ordemSme || 999) : A.ordem === 'calor' ? (b.tempMax || 0) - (a.tempMax || 0) : (a._km || 9e9) - (b._km || 9e9));
+  const sel = A.sel.map(id => r.escolas.find(e => e.id === id)).filter(Boolean);
+  const porDia = Math.max(1, Number(A.porDia) || 2);
+  const dias = [];
+  for (let i = 0; i < sel.length; i += porDia) dias.push(sel.slice(i, i + porDia));
+  let data = A.data;
+  while ([0, 6].indexOf(dDe(data).getDay()) >= 0) data = somaD(data, 1); // só dias úteis
+  const diasCom = dias.map((l, k) => { if (k) { data = somaD(data, 1); while ([0, 6].indexOf(dDe(data).getDay()) >= 0) data = somaD(data, 1); } return { data: data, itens: Roteiro.horarios(l, A.inicio, partida) }; });
+  A.dias = diasCom;
+  const totalKm = diasCom.reduce((s, d) => s + d.itens.reduce((t, x) => t + x.km, 0), 0);
+  const pontos = sel.filter(e => e.lat).map((e, i) => ({ id: e.id, nome: (i + 1) + '. ' + e.nome, lat: e.lat, lng: e.lng, st: 'agendada' }));
+  const mapa = Views.asMapa(sel, partida, cand.slice(0, 25));
+  encher('#asBox', '<div class="grade duas">' +
+    '<section class="card full"><div class="grid3" style="align-items:end">' +
+      '<div class="fld"><span class="lbl">Equipe</span><select class="inp" id="asEq">' + opcoes(r.equipes.map(e => [e.id, e.nome]), A.equipeId) + '</select></div>' +
+      campo('asData', 'Primeiro dia', A.data, { type: 'date' }) + campo('asIni', 'Início do dia', A.inicio, { type: 'time' }) + '</div>' +
+      '<div class="grid3 mt" style="align-items:end"><div class="fld"><span class="lbl">Escolas por dia</span><select class="inp" id="asPorDia">' + opcoes([[1, '1'], [2, '2'], [3, '3'], [4, '4']], porDia) + '</select></div>' +
+      '<div class="fld"><span class="lbl">Ponto de partida</span><select class="inp" id="asPartida">' + opcoes([['base', 'Base da equipe'], ['gps', 'Minha localização'], ['escola', 'Primeira escola escolhida']], A.partida) + '</select></div>' +
+      '<div class="fld"><span class="lbl">DRE</span><select class="inp" id="asDre">' + opcoes((App.data.dres || []).map(d => [d.id, d.id]), A.dre, 'Todas') + '</select></div></div>' +
+      (A.partida === 'base' && !partida ? '<p class="muted small">Esta equipe não tem base cadastrada (Cadastros › Equipes). A distância é contada a partir da primeira escola escolhida.</p>' : '') + '</section>' +
+    '<section class="card"><div class="card-h"><h3>Escolas para visitar</h3><span class="badge b-gray">' + cand.length + '</span></div>' +
+      '<div class="search" style="margin-bottom:8px">' + I('search', 20) + '<input class="inp" id="asBusca" placeholder="Buscar escola ou bairro" value="' + esc(A.busca) + '"></div>' +
+      '<div class="chips sm">' + [['distancia', 'Mais próximas'], ['prioridade', 'Prioridade SME'], ['calor', 'Mais quentes']].map(x => '<button class="chip' + (A.ordem === x[0] ? ' on' : '') + '" data-act="asSet" data-k="ordem" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<button class="btn btn-out-teal btn-sm mt" style="width:100%" data-act="asProximas">' + I('pin', 16) + ' Adicionar as ' + porDia + ' mais próximas</button>' +
+      '<div style="max-height:520px;overflow-y:auto;margin-top:8px">' + cand.slice(0, 80).map(e => '<div class="cand"><button class="ck" data-act="asAdd" data-id="' + e.id + '" aria-label="Adicionar">' + I('plus', 16, 3) + '</button><span style="min-width:0"><b style="font-size:14.5px">' + esc(e.nome) + '</b>' +
+        '<div class="muted small">' + esc([e.dre, e.bairro, e.ambientes ? e.ambientes + ' amb.' : '', e.tempMax ? fmt(e.tempMax, 1) + '°C' : '', e.ordemSme ? 'prior. ' + e.ordemSme : ''].filter(Boolean).join(' · ')) + '</div>' +
+        (e.programada ? '<div class="small c-amber">Já programada ' + dataBR(e.programada.data) + (e.programada.equipe ? ' · ' + esc(e.programada.equipe) : '') + '</div>' : '') + '</span>' +
+        '<span class="small muted" style="white-space:nowrap">' + (e._km ? fmt(e._km, 1) + ' km' : '') + '</span></div>').join('') + '</div></section>' +
+    '<section class="card"><div class="card-h"><h3>Roteiro</h3><span class="badge b-teal">' + plural(sel.length, 'escola') + (sel.length ? ' · ' + fmt(totalKm, 1) + ' km' : '') + '</span></div>' +
+      (sel.length ? '<div class="map" style="aspect-ratio:16/9;margin-bottom:12px">' + mapa + '</div>' +
+        diasCom.map((d, k) => '<div class="kh" style="margin:10px 0 6px">' + (diasCom.length > 1 ? 'Dia ' + (k + 1) + ' · ' : '') + ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][dDe(d.data).getDay()] + ', ' + dataBR(d.data) + '</div>' +
+          d.itens.map(x => (x.viagem ? '<div class="rot-trecho">' + I('arrow', 14) + ' ' + fmt(x.km, 1) + ' km · ~' + x.viagem + ' min</div>' : '') +
+            '<div class="rot-item" data-id="' + x.e.id + '"><span class="pega drag" data-arrasta="' + x.e.id + '" aria-label="Arrastar">' + I('menu', 22) + '</span><span class="num">' + (sel.indexOf(x.e) + 1) + '</span>' +
+            '<span style="min-width:0"><b style="font-size:14.5px">' + esc(x.e.nome) + '</b><div class="muted small">' + x.ini + '–' + x.fim + ' · ' + esc(x.e.bairro || x.e.dre) + '</div></span>' +
+            '<span class="row" style="gap:2px"><button class="back" style="width:32px;height:32px;background:var(--field);color:var(--ink)" data-act="asMover" data-id="' + x.e.id + '" data-d="-1" aria-label="Subir">' + I('up', 16) + '</button>' +
+            '<button class="back" style="width:32px;height:32px;background:var(--field);color:var(--ink)" data-act="asMover" data-id="' + x.e.id + '" data-d="1" aria-label="Descer">' + I('down', 16) + '</button>' +
+            '<button class="back" style="width:32px;height:32px;background:var(--red-l);color:var(--red)" data-act="asTirar" data-id="' + x.e.id + '" aria-label="Tirar">' + I('x', 16) + '</button></span></div>').join('')).join('') +
+        '<div class="grid2 mt"><button class="btn btn-out" data-act="asSugerir">' + I('rotate', 18) + ' Sugerir ordem</button><button class="btn btn-out" data-act="asMaps">' + I('pin', 18) + ' Abrir no Google Maps</button></div>' +
+        '<button class="btn btn-navy mt" data-act="asSalvar">' + I('calendar', 18) + ' Salvar na programação</button>' +
+        '<p class="muted small">Arraste pelo ícone ☰ (ou use as setas) para mudar a ordem. Duração estimada: 1 h + 4 min por ambiente previsto; deslocamento a ~22 km/h; almoço 12h–13h.</p>'
+        : '<div class="empty">Escolha as escolas na lista ao lado (ou toque em "Adicionar as mais próximas").</div>') + '</section></div>');
+  ['asEq', 'asData', 'asIni', 'asPorDia', 'asPartida', 'asDre'].forEach(id => { const el = $('#' + id); if (el) el.onchange = () => {
+    A.equipeId = valor('asEq'); A.data = valor('asData'); A.inicio = valor('asIni'); A.porDia = Number(valor('asPorDia')); A.partida = valor('asPartida'); A.dre = valor('asDre');
+    if (A.partida === 'gps') Geo.get(6000).then(() => Views.asRender()); else Views.asRender();
+  }; });
+  const b = $('#asBusca');
+  if (b) b.oninput = () => { A.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => { const pp = b.selectionStart; Views.asRender(); const n = $('#asBusca'); n.focus(); n.setSelectionRange(pp, pp); }, 250); };
+  Views.asArrastar();
+};
+/** Mapa esquemático: pontos numerados, trajeto e candidatos próximos em cinza. */
+Views.asMapa = (sel, partida, cand) => {
+  const todos = sel.concat(cand).concat(partida ? [partida] : []).filter(e => e.lat);
+  if (!todos.length) return Views.mapaIlustrativo();
+  const la = todos.map(e => e.lat), ln = todos.map(e => e.lng);
+  const a0 = Math.min.apply(null, la), a1 = Math.max.apply(null, la), l0 = Math.min.apply(null, ln), l1 = Math.max.apply(null, ln);
+  const W = 640, H = 360, pad = 30;
+  const sx = Math.max(1e-6, l1 - l0), sy = Math.max(1e-6, a1 - a0);
+  const k = Math.min((W - 2 * pad) / sx, (H - 2 * pad) / sy);
+  const x = e => pad + (e.lng - l0) * k + ((W - 2 * pad) - sx * k) / 2, y = e => pad + (a1 - e.lat) * k + ((H - 2 * pad) - sy * k) / 2;
+  const caminho = (partida ? [partida] : []).concat(sel).filter(e => e.lat);
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '"><rect width="' + W + '" height="' + H + '" fill="#E8EEEA"/>' +
+    '<g stroke="#fff" stroke-width="8" opacity=".8"><path d="M0 120H640M0 250H640M160 0V360M420 0V360"/></g>' +
+    cand.filter(e => e.lat).map(e => '<circle cx="' + x(e) + '" cy="' + y(e) + '" r="6" fill="#94A3B8" stroke="#fff" stroke-width="2"><title>' + esc(e.nome) + '</title></circle>').join('') +
+    (caminho.length > 1 ? '<polyline points="' + caminho.map(e => x(e) + ',' + y(e)).join(' ') + '" fill="none" stroke="#1F8F86" stroke-width="4" stroke-dasharray="2 8" stroke-linecap="round"/>' : '') +
+    (partida && partida.lat ? '<circle cx="' + x(partida) + '" cy="' + y(partida) + '" r="11" fill="#fff" stroke="#0F2140" stroke-width="5"><title>' + esc(partida.nome) + '</title></circle>' : '') +
+    sel.filter(e => e.lat).map(e => '<g><circle cx="' + x(e) + '" cy="' + y(e) + '" r="13" fill="#0F2140" stroke="#fff" stroke-width="3"/><text x="' + x(e) + '" y="' + (y(e) + 5) + '" text-anchor="middle" fill="#fff" font-size="13" font-weight="800" font-family="Inter,Arial">' + (sel.indexOf(e) + 1) + '</text><title>' + esc(e.nome) + '</title></g>').join('') + '</svg>';
+};
+/** Arrastar e soltar (mouse e toque) pela alça ☰. */
+Views.asArrastar = () => {
+  $$('[data-arrasta]').forEach(h => {
+    h.onpointerdown = ev => {
+      ev.preventDefault();
+      const A = App._as, id = h.dataset.arrasta, item = h.closest('.rot-item');
+      item.classList.add('arrastando');
+      h.setPointerCapture(ev.pointerId);
+      const mover = e2 => {
+        const alvo = document.elementFromPoint(e2.clientX, e2.clientY);
+        const outro = alvo && alvo.closest && alvo.closest('.rot-item');
+        if (outro && outro.dataset.id !== id) {
+          const de = A.sel.indexOf(id), para = A.sel.indexOf(outro.dataset.id);
+          A.sel.splice(de, 1); A.sel.splice(para, 0, id);
+          const r = outro.getBoundingClientRect();
+          if (e2.clientY > r.top + r.height / 2) outro.after(item); else outro.before(item);
+        }
+      };
+      const soltar = () => { h.onpointermove = null; h.onpointerup = null; vib(10); Views.asRender(); };
+      h.onpointermove = mover; h.onpointerup = soltar; h.onpointercancel = soltar;
+    };
+  });
+};
+
+/* ═════════════ Ações ═════════════ */
+Object.assign(Act, {
+  abrirUrl(el) { abrirExterno(el.dataset.url); },
+  cadAba(el) { App._cad.aba = el.dataset.v; App.rerender(); },
+  cadSet(el) { App._cad[el.dataset.k] = el.dataset.v; Views.cadRender(); },
+  escolaForm(el) { const id = el.dataset && el.dataset.id; Views.escolaForm(id ? App._cadDados.escolas.find(e => e.id === id) : null); },
+  async geocod() {
+    try { const r = await Api.run('geocodificar', { endereco: [valor('esLog'), valor('esNum'), valor('esBairro'), valor('esCep')].filter(Boolean).join(', ') }); $('#esLat').value = r.lat; $('#esLng').value = r.lng; toast('Coordenadas encontradas', 'ok'); }
+    catch (x) { toast(x.message, 'err'); }
+  },
+  importar() { Views.importar(); },
+  dreForm(el) { const id = el.dataset && el.dataset.id; Views.dreForm(id ? App._cadDados.dres.find(d => d.id === id) : null); },
+  empresaForm(el) { const id = el.dataset && el.dataset.id; const l = Dados.mem.empresas || []; Views.empresaForm(id ? l.find(e => e.id === id) : null); },
+  async empresaCompartilhar(el) {
+    if (!(await confirmar({ titulo: 'Compartilhar a pasta da empresa?', texto: 'Gestores e orçamentistas desta empresa passam a ver (somente leitura) a pasta com fotos, relatórios e extrações dela no Google Drive.', sim: 'Compartilhar' }))) return;
+    try { const r = await Api.run('compartilharPastaEmpresa', { id: el.dataset.id }); toast('Pasta compartilhada com ' + plural(r.compartilhados, 'pessoa'), 'ok'); } catch (x) { toast(x.message, 'err'); }
+  },
+  equipeForm(el) { const id = el.dataset && el.dataset.id; Views.equipeForm(id ? App._eqc.equipes.find(q => q.id === id) : null); },
+  async eqAqui() { const p = await Geo.get(8000); if (!p) return toast('Localização indisponível', 'warn'); $('#eqLat').value = p.lat.toFixed(6); $('#eqLng').value = p.lng.toFixed(6); },
+  uFiltro(el) { App._uf[el.dataset.k] = el.dataset.v; Views.usuariosRender(); },
+  usuarioNovo() { Views.formUsuario(null); },
+  usuarioEditar(el) { Views.formUsuario(App._usr.usuarios.find(u => u.id === el.dataset.id)); },
+  perfilForm(el) { Views.perfilForm(App._pf.perfis.find(p => p.id === el.dataset.id)); },
+  perfilDuplicar(el) { const p = App._pf.perfis.find(x => x.id === el.dataset.id); Views.perfilForm(Object.assign({}, p, { id: '', nome: p.nome + ' (cópia)', padrao: false })); },
+  async perfilRestaurar(el) {
+    if (!(await confirmar({ titulo: 'Restaurar o perfil padrão?', texto: 'As funções deste perfil voltam ao original do sistema.', sim: 'Restaurar' }))) return;
+    try { await Api.run('restaurarPerfil', { id: el.dataset.id }); Dados.limpar('perfis'); App.rerender(); toast('Perfil restaurado', 'ok'); } catch (x) { toast(x.message, 'err'); }
+  },
+  async perfilExcluir(el) {
+    if (!(await confirmar({ titulo: 'Excluir este perfil?', sim: 'Excluir', perigo: true }))) return;
+    try { await Api.run('excluirPerfil', { id: el.dataset.id }); Dados.limpar('perfis'); App.rerender(); } catch (x) { toast(x.message, 'err', 4000); }
+  },
+  psSemLogo() { App._ps.logo = ''; $('#psLogo').innerHTML = LOGO; },
+  async psSalvar(el) {
+    const valores = {};
+    $$('.psCfg').forEach(i => { valores[i.dataset.chave] = i.value.trim(); });
+    const fat = {};
+    $$('.psFator').forEach(i => { if (Number(i.value)) fat[i.dataset.t] = Number(i.value); });
+    valores.FATORES_BTU_M2 = JSON.stringify(fat);
+    carregando(el, true, 'Salvando');
+    try { await Api.run('salvarConfig', { valores: valores, logo: App._ps.logo }); carregando(el, false); toast('Personalização salva', 'ok'); Dados.limpar('configAdmin'); App.refresh(); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  consSet(el) { App._cons.status = el.dataset.v; App.rerender(); },
+  consOrc(el) { App._cons.orc = el.dataset.v; App.rerender(); },
+  exSet(el) { Views.exFiltros(); App._ex[el.dataset.k] = el.dataset.v; App.rerender(); },
+  async exVer(el) {
+    carregando(el, true);
+    try {
+      const t = await Api.run('extrair', Views.exFiltros());
+      App._exT = t; carregando(el, false);
+      encher('#exBox', '<div class="row" style="justify-content:space-between;margin-bottom:8px"><b>' + esc(t.titulo) + ' · ' + plural(t.total, 'linha') + '</b>' + (t.total > 200 ? '<span class="muted small">mostrando 200 · baixe o CSV para ver tudo</span>' : '') + '</div>' +
+        '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table class="tabela"><tr>' + t.colunas.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>' +
+        t.linhas.slice(0, 200).map(l => '<tr>' + l.map(v => '<td>' + esc(typeof v === 'number' ? fmt(v, v % 1 ? 2 : 0) : v) + '</td>').join('') + '</tr>').join('') + '</table></div>');
+    } catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  async exCsv(el) {
+    carregando(el, true);
+    try {
+      const t = await Api.run('extrair', Views.exFiltros());
+      carregando(el, false);
+      baixarDataUrl('data:text/csv;charset=utf-8,' + encodeURIComponent(csvDe(t)), 'VistAR_' + App._ex.conjunto + '_' + hojeISO() + '.csv');
+      toast(plural(t.total, 'linha') + ' exportadas', 'ok');
+    } catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  async exPlanilha(el) {
+    carregando(el, true, 'Gerando');
+    try { const r = await Api.run('extrair', Object.assign(Views.exFiltros(), { planilha: true })); carregando(el, false); toast('Planilha criada com ' + plural(r.linhas, 'linha'), 'ok'); abrirExterno(r.url);
+      encher('#exBox', '<div class="warn-box" style="background:var(--green-l);color:var(--green)">Planilha Google criada: <a href="' + r.url + '" target="_blank">abrir</a></div>'); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  asSet(el) { App._as[el.dataset.k] = el.dataset.v; Views.asRender(); },
+  asAdd(el) { vib(); App._as.sel.push(el.dataset.id); Views.asRender(); },
+  asTirar(el) { App._as.sel = App._as.sel.filter(i => i !== el.dataset.id); Views.asRender(); },
+  asMover(el) {
+    const A = App._as, i = A.sel.indexOf(el.dataset.id), j = i + Number(el.dataset.d);
+    if (j < 0 || j >= A.sel.length) return;
+    A.sel.splice(i, 1); A.sel.splice(j, 0, el.dataset.id); Views.asRender();
+  },
+  asProximas() {
+    const A = App._as, r = App._asD;
+    const n = Math.max(1, Number(A.porDia) || 2);
+    let ref = Views.asPartida() || (A.sel.length ? r.escolas.find(e => e.id === A.sel[A.sel.length - 1]) : null);
+    for (let k = 0; k < n; k++) {
+      const livres = r.escolas.filter(e => A.sel.indexOf(e.id) < 0 && e.lat && (!A.dre || e.dre === A.dre) && !e.programada);
+      if (!livres.length) break;
+      if (!ref) ref = livres.sort((a, b) => (a.ordemSme || 999) - (b.ordemSme || 999))[0];
+      const prox = livres.sort((a, b) => kmEntre(ref, a) - kmEntre(ref, b))[0];
+      A.sel.push(prox.id); ref = prox;
+    }
+    Views.asRender();
+  },
+  asSugerir() {
+    const A = App._as, r = App._asD;
+    const sel = A.sel.map(id => r.escolas.find(e => e.id === id)).filter(Boolean);
+    A.sel = Roteiro.ordenar(sel, Views.asPartida()).map(e => e.id);
+    toast('Ordem pelo menor deslocamento', 'ok', 1500); Views.asRender();
+  },
+  asMaps() {
+    const A = App._as, r = App._asD, partida = Views.asPartida();
+    const pts = A.sel.map(id => r.escolas.find(e => e.id === id)).filter(e => e && e.lat).map(e => e.lat + ',' + e.lng);
+    if (!pts.length) return;
+    abrirExterno('https://www.google.com/maps/dir/?api=1&travelmode=driving' + (partida ? '&origin=' + partida.lat + ',' + partida.lng : '') + '&destination=' + pts[pts.length - 1] + (pts.length > 1 ? '&waypoints=' + encodeURIComponent(pts.slice(0, -1).join('|')) : ''));
+  },
+  async asSalvar(el) {
+    const A = App._as;
+    if (!A.equipeId) return toast('Escolha a equipe.', 'warn');
+    const eq = (App._asD.equipes.find(e => e.id === A.equipeId) || {}).nome;
+    if (!(await confirmar({ titulo: 'Salvar na programação?', texto: plural(A.sel.length, 'escola') + ' para a <b>' + esc(eq) + '</b> em ' + plural(A.dias.length, 'dia') + ' (a partir de ' + dataBR(A.dias[0].data) + '). As outras visitas agendadas desses dias para a equipe continuam.', sim: 'Salvar' }))) return;
+    carregando(el, true, 'Salvando');
+    try {
+      for (const d of A.dias) await Api.run('salvarRoteiro', { equipeId: A.equipeId, data: d.data, itens: d.itens.map(x => ({ escolaId: x.e.id, hora: x.ini, horaFim: x.fim })), substituir: false });
+      carregando(el, false); toast('Roteiro salvo na programação', 'ok');
+      A.sel = []; Dados.limpar('candidatos'); Dados.limpar('prog'); App.refresh();
+      Router.go('programacao', { modo: A.dias.length > 1 ? 'semana' : 'dia', ref: A.dias[0].data, equipeId: A.equipeId });
+    } catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  async manualBaixar(el) {
+    carregando(el, true, 'Gerando PDF');
+    try { const r = await Api.run('manual', { tipo: el.dataset.tipo }); carregando(el, false); if (!baixarBase64(r.base64, r.nome)) toast('Não foi possível baixar aqui.', 'warn'); }
+    catch (x) { carregando(el, false); toast(x.message, 'err'); }
+  }
+});
+
+/* Configurações: ajuda com manual e guia do perfil. */
+Views.configuracoes = (orig => function () {
+  const out = orig();
+  out.body = out.body.replace('<button class="btn btn-out-red btn-lg" data-act="sair">',
+    '<section class="card"><div class="kh">Ajuda</div><div class="grid2 mt"><button class="btn btn-out btn-sm" style="width:100%" data-act="manualBaixar" data-tipo="guia">' + I('file', 16) + ' Guia rápido (PDF)</button>' +
+    '<button class="btn btn-out btn-sm" style="width:100%" data-act="manualBaixar" data-tipo="manual">' + I('doc', 16) + ' Manual do usuário (PDF)</button></div></section><button class="btn btn-out-red btn-lg" data-act="sair">');
+  return out;
+})(Views.configuracoes);
+
+/* Ficha da escola: dados da SME (prioridade, temperatura, ambientes e áreas). */
+Views.escolaSme = e => {
+  if (!e || !(e.tempMax || e.salas || e.areaAmbientes)) return '';
+  const l = (k, v) => v || v === 0 ? '<div><small>' + k + '</small><b>' + v + '</b></div>' : '';
+  return '<section class="card"><div class="kh">Dados da SME</div>' + (e.obsSme ? '<div class="warn-box" style="margin:8px 0">' + esc(e.obsSme) + '</div>' : '') +
+    '<div class="kv2" style="border:0;margin:6px 0 0;padding:6px 0">' + l('Prioridade na lista', e.ordemSme) + l('Temp. máx. média', e.tempMax ? fmt(e.tempMax, 1) + ' °C' : '') +
+    l('Salas de aula', e.salas ? e.salas + ' · ' + fmt(e.areaSalas) + ' m²' : '') + l('Ambientes (EOL)', e.ambientesPrevistos ? e.ambientesPrevistos + ' · ' + fmt(e.areaAmbientes) + ' m²' : '') +
+    l('Salas/labs/recursos (G1)', e.g1Qtd ? e.g1Qtd + ' · ' + fmt(e.g1Area) + ' m²' : '') + l('Biblioteca/auditório (G2)', e.g2Qtd ? e.g2Qtd + ' · ' + fmt(e.g2Area) + ' m²' : '') +
+    l('Administrativo (G3)', e.g3Qtd ? e.g3Qtd + ' · ' + fmt(e.g3Area) + ' m²' : '') + l('Código INEP', e.inep) + l('Distrito', e.distrito) + l('Subprefeitura', e.subprefeitura) + '</div>' +
+    (e.notas ? '<p class="muted small" style="margin:6px 0 0">' + esc(e.notas) + '</p>' : '') + '</section>';
+};
+Views.escola = (orig => function (p) {
+  const out = orig(p);
+  const after = out.after;
+  out.body = out.body.replace('id="escBox"', 'id="escBox" class="grade full"');
+  out.after = function () {
+    after();
+    const tenta = () => { const box = $('#escBox'); const r = Dados.mem['esc:' + p.id]; if (box && r && !$('#escSme')) { const c = Views.escolaSme(r.escola); if (c) box.insertAdjacentHTML('beforeend', c.replace('<section class="card">', '<section class="card" id="escSme">')); } };
+    setTimeout(tenta, 50); setTimeout(tenta, 1500); setTimeout(tenta, 4000);
+  };
+  return out;
+})(Views.escola);
+</script>
+
+  <script>
+'use strict';
+/* ═══════════════════════ VistAR · orçamentos ═══════════════════════
+   Vistoria finalizada → Aguardando atribuição → Em elaboração → Em aprovação → Orçamento finalizado
+   (o gestor pode devolver para revisão; cada envio é uma revisão v1, v2… com valores e documentos). */
+
+ICONS.money = '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/>';
+
+const ORC_ST = {
+  aguardando: ['Aguardando atribuição', 'b-gray', 'var(--c-ni)'],
+  em_andamento: ['Em elaboração', 'b-blue', 'var(--c-and)'],
+  em_aprovacao: ['Em aprovação', 'b-amber', 'var(--c-ag)'],
+  revisao: ['Em revisão', 'b-red', 'var(--c-ret)'],
+  finalizado: ['Orçamento finalizado', 'b-green', 'var(--c-ok)'],
+  cancelado: ['Cancelado', 'b-gray', 'var(--muted-2)']
+};
+const ORC_ORDEM = ['aguardando', 'em_andamento', 'revisao', 'em_aprovacao', 'finalizado'];
+const MAX_DOC_MB = 10;
+const brl = n => 'R$ ' + fmt(n, 2);
+/** "12.345,67" ou "12345.67" → número. */
+const moedaNum = s => {
+  s = String(s || '').replace(/[^\d,.-]/g, '');
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return isNaN(n) ? 0 : n;
+};
+const orcBadge = st => { const s = ORC_ST[st] || ORC_ST.aguardando; return '<span class="badge ' + s[1] + '">' + s[0] + '</span>'; };
+App.verOrcamentos = () => App.pode('orcamentos.ver') || App.pode('orcamentos.elaborar');
+
+/* ───── Painel: bloco de orçamentos (painel do contrato e do escritório) ───── */
+Views.orcPainel = o => {
+  if (!o) return '';
+  const c = o.cont || {}, tot = ORC_ORDEM.reduce((s, k) => s + (c[k] || 0), 0);
+  const tile = (st, rot, sub) => '<button class="card kpi-mini orc-kpi" style="margin:0;padding:12px;text-align:left;border-left:4px solid ' + ORC_ST[st][2] + '" data-act="orcIr" data-v="' + st + '"><div class="kh">' + rot + '</div><b>' + (c[st] || 0) + '</b><small class="muted">' + sub + '</small></button>';
+  return '<section class="card"><div class="card-h"><span><h3>Orçamentos</h3><div class="muted small">' + plural(tot, 'escola') + ' com vistoria finalizada' + (o.atrasados ? ' · <b class="c-red">' + plural(o.atrasados, 'atrasado') + '</b>' : '') + '</div></span>' +
+      '<button class="link" data-act="go" data-to="orcamentos">Ver todos</button></div>' +
+    '<div class="grade-kpi">' +
+      tile('aguardando', 'A atribuir', 'aguardando orçamentista') + tile('em_andamento', 'Em elaboração', (c.revisao ? c.revisao + ' em revisão' : 'com orçamentista')) +
+      tile('em_aprovacao', 'Em aprovação', brl(o.valorEmAprovacao)) + tile('finalizado', 'Finalizados', brl(o.valorFinalizado)) + '</div>' +
+    (tot ? '<div class="stack mt">' + ORC_ORDEM.filter(k => c[k]).map(k => '<div style="flex:' + c[k] + ';background:' + ORC_ST[k][2] + '" title="' + ORC_ST[k][0] + ': ' + c[k] + '">' + (c[k] / tot >= 0.12 ? c[k] : '') + '</div>').join('') + '</div>' +
+      '<div class="leg">' + ORC_ORDEM.map(k => '<span><i style="background:' + ORC_ST[k][2] + '"></i>' + ORC_ST[k][0] + ' · ' + (c[k] || 0) + '</span>').join('') + '</div>' : '') + '</section>';
+};
+
+/* ───── Lista ───── */
+Views.orcamentos = p => {
+  const st = App._orc = App._orc || { f: '', busca: '', dre: '' };
+  if (p && p.f !== undefined) st.f = p.f;
+  return {
+    header: App.escritorio() ? Views.hdrApp() : Views.hdrNavy('Gestão', 'Orçamentos'),
+    body: '<div id="orcKpi" class="full"></div><div class="search full">' + I('search', 20) + '<input class="inp" id="orcBusca" placeholder="Buscar escola, código ou orçamentista" value="' + esc(st.busca) + '"></div>' +
+      '<div id="orcChips" class="fchips full"></div><div id="orcBox" class="full">' + SKEL + '</div>',
+    nav: App.escritorio() ? 'orcamentos' : null,
+    after() {
+      const b = $('#orcBusca');
+      b.oninput = () => { st.busca = b.value; clearTimeout(b._t); b._t = setTimeout(() => Views.orcRender(), 150); };
+      Dados.obter('orc:lista', 'orcamentos', {}, (r, c, e) => { App._orcD = r; if (!r) return encher('#orcBox', erroBox(e)); Views.orcRender(); }, { semLS: true });
+    }
+  };
+};
+Views.orcRender = () => {
+  const r = App._orcD, st = App._orc;
+  if (!r || !$('#orcBox')) return;
+  const eu_ = eu().id;
+  const n = r.contagem;
+  encher('#orcKpi', '<div class="grade-kpi" style="margin-bottom:14px">' +
+    [['aguardando', 'A atribuir', n.aguardando, 'aguardando orçamentista'], ['em_andamento', 'Em elaboração', n.em_andamento + n.revisao, n.revisao ? n.revisao + ' em revisão' : 'com orçamentista'],
+      ['em_aprovacao', 'Em aprovação', n.em_aprovacao, brl(r.totais.emAprovacao)], ['finalizado', 'Finalizados', n.finalizado, brl(r.totais.finalizado)]]
+      .map(k => '<div class="card kpi-mini" style="margin:0;padding:12px;border-left:4px solid ' + ORC_ST[k[0]][2] + '"><div class="kh">' + k[1] + '</div><b>' + k[2] + '</b><small class="muted">' + k[3] + '</small></div>').join('') + '</div>');
+  const atras = r.itens.filter(o => o.atrasado).length, meus = r.itens.filter(o => o.responsavelId === eu_ && ['em_andamento', 'revisao'].indexOf(o.status) >= 0).length;
+  const chips = [['', 'Todos · ' + r.itens.length]].concat(r.podeElaborar ? [['meus', 'Meus em aberto · ' + meus]] : []).concat(ORC_ORDEM.concat(['cancelado']).filter(k => n[k]).map(k => [k, ORC_ST[k][0] + ' · ' + n[k]]))
+    .concat(atras ? [['atrasados', 'Atrasados · ' + atras]] : []);
+  encher('#orcChips', chips.map(x => '<button class="chip dark' + (st.f === x[0] ? ' on' : '') + '" data-act="orcF" data-v="' + x[0] + '">' + esc(x[1]) + '</button>').join(''));
+  const q = norm(st.busca);
+  const l = r.itens.filter(o => (!st.f || o.status === st.f || (st.f === 'atrasados' && o.atrasado) || (st.f === 'meus' && o.responsavelId === eu_ && ['em_andamento', 'revisao'].indexOf(o.status) >= 0)) &&
+    (st.f === 'cancelado' || st.f === '' || o.status !== 'cancelado') &&
+    (!q || norm([o.escola, o.codigo, o.responsavel, o.dre].join(' ')).indexOf(q) >= 0));
+  const prazo = o => o.prazo ? '<span class="' + (o.atrasado ? 'c-red' : '') + '">' + dataBR(o.prazo) + (o.atrasado ? ' · atrasado' : '') + '</span>' : '';
+  const abrir = o => 'data-act="go" data-to="orcamento" data-p=\'' + JSON.stringify({ id: o.id }) + '\'';
+  encher('#orcBox', !l.length ? '<div class="empty">' + I('money', 36) + '<div><b>Nenhum orçamento aqui</b></div><div class="small">' + (r.itens.length ? 'Mude o filtro ou a busca.' : 'Os orçamentos aparecem quando uma vistoria é finalizada.') + '</div></div>' :
+    '<div class="tabela-wrap so-pc"><table class="tabela"><tr><th>Escola</th><th>DRE</th><th>Vistoria</th><th>Orçamentista</th><th>Prazo</th><th class="n">Valor</th><th>Status</th><th></th></tr>' +
+      l.map(o => '<tr><td><b>' + esc(o.escola) + '</b>' + (o.empresa ? '<br><span class="muted small">' + esc(o.empresa) + '</span>' : '') + '</td><td>' + esc(o.dre) + '</td><td>' + esc(o.codigo) + '<br><span class="muted small">' + dataBR(o.vistoriaEm) + '</span></td>' +
+        '<td>' + esc(o.responsavel || '—') + '</td><td>' + prazo(o) + '</td><td class="n">' + (o.valor ? brl(o.valor) + '<br><span class="muted small">v' + o.versao + '</span>' : '—') + '</td><td>' + orcBadge(o.status) + '</td>' +
+        '<td><button class="btn btn-out btn-sm" ' + abrir(o) + '>Abrir</button></td></tr>').join('') + '</table></div>' +
+    '<div class="so-cel">' + l.map(o => '<button class="sch" ' + abrir(o) + '><span style="flex:1;min-width:0"><h4>' + esc(o.escola) + '</h4><div class="ad">' + esc([o.codigo, o.dre, o.responsavel].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="tags">' + orcBadge(o.status) + (o.valor ? '<span class="tag b-gray">' + brl(o.valor) + '</span>' : '') + (o.prazo ? '<span class="tag ' + (o.atrasado ? 'b-red' : 'b-gray') + '">prazo ' + dataBR(o.prazo) + '</span>' : '') + '</div></span><span class="chev">' + I('right') + '</span></button>').join('') + '</div>');
+};
+
+/* ───── Detalhe ───── */
+Views.orcamento = p => ({
+  header: Views.hdrNavy('Orçamento', '', '<span id="orcSt"></span>'),
+  body: '<div id="orcDet">' + SKEL + '</div>',
+  footOne: true,
+  foot: '<div id="orcFoot"></div>',
+  after() {
+    Dados.obter('orc:' + p.id, 'orcamento', { id: p.id }, (o, c, e) => {
+      if (!o) return encher('#orcDet', erroBox(e));
+      App._orcAtual = o;
+      $('.whdr .ttl').textContent = o.escola;
+      encher('#orcSt', orcBadge(o.status));
+      const t = o.tecnico;
+      const passos = ['aguardando', 'em_andamento', 'em_aprovacao', 'finalizado'];
+      const at = o.status === 'revisao' ? 1 : passos.indexOf(o.status);
+      encher('#orcDet', '<div class="grade duas">' +
+        '<section class="card"><div class="kh">Situação</div>' +
+          '<div class="orc-passos">' + passos.map((s, i) => '<div class="' + (i < at || o.status === 'finalizado' ? 'ok' : i === at ? 'atual' : '') + '"><i></i><span>' + (s === 'em_andamento' && o.status === 'revisao' ? 'Em revisão' : ORC_ST[s][0]) + '</span></div>').join('') + '</div>' +
+          '<div class="kpi3 mt">' + [['Valor', o.valor ? brl(o.valor) : '—'], ['Revisão', o.versao ? 'v' + o.versao : '—'], ['Prazo', o.prazo ? dataBR(o.prazo) : '—']]
+            .map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b style="font-size:17px">' + k[1] + '</b></div>').join('') + '</div>' +
+          '<div class="doc-row"><span><b>' + esc(o.responsavel || 'Sem orçamentista') + '</b><small>Orçamentista responsável' + (o.atrasado ? ' · <span class="c-red">prazo vencido</span>' : '') + '</small></span></div>' +
+          (o.aprovadoPor ? '<div class="doc-row"><span><b>Aprovado por ' + esc(o.aprovadoPor) + '</b><small>' + dataBR(o.aprovadoEm, true) + ' · ' + hora(o.aprovadoEm) + '</small></span><span class="badge b-green">Aprovado</span></div>' : '') +
+          '<div class="doc-row"><span><b>Vistoria ' + esc(o.codigo) + '</b><small>DRE ' + esc(o.dre) + ' · finalizada em ' + dataBR(o.vistoriaEm, true) + (o.empresa ? ' · ' + esc(o.empresa) : '') + '</small></span>' +
+            '<button class="btn btn-out btn-sm" data-act="go" data-to="vistoria" data-p=\'' + JSON.stringify({ id: o.vistoriaId }) + '\'>Abrir</button></div></section>' +
+        (t ? '<section class="card"><div class="kh">Base técnica da vistoria</div><div class="kpi3 mt" style="margin-bottom:10px">' +
+            [['Área climatizável', fmt(t.areaClim, 0) + ' m²'], ['Carga térmica', fmt(t.tr, 1) + ' TR'], ['Potência AC', fmt(t.kwAc, 1) + ' kW']]
+              .map(k => '<div style="background:var(--field);box-shadow:none;text-align:center"><small>' + k[0] + '</small><b style="font-size:17px">' + k[1] + '</b></div>').join('') + '</div>' +
+            '<div class="doc-row"><span><b>' + plural(t.ambientes, 'ambiente') + (t.externos ? ' + ' + t.externos + ' áreas externas' : '') + '</b><small>Área total ' + fmt(t.area, 0) + ' m²</small></span></div>' +
+            '<div class="doc-row"><span><b>Entrada de energia' + (t.padrao ? ' · ' + esc(t.padrao) : '') + '</b><small>' + (t.kwEntrada ? 'Capacidade ' + fmt(t.kwEntrada, 1) + ' kW' : 'Capacidade não informada') + '</small></span>' +
+              (t.kwEntrada ? '<span class="badge ' + (t.suporta ? 'b-green">Comporta' : 'b-red">Requer aumento') + '</span>' : '') + '</div>' +
+            '<div class="grid2 mt"><button class="btn btn-out btn-sm" data-act="go" data-to="relatorio" data-p=\'' + esc(JSON.stringify({ tipo: 'completo', vistoriaId: o.vistoriaId, escolaId: o.escolaId })) + '\'>Relatório completo</button>' +
+              '<button class="btn btn-out btn-sm" data-act="go" data-to="galeriaEscola" data-p=\'' + JSON.stringify({ escolaId: o.escolaId }) + '\'>Fotos</button></div></section>' : '') +
+        '</div>' +
+        '<section class="card"><div class="card-h"><h3>Revisões</h3><span class="muted small">' + plural(o.revisoes.length, 'envio') + '</span></div>' +
+          (o.revisoes.length ? o.revisoes.map(r => '<div class="orc-rev"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><b>v' + r.versao + ' · ' + brl(r.valor) + '</b>' +
+              '<span class="badge ' + ({ aprovada: 'b-green">Aprovada', devolvida: 'b-red">Devolvida', em_analise: 'b-amber">Em análise' })[r.status] + '</span></div>' +
+            '<div class="muted small">Enviada por ' + esc(r.enviadoPor) + ' · ' + dataBR(r.enviadoEm, true) + ' ' + hora(r.enviadoEm) + '</div>' +
+            '<div class="orc-grupos">' + r.grupos.filter(g => g[1]).map(g => '<span>' + esc(g[0]) + '<b>' + brl(g[1]) + '</b></span>').join('') + '</div>' +
+            (r.notas ? '<p class="small" style="margin:6px 0">' + esc(r.notas) + '</p>' : '') +
+            '<div class="orc-arqs">' + r.arquivos.map(a => '<button class="chip" data-act="abrirUrl" data-url="' + esc(a.url) + '">' + I('file', 16) + ' ' + esc(a.nome) + '</button>').join('') + '</div>' +
+            (r.parecer ? '<div class="warn-box" style="margin:8px 0 0;' + (r.status === 'aprovada' ? 'background:var(--green-l);color:var(--green)' : 'background:var(--red-l);color:var(--red)') + '"><b>Parecer de ' + esc(r.parecerPor) + ':</b> ' + esc(r.parecer) + '</div>' : '') + '</div>').join('')
+            : '<p class="muted small" style="margin:0">Nenhuma revisão enviada ainda. O orçamentista envia os valores e os documentos (planilha, PDF) para aprovação.</p>') + '</section>' +
+        '<section class="card"><div class="kh">Histórico</div>' + o.historico.map(h => '<div class="sum-row"><i style="width:12px;height:12px;border-radius:50%;flex:none;background:' + (ORC_ST[h.status] || ORC_ST.aguardando)[2] + '"></i><span><b>' + esc(h.nota || (ORC_ST[h.status] || [''])[0]) + '</b><small>' +
+          dataBR(h.em, true) + ' · ' + hora(h.em) + (h.por ? ' · ' + esc(h.por) : '') + '</small></span></div>').join('') + '</section>');
+      const pd = o.pode, bt = [];
+      if (pd.atribuir) bt.push('<button class="btn btn-out" data-act="orcAtribuir">' + I('user', 18) + ' ' + (o.responsavelId ? 'Reatribuir' : 'Atribuir orçamentista') + '</button>');
+      if (pd.elaborar) bt.push('<button class="btn btn-teal" data-act="orcEnviar">' + I('up', 18) + ' ' + (o.status === 'revisao' ? 'Enviar nova revisão' : 'Enviar orçamento') + '</button>');
+      if (pd.aprovar) bt.push('<button class="btn btn-out-red" data-act="orcDecidir" data-d="devolver">Devolver para revisão</button>', '<button class="btn btn-teal" data-act="orcDecidir" data-d="aprovar">' + I('check', 18) + ' Aprovar orçamento</button>');
+      if (pd.reabrir) bt.push('<button class="btn btn-out" data-act="orcDecidir" data-d="reabrir">' + I('refresh', 18) + ' Reabrir para revisão</button>');
+      encher('#orcFoot', bt.length > 1 ? '<div class="grid2">' + bt.join('') + '</div>' : bt.length ? bt[0].replace('<button ', '<button style="width:100%" ') : '');
+    }, { semLS: true });
+  }
+});
+
+/** Cartão do orçamento no detalhe da vistoria. */
+Views.orcCartao = o => !o ? '' : '<section class="card"><div class="kh">Orçamento</div><div class="doc-row"><span><b>' + (ORC_ST[o.status] || ORC_ST.aguardando)[0] + '</b><small>' +
+  (o.valor ? brl(o.valor) + ' · revisão v' + o.versao : 'Sem valores ainda') + '</small></span><button class="btn btn-out btn-sm" data-act="go" data-to="orcamento" data-p=\'' + JSON.stringify({ id: o.id }) + '\'>Abrir</button></div></section>';
+
+/* ───── Formulários ───── */
+Views.orcAtribuirForm = () => {
+  const o = App._orcAtual;
+  if (!o.orcamentistas.length) return toast('Nenhum usuário com perfil de orçamentista no seu escopo. Cadastre em Usuários e acessos.', 'warn', 5000);
+  Sheet.open('<h3>Atribuir orçamento</h3><p class="muted small">' + esc(o.escola) + '</p>' +
+    '<span class="lbl">Orçamentista</span><select class="inp" id="oaResp">' + opcoes(o.orcamentistas.map(x => [x.id, x.nome]), o.responsavelId, 'Escolha…') + '</select>' +
+    '<div class="mt">' + campo('oaPrazo', 'Prazo de entrega', o.prazo || somaDiasISO(hojeISO(), 5), { type: 'date' }) + '</div>' +
+    '<p class="muted small">O orçamentista recebe um e-mail e passa a ver este orçamento. O status vai para <b>Em elaboração</b>.</p>' +
+    '<button class="btn btn-navy mt" style="width:100%" data-act="orcAtribuirOk">Atribuir</button>');
+};
+const somaDiasISO = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); while (x.getDay() === 0 || x.getDay() === 6) x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); };
+
+Views.orcEnviarForm = () => {
+  const o = App._orcAtual;
+  const ult = o.revisoes[0];
+  App._orcArqs = [];
+  Sheet.open('<h3>' + (o.status === 'revisao' ? 'Nova revisão' : 'Enviar orçamento') + ' · v' + (o.versao + 1) + '</h3><p class="muted small">' + esc(o.escola) + '</p>' +
+    (o.status === 'revisao' && ult && ult.parecer ? '<div class="warn-box" style="background:var(--red-l);color:var(--red)"><b>O que revisar:</b> ' + esc(ult.parecer) + '</div>' : '') +
+    '<div class="grid2">' + o.grupos.map((g, i) => campo('ov' + i, esc(g[1]) + ' (R$)', ult ? fmt((ult.grupos[i] || [])[1] || 0, 2) : '', { im: 'decimal', ph: '0,00' })).join('') + '</div>' +
+    '<div class="row mt" style="justify-content:space-between"><span class="muted">Total</span><b id="ovTot" style="font-size:20px">' + brl(0) + '</b></div>' +
+    '<div class="fld mt"><span class="lbl">Observações</span><textarea class="inp" id="ovNotas" rows="3" placeholder="Premissas, exclusões, validade da proposta…"></textarea></div>' +
+    '<label class="btn btn-out-teal mt" style="cursor:pointer;width:100%">' + I('up', 18) + ' Anexar documentos<input type="file" id="ovArq" multiple accept=".pdf,.xlsx,.xls,.csv,.doc,.docx,.zip,.dwg,image/*" class="hidden"></label>' +
+    '<div id="ovLista" class="orc-arqs mt"></div><p class="muted small">Planilha de orçamento, memorial, PDF da proposta… até ' + MAX_DOC_MB + ' MB cada. Ficam na pasta da empresa no Google Drive (Orçamentos › escola › versão).</p>' +
+    '<button class="btn btn-teal mt" style="width:100%" data-act="orcEnviarOk">' + I('up', 18) + ' Enviar para aprovação</button>');
+  const tot = () => { $('#ovTot').textContent = brl(o.grupos.reduce((s, g, i) => s + moedaNum(valor('ov' + i)), 0)); };
+  o.grupos.forEach((g, i) => { $('#ov' + i).oninput = tot; });
+  tot();
+  $('#ovArq').onchange = ev => {
+    Array.from(ev.target.files || []).forEach(f => {
+      if (f.size > MAX_DOC_MB * 1048576) return toast(f.name + ': maior que ' + MAX_DOC_MB + ' MB', 'warn', 4000);
+      App._orcArqs.push(f);
+    });
+    ev.target.value = '';
+    Views.orcListaArqs();
+  };
+};
+Views.orcListaArqs = () => encher('#ovLista', App._orcArqs.map((f, i) => '<span class="chip on">' + I('file', 16) + ' ' + esc(f.name) + ' · ' + (f.size < 1048576 ? Math.max(1, Math.round(f.size / 1024)) + ' KB' : fmt(f.size / 1048576, 1) + ' MB') + ' <button class="link" data-act="orcTirarArq" data-i="' + i + '" aria-label="Remover">✕</button></span>').join(''));
+
+const lerDataUrl = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('Não foi possível ler ' + f.name)); r.readAsDataURL(f); });
+
+Views.orcDecidirForm = d => {
+  const o = App._orcAtual;
+  const t = { aprovar: ['Aprovar orçamento', 'A revisão v' + o.versao + ' (' + brl(o.valor) + ') passa a ser o orçamento finalizado.', 'Parecer (opcional)', 'Aprovar', 'btn-teal'],
+    devolver: ['Devolver para revisão', 'O orçamentista recebe o seu parecer por e-mail e envia uma nova revisão.', 'O que precisa ser revisto?', 'Devolver', 'btn-out-red'],
+    reabrir: ['Reabrir orçamento', 'O orçamento finalizado volta para revisão. O histórico e as versões anteriores ficam guardados.', 'Motivo da reabertura', 'Reabrir', 'btn-navy'] }[d];
+  Sheet.open('<h3>' + t[0] + '</h3><p class="muted small">' + esc(o.escola) + ' · ' + t[1] + '</p><div class="fld"><span class="lbl">' + t[2] + '</span><textarea class="inp" id="odParecer" rows="4"></textarea></div>' +
+    '<button class="btn ' + t[4] + ' mt" style="width:100%" data-act="orcDecidirOk" data-d="' + d + '">' + t[3] + '</button>');
+};
+
+Object.assign(Act, {
+  orcIr(el) { App._orc = Object.assign(App._orc || { busca: '', dre: '' }, { f: el.dataset.v }); App.go('orcamentos'); },
+  orcF(el) { App._orc.f = el.dataset.v; Views.orcRender(); },
+  orcAtribuir() { Views.orcAtribuirForm(); },
+  async orcAtribuirOk(el) {
+    const o = App._orcAtual, resp = valor('oaResp');
+    if (!resp) return toast('Escolha o orçamentista', 'warn');
+    carregando(el, true);
+    try { await Api.run('atribuirOrcamento', { id: o.id, responsavelId: resp, prazo: valor('oaPrazo') }); Sheet.close(true); toast('Orçamento atribuído', 'ok'); Dados.limpar('orc:'); App.rerender(); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  },
+  orcEnviar() { Views.orcEnviarForm(); },
+  orcTirarArq(el) { App._orcArqs.splice(Number(el.dataset.i), 1); Views.orcListaArqs(); },
+  async orcEnviarOk(el) {
+    const o = App._orcAtual, valores = {};
+    o.grupos.forEach((g, i) => { valores[g[0]] = moedaNum(valor('ov' + i)); });
+    if (!o.grupos.some(g => valores[g[0]] > 0)) return toast('Informe os valores do orçamento', 'warn');
+    if (!App._orcArqs.length) return toast('Anexe pelo menos um documento', 'warn');
+    const notas = valor('ovNotas');
+    try {
+      const arquivos = [];
+      for (let i = 0; i < App._orcArqs.length; i++) {
+        const f = App._orcArqs[i];
+        carregando(el, true, 'Enviando ' + (i + 1) + '/' + App._orcArqs.length);
+        const r = await Api.run('uploadDocOrcamento', { id: o.id, nome: f.name, mime: f.type, data: await lerDataUrl(f) });
+        arquivos.push({ fileId: r.fileId, nome: r.nome, url: r.url, bytes: r.bytes });
+      }
+      carregando(el, true, 'Registrando');
+      const r = await Api.run('enviarOrcamento', { id: o.id, valores: valores, notas: notas, arquivos: arquivos });
+      Sheet.close(true); toast('Revisão v' + r.versao + ' enviada para aprovação', 'ok'); Dados.limpar('orc:'); App.rerender();
+    } catch (x) { carregando(el, false); toast(x.message, 'err', 5000); }
+  },
+  orcDecidir(el) { Views.orcDecidirForm(el.dataset.d); },
+  async orcDecidirOk(el) {
+    const d = el.dataset.d, parecer = valor('odParecer');
+    if (d !== 'aprovar' && !parecer) return toast(d === 'devolver' ? 'Descreva o que precisa ser revisto' : 'Informe o motivo', 'warn');
+    carregando(el, true);
+    try { await Api.run('decidirOrcamento', { id: App._orcAtual.id, decisao: d, parecer: parecer }); Sheet.close(true);
+      toast({ aprovar: 'Orçamento aprovado e finalizado', devolver: 'Devolvido para revisão', reabrir: 'Orçamento reaberto' }[d], 'ok'); Dados.limpar('orc:'); Dados.limpar('painel'); App.rerender(); }
+    catch (x) { carregando(el, false); toast(x.message, 'err', 4000); }
+  }
 });
 </script>
 
