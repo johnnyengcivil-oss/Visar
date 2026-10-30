@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <div id="app">
+    <div id="hdr"></div>
+    <main id="main" class="main"></main>
+    <div id="foot"></div>
+  </div>
+  <div id="layer"></div>
+  <div class="toasts" id="toasts"></div>
+  <input type="file" id="cam" accept="image/*" capture="environment" class="hidden">
+  <input type="file" id="gal" accept="image/*" multiple class="hidden">
+  <script>window.__BOOT__ = <?!= boot ?>;</script>
+  <?!= include('App'); ?>
+  <?!= include('Vistoria'); ?>
+  <?!= include('Views'); ?>
+  <script>App.start();</script>
+</body>
+</html>

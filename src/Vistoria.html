@@ -1,0 +1,956 @@
+<script>
+'use strict';
+/* ═══════════════════════════ VistAR · vistoria ═══════════════════════════ */
+
+const ETAPAS = [
+  { k: 'dados', n: 'Dados', t: 'Dados da escola' },
+  { k: 'entrada', n: 'Entrada de energia', t: 'Entrada de energia' },
+  { k: 'estrutura', n: 'Estrutura', t: 'Estrutura' },
+  { k: 'eletrica', n: 'Elétrica', t: 'Elétrica' },
+  { k: 'ambientes', n: 'Ambientes', t: 'Ambientes' },
+  { k: 'equipamentos', n: 'Outros pontos', t: 'Equipamentos' },
+  { k: 'revisao', n: 'Revisão', t: 'Revisão final' }
+];
+const ETAPA = k => ETAPAS.find(e => e.k === k) || ETAPAS[0];
+const ROTULO_ETAPA = { dados: 'Dados', entrada: 'Entrada de energia', estrutura: 'Estrutura', eletrica: 'Elétrica', ambientes: 'Ambientes', equipamentos: 'Equipamentos', revisao: 'Revisão', geral: 'Fotos gerais', doc: 'Documentos', cancelamento: 'Cancelamento' };
+
+const TIPOS_AMB = ['Sala de aula', 'Sala de leitura', 'Biblioteca', 'Sala de informática', 'Laboratório', 'Sala dos professores', 'Secretaria',
+  'Diretoria', 'Coordenação', 'Auditório', 'Refeitório', 'Sala multiuso', 'Brinquedoteca', 'Sala de recursos', 'Enfermaria',
+  'Corredor', 'Escada', 'Banheiro', 'Depósito', 'Cozinha', 'Vestiário', 'Outro'];
+const TIPOS_EXT = ['Pátio coberto', 'Pátio descoberto', 'Quadra coberta', 'Quadra descoberta', 'Estacionamento', 'Playground', 'Entrada', 'Anexo', 'Edícula', 'Horta', 'Outro'];
+const SETOR_PARA_EXT = { 'Entrada': 'Entrada', 'Estacionamento': 'Estacionamento', 'Pátio': 'Pátio coberto', 'Quadra coberta': 'Quadra coberta', 'Anexo': 'Anexo', 'Edícula': 'Edícula', 'Playground': 'Playground' };
+const TUE_PADRAO = {
+  'Sala de aula': ['Computador', 'Projetor', 'Ventilador'], 'Sala de informática': ['Computador', 'Projetor'], 'Sala de leitura': ['Computador', 'Ventilador'],
+  'Biblioteca': ['Computador', 'Ventilador'], 'Secretaria': ['Computador', 'Impressora'], 'Diretoria': ['Computador'], 'Sala dos professores': ['Computador', 'Micro-ondas'],
+  'Auditório': ['Projetor'], 'Refeitório': ['Ventilador'], 'Cozinha': ['Geladeira', 'Micro-ondas']
+};
+const BLOCO = i => String.fromCharCode(65 + Number(i || 0));
+const PAV = p => Number(p) === 0 ? 'Térreo' : p + 'º';
+
+/* ───── Estado da vistoria ───── */
+const Vist = {
+  novo(e, pos) {
+    return {
+      id: uid(), codigo: '', escolaId: e.id, status: 'em_andamento', checkin: new Date().toISOString(), srv: false,
+      lat: pos ? pos.lat : '', lng: pos ? pos.lng : '', etapa: 'dados', ts: {}, fotos: {}, ui: { bloco: 0, pav: 0 },
+      d: this.padrao(e)
+    };
+  },
+  padrao(e) {
+    e = e || {};
+    return {
+      dados: {
+        nome: e.nome || '', cie: e.cie || '', dre: e.dre || '', etapaEnsino: e.etapaEnsino || '', logradouro: e.logradouro || '', numero: e.numero || '',
+        cep: e.cep || '', bairro: e.bairro || '', complemento: e.complemento || '', imovel: e.imovel || 'Próprio', idadeAnos: e.idadeAnos || '',
+        diretor: e.diretor || '', telefone: e.telefone || '', email: e.email || ''
+      },
+      entrada: { caboModo: 'diametro', cx1: {}, cx2: {}, cabos: {}, med: {}, cons: {}, consMT: {}, trafo: {} },
+      estrutura: { nBlocos: 1, blocos: [{ pav: 1, fachadas: {} }], setores: [], norte: 0, cons: {} },
+      eletrica: { blocos: [{ quadros: 1, cons: {} }] },
+      ambientes: { itens: [], pavOk: {} },
+      equipamentos: {
+        itens: [['Bomba de recalque', 1], ['Elevador', 1], ['Plataforma elevatória', 1], ['Exaustor', 1]]
+          .map(x => ({ id: uid(), nome: x[0], qtd: x[1], pot: '', un: 'CV', desc: false }))
+      },
+      revisao: { respNome: e.diretor || '', respCargo: e.diretor ? 'Diretor(a)' : '', respTel: e.telefone || '', respEmail: e.email || '' }
+    };
+  },
+  doServidor(s) {
+    const e = App.escola(s.escolaId) || { id: s.escolaId };
+    const V = { id: s.id, codigo: s.codigo, escolaId: s.escolaId, status: s.status, checkin: s.checkin, srv: true, etapa: 'dados', ts: {}, fotos: {}, ui: { bloco: 0, pav: 0 }, d: this.padrao(e) };
+    Object.keys(s.etapas || {}).forEach(k => { V.d[k] = Object.assign(V.d[k] || {}, s.etapas[k].dados || {}); V.ts[k] = s.etapas[k].ts; });
+    (s.fotos || []).forEach(f => { V.fotos[f.id] = Object.assign({}, f, { st: 'ok' }); });
+    return V;
+  },
+  /** Junta o que veio do servidor com o rascunho local (vence o mais recente por etapa). */
+  mesclar(s) {
+    const L = App.V;
+    const pendente = id => Sync.has(i => i.payload && (i.payload.vistoriaId === id || i.payload.id === id));
+    if (s) {
+      if (!L || L.id !== s.id) {
+        if (L && L.status !== 'cancelada' && pendente(L.id)) return;
+        App.V = this.doServidor(s);
+      } else {
+        Object.keys(s.etapas || {}).forEach(k => {
+          const lt = L.ts[k];
+          const naFila = Sync.has(i => i.key === 'etapa:' + L.id + ':' + k);
+          if (!naFila && (!lt || (s.etapas[k].ts && s.etapas[k].ts > lt))) { L.d[k] = Object.assign(L.d[k] || {}, s.etapas[k].dados || {}); L.ts[k] = s.etapas[k].ts; }
+        });
+        (s.fotos || []).forEach(f => { L.fotos[f.id] = Object.assign(L.fotos[f.id] || {}, f, { st: 'ok' }); });
+        L.codigo = s.codigo; L.srv = true;
+      }
+    } else if (L && L.status === 'em_andamento' && L.srv && !pendente(L.id)) {
+      App.V = null; // encerrada em outro aparelho
+    }
+    this.salvar(true);
+  },
+  salvar(ja) {
+    clearTimeout(this._t);
+    const f = () => { if (App.V) LS.set('v', App.V); else LS.del('v'); };
+    if (ja) f(); else this._t = setTimeout(f, 250);
+  },
+  /** Marca a etapa como alterada: salva no aparelho e agenda o envio. */
+  tocar(etapa, ja) {
+    const V = App.V;
+    if (!V || !V.d[etapa]) return;
+    V.ts[etapa] = new Date().toISOString();
+    this.salvar();
+    clearTimeout((this._e = this._e || {})[etapa]);
+    const envia = () => Sync.add('salvarEtapa', { vistoriaId: V.id, etapa: etapa, dados: V.d[etapa] }, 'etapa:' + V.id + ':' + etapa);
+    if (ja) envia(); else this._e[etapa] = setTimeout(envia, 1800);
+  },
+  fotosDe(slot) {
+    const V = App.V;
+    if (!V) return [];
+    return Object.values(V.fotos).filter(f => f.slot === slot && !f.del).sort((a, b) => a.criadoEm < b.criadoEm ? -1 : 1);
+  },
+  contagem() {
+    const V = App.V;
+    if (!V) return { fotos: 0, ambientes: 0, docs: 0 };
+    const fotos = Object.values(V.fotos).filter(f => !f.del);
+    return {
+      fotos: fotos.length,
+      docs: fotos.filter(f => f.etapa === 'doc').length,
+      ambientes: (V.d.ambientes.itens || []).reduce((s, a) => s + (Number(a.qtd) || 1), 0)
+    };
+  }
+};
+
+Sync.on('checkin', (r, p) => {
+  if (App.V && App.V.id === p.id) { App.V.codigo = r.codigo; App.V.srv = true; Vist.salvar(true); }
+});
+Sync.on('checkin:erro', (e, p) => {
+  if (App.V && App.V.id === p.id) {
+    toast('Check-in recusado: ' + e.message, 'err', 7000);
+    Sync.q = Sync.q.filter(i => !(i.payload && i.payload.vistoriaId === p.id));
+    App.V = null; Vist.salvar(true); Router.reset('home'); App.refresh();
+  }
+});
+Sync.on('uploadFoto', (r, p) => {
+  const V = App.V;
+  if (V && V.fotos[p.id]) { V.fotos[p.id].fileId = r.fileId; V.fotos[p.id].st = 'ok'; Vist.salvar(); }
+  $$('[data-st="' + p.id + '"]').forEach(el => el.classList.add('ok'));
+});
+
+/* ───── Fotos de vistoria ───── */
+const Fotos = {
+  async adicionar(alvo, img) {
+    const V = App.V;
+    if (!V) return;
+    const id = uid();
+    const pos = Geo.last;
+    const f = { id: id, etapa: alvo.etapa, slot: alvo.slot, ref: alvo.ref || '', criadoEm: new Date().toISOString(), st: 'pend' };
+    V.fotos[id] = f;
+    Thumbs.put(id, img.thumb);
+    Vist.salvar(true);
+    await Sync.add('uploadFoto', Object.assign({ vistoriaId: V.id, mime: 'image/jpeg', data: img.full, lat: pos ? pos.lat : '', lng: pos ? pos.lng : '' }, f));
+    vib(12);
+    if (alvo.toast !== false) toast('Foto salva · ' + (alvo.rotulo || ROTULO_ETAPA[alvo.etapa] || ''), 'ok', 1600);
+    App.rerender();
+  },
+  async remover(id) {
+    const V = App.V;
+    const f = V && V.fotos[id];
+    if (!f) return;
+    const naFila = Sync.q.find(i => i.acao === 'uploadFoto' && i.payload.id === id && !i.running);
+    if (naFila) { Sync.q = Sync.q.filter(i => i !== naFila); await IDB.del('outbox', naFila.id); Sync.render(); }
+    else Sync.add('removerFoto', { id: id });
+    delete V.fotos[id];
+    Thumbs.drop(id);
+    Vist.salvar(true);
+  },
+  /** Abre a câmera para um slot; se já houver foto, abre o visualizador. */
+  alvo(el) {
+    const V = App.V;
+    return {
+      slot: el.dataset.slot, etapa: el.dataset.etapa || el.dataset.slot.split('.')[0], ref: el.dataset.ref || '',
+      rotulo: el.dataset.rot || '', carimbo: V ? curto((App.escola(V.escolaId) || {}).nome || V.d.dados.nome) + (V.codigo ? ' · ' + V.codigo : '') : ''
+    };
+  },
+  ver(id, lista) {
+    const V = App.V;
+    const f = V && V.fotos[id];
+    const src = Thumbs.mem.get(id) || (f && f.fileId && Thumbs.mem.get('f:' + f.fileId)) || '';
+    const idx = lista ? lista.indexOf(id) : -1;
+    $('#layer').innerHTML = '<div class="viewer"><div class="top"><button class="back" data-act="sheetClose">' + I('x') + '</button>' +
+      '<span>' + esc(f ? (ROTULO_ETAPA[f.etapa] || '') + ' · ' + hora(f.criadoEm) : '') + (lista && lista.length > 1 ? ' · ' + (idx + 1) + '/' + lista.length : '') + '</span>' +
+      '<span class="badge ' + (f && f.st === 'ok' ? 'b-green">Enviada' : 'b-amber">Na fila') + '</span></div>' +
+      '<img src="' + src + '" alt="">' +
+      '<div class="bar">' + (lista && idx > 0 ? '<button class="btn btn-out btn-sm" style="width:auto" id="vwPrev">' + I('left') + '</button>' : '') +
+      '<button class="btn btn-out-red" id="vwDel">' + I('trash', 20) + ' Excluir</button>' +
+      '<button class="btn btn-teal" id="vwRep">' + I('camera', 20) + ' Refazer</button>' +
+      (lista && idx >= 0 && idx < lista.length - 1 ? '<button class="btn btn-out btn-sm" style="width:auto" id="vwNext">' + I('right') + '</button>' : '') + '</div></div>';
+    Sheet.opts = {};
+    $('#vwDel').onclick = async () => { await this.remover(id); Sheet.close(true); toast('Foto excluída'); App.rerender(); };
+    $('#vwRep').onclick = async () => {
+      const alvo = { slot: f.slot, etapa: f.etapa, ref: f.ref, carimbo: curto(V.d.dados.nome) + (V.codigo ? ' · ' + V.codigo : '') };
+      Sheet.close(true);
+      alvo.onFoto = async img => { await this.remover(id); await this.adicionar(alvo, img); };
+      Camera.abrir(alvo);
+    };
+    if ($('#vwPrev')) $('#vwPrev').onclick = () => this.ver(lista[idx - 1], lista);
+    if ($('#vwNext')) $('#vwNext').onclick = () => this.ver(lista[idx + 1], lista);
+  }
+};
+
+/* ───── Motor de formulário: caminhos "etapa.campo.sub" (ou "@campo" para o formulário aberto) ───── */
+const Form = {
+  raiz(path) { return path[0] === '@' ? [App, 'form.' + path.slice(1)] : [App.V ? App.V.d : {}, path]; },
+  get(path) {
+    const r = this.raiz(path);
+    return r[1].split('.').reduce((o, k) => (o === null || o === undefined ? undefined : o[k]), r[0]);
+  },
+  set(path, v) {
+    const r = this.raiz(path);
+    const ks = r[1].split('.');
+    let o = r[0];
+    ks.slice(0, -1).forEach((k, i) => {
+      if (o[k] === null || o[k] === undefined || typeof o[k] !== 'object') o[k] = /^\d+$/.test(ks[i + 1]) ? [] : {};
+      o = o[k];
+    });
+    o[ks[ks.length - 1]] = v;
+    if (path[0] !== '@') Vist.tocar(path.split('.')[0]);
+  },
+  input(el) {
+    this.set(el.dataset.k, el.type === 'checkbox' ? el.checked : el.value);
+    Calc.refresh();
+  },
+  change(el) { if (el.dataset.rr) App.rerender(); }
+};
+
+Object.assign(Act, {
+  pick(el) {
+    vib();
+    const k = el.dataset.k, v = el.dataset.v;
+    if (el.dataset.m) {
+      let a = (Form.get(k) || []).slice();
+      if (v === 'Nenhuma') a = a.indexOf(v) >= 0 ? [] : [v];
+      else { a = a.filter(x => x !== 'Nenhuma'); a = a.indexOf(v) >= 0 ? a.filter(x => x !== v) : a.concat(v); }
+      Form.set(k, a);
+    } else Form.set(k, Form.get(k) === v && !el.dataset.fix ? '' : v);
+    App.rerender();
+  },
+  stp(el) {
+    vib();
+    const k = el.dataset.k, d = Number(el.dataset.d);
+    const n = Math.min(Number(el.dataset.max || 99), Math.max(Number(el.dataset.min || 0), (Number(Form.get(k)) || 0) + d));
+    Form.set(k, n);
+    if (el.dataset.fn && Hooks[el.dataset.fn]) Hooks[el.dataset.fn](n);
+    App.rerender();
+  },
+  chk(el) { vib(); Form.set(el.dataset.k, !Form.get(el.dataset.k)); App.rerender(); },
+  foto(el) {
+    const ids = Vist.fotosDe(el.dataset.slot).map(f => f.id);
+    if (el.dataset.add || !ids.length) { vib(); Camera.abrir(Fotos.alvo(el)); }
+    else Fotos.ver(ids[ids.length - 1], ids);
+  },
+  verFoto(el) { Fotos.ver(el.dataset.id, el.dataset.lista ? el.dataset.lista.split(',') : null); },
+  bloco(el) { vib(); App.V.ui.bloco = Number(el.dataset.b); App.V.ui.pav = 0; Vist.salvar(); App.rerender(); },
+  pav(el) { vib(); App.V.ui.pav = Number(el.dataset.p); Vist.salvar(); App.rerender(); },
+  girar() { vib(); const n = ((Number(Form.get('estrutura.norte')) || 0) + 45) % 360; Form.set('estrutura.norte', n); App.rerender(); },
+  etapaIr(el) { vib(); Vist.tocar(App.route.params.k, true); Router.go('etapa', { k: el.dataset.to }, { replace: true }); },
+  etapaProx() {
+    const k = App.route.params.k;
+    const i = ETAPAS.findIndex(e => e.k === k);
+    Vist.tocar(k, true);
+    vib(12);
+    App.V.etapa = ETAPAS[Math.min(i + 1, ETAPAS.length - 1)].k;
+    Vist.salvar();
+    const p = Pend.etapa(k).length;
+    if (p) toast(ETAPA(k).t + ' salva · ' + plural(p, 'pendência'), 'warn', 1800); else toast(ETAPA(k).t + ' completa', 'ok', 1400);
+    Router.go('etapa', { k: App.V.etapa }, { replace: true });
+  },
+  etapaAnt() {
+    const k = App.route.params.k;
+    const i = ETAPAS.findIndex(e => e.k === k);
+    Vist.tocar(k, true);
+    if (i <= 0) return Router.back();
+    Router.go('etapa', { k: ETAPAS[i - 1].k }, { replace: true });
+  },
+  editar(el) { const k = el.dataset.k; App.V.ui['ed_' + k] = !App.V.ui['ed_' + k]; App.rerender(); },
+  // Ambientes
+  ambNovo(el) {
+    const V = App.V;
+    const ext = !!el.dataset.ext;
+    const tipo = el.dataset.tipo || (ext ? 'Pátio coberto' : 'Sala de aula');
+    App.form = Amb.novo(tipo, ext, V.ui.bloco, V.ui.pav);
+    App.form._novo = true;
+    Router.go('ambiente');
+  },
+  ambEditar(el) {
+    const a = App.V.d.ambientes.itens.find(x => x.id === el.dataset.id);
+    if (!a) return;
+    App.form = JSON.parse(JSON.stringify(a));
+    Router.go('ambiente');
+  },
+  ambTipo(el) {
+    const t = el.value;
+    App.form.tipo = t;
+    if (!App.form._tocouTue) App.form.tue = (TUE_PADRAO[t] || []).map(n => ({ id: uid(), nome: n, qtd: '' }));
+    App.rerender();
+  },
+  ambSalvar() {
+    const a = App.form;
+    if (!a) return;
+    if (!num(a.c) || !num(a.l)) { toast('Informe comprimento e largura.', 'warn'); return; }
+    const it = App.V.d.ambientes.itens;
+    const i = it.findIndex(x => x.id === a.id);
+    const limpo = JSON.parse(JSON.stringify(a));
+    delete limpo._novo; delete limpo._tocouTue;
+    if (i >= 0) it[i] = limpo; else it.push(limpo);
+    Vist.tocar('ambientes', true);
+    vib(14);
+    toast((a.externo ? 'Área externa' : 'Ambiente') + ' salvo', 'ok', 1400);
+    App.form = null;
+    Router.back();
+  },
+  async ambExcluir() {
+    const a = App.form;
+    if (!(await confirmar({ titulo: 'Excluir ' + (a.nome || a.tipo) + '?', texto: 'As fotos deste ambiente também serão excluídas.', sim: 'Excluir', perigo: true }))) return;
+    App.V.d.ambientes.itens = App.V.d.ambientes.itens.filter(x => x.id !== a.id);
+    Object.values(App.V.fotos).filter(f => f.ref === a.id).forEach(f => Fotos.remover(f.id));
+    Vist.tocar('ambientes', true);
+    App.form = null;
+    Router.back();
+  },
+  pavConcluir() {
+    const V = App.V;
+    const key = V.ui.bloco + '-' + V.ui.pav;
+    V.d.ambientes.pavOk[key] = !V.d.ambientes.pavOk[key];
+    Vist.tocar('ambientes');
+    if (V.d.ambientes.pavOk[key]) {
+      const pavs = Number(((V.d.estrutura.blocos || [])[V.ui.bloco] || {}).pav) || 1;
+      if (V.ui.pav < pavs - 1) V.ui.pav++;
+      toast('Pavimento concluído', 'ok', 1200);
+    }
+    App.rerender();
+  },
+  addLum() { App.form.lum = (App.form.lum || []).concat({ id: uid(), nome: '', lamp: 1, qtd: '' }); App.rerender(); },
+  addTue() { App.form._tocouTue = true; App.form.tue = (App.form.tue || []).concat({ id: uid(), nome: '', qtd: '' }); App.rerender(); },
+  rmLinha(el) {
+    const lista = el.dataset.l;
+    App.form[lista] = (App.form[lista] || []).filter(x => x.id !== el.dataset.id);
+    if (lista === 'tue') App.form._tocouTue = true;
+    App.rerender();
+  },
+  // Equipamentos
+  eqAdd() {
+    Sheet.open('<h3>Adicionar equipamento</h3><p class="muted small">Equipamentos com carga relevante fora dos ambientes.</p>' +
+      ['Bomba de incêndio', 'Bomba de recalque', 'Elevador', 'Plataforma elevatória', 'Exaustor', 'Câmara fria', 'Forno elétrico', 'Chuveiro elétrico', 'Aquecedor', 'Outro']
+        .map(n => '<button class="opt" data-act="eqAddTipo" data-n="' + n + '"><span class="ic">' + I('plus', 20) + '</span>' + n + '</button>').join(''));
+  },
+  eqAddTipo(el) {
+    const n = el.dataset.n;
+    App.V.d.equipamentos.itens.push({ id: uid(), nome: n === 'Outro' ? '' : n, qtd: 1, pot: '', un: n === 'Chuveiro elétrico' || n === 'Forno elétrico' ? 'W' : 'CV', desc: false });
+    Vist.tocar('equipamentos');
+    Sheet.close(true);
+    App.rerender();
+    setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 50);
+  },
+  async eqRm(el) {
+    const it = App.V.d.equipamentos.itens.find(x => x.id === el.dataset.id);
+    if (!(await confirmar({ titulo: 'Remover ' + (it.nome || 'equipamento') + '?', texto: 'Use quando o equipamento não existe na unidade.', sim: 'Remover', perigo: true }))) return;
+    App.V.d.equipamentos.itens = App.V.d.equipamentos.itens.filter(x => x.id !== el.dataset.id);
+    Vist.tocar('equipamentos');
+    App.rerender();
+  },
+  sigLimpar(el) { Form.set(el.dataset.k, ''); App.rerender(); },
+  // Fluxos principais
+  quickFoto() {
+    const V = App.V;
+    if (!V) return;
+    const opts = [
+      ['geral', 'geral.foto', 'Foto geral', 'Qualquer registro da vistoria', 'camera'],
+      ['doc', 'doc.documento', 'Documento', 'Planta, conta de energia, ofício…', 'doc'],
+      ['dados', 'dados.fachada', 'Fachada', 'Dados da escola', 'school'],
+      ['entrada', 'entrada.medidor', 'Medidor / entrada', 'Entrada de energia', 'pin'],
+      ['eletrica', 'eletrica.b' + V.ui.bloco + '.quadro', 'Quadro elétrico', 'Elétrica · Bloco ' + BLOCO(V.ui.bloco), 'checksq'],
+      ['estrutura', 'estrutura.b' + V.ui.bloco + '.cobertura', 'Cobertura', 'Estrutura · Bloco ' + BLOCO(V.ui.bloco), 'home']
+    ];
+    Sheet.open('<h3>Foto rápida · ' + esc(curto(V.d.dados.nome)) + '</h3><p class="muted small" style="margin:0 0 6px">A foto já vai para a etapa certa.</p>' +
+      opts.map(o => '<button class="opt" data-act="quickTipo" data-etapa="' + o[0] + '" data-slot="' + o[1] + '" data-rot="' + esc(o[2]) + '"><span class="ic">' + I(o[4], 20) + '</span><span>' + o[2] + '<small>' + o[3] + '</small></span></button>').join('') +
+      '<button class="opt" data-act="quickGal"><span class="ic">' + I('gallery', 20) + '</span><span>Escolher da galeria<small>Vai para Fotos gerais</small></span></button>');
+  },
+  quickTipo(el) { Sheet.close(true); Camera.abrir(Fotos.alvo(el)); },
+  quickGal() {
+    Sheet.close(true);
+    const V = App.V;
+    Camera.abrir({ slot: 'geral.foto', etapa: 'geral', rotulo: 'Galeria', carimbo: curto(V.d.dados.nome) }, true);
+  },
+  async finalizar(el) {
+    const V = App.V;
+    Vist.tocar('revisao', true);
+    const pend = Pend.todas();
+    const r = V.d.revisao;
+    const semAss = !r.assResp || !r.assEmpresa;
+    const ok = await confirmar({
+      titulo: 'Finalizar vistoria e fazer check-out?',
+      texto: (pend.length ? '<b>' + plural(pend.length, 'pendência') + '</b> ficarão registradas para retorno.<br>' : 'Tudo completo. ') +
+        (semAss ? '<b style="color:var(--amber)">Assinaturas incompletas:</b> o relatório sairá como versão preliminar.' : 'Relatórios assinados serão gerados e enviados.'),
+      sim: 'Finalizar'
+    });
+    if (!ok) return;
+    carregando(el, true, 'Finalizando');
+    const pos = await Geo.get(5000);
+    const c = Vist.contagem();
+    V.status = 'finalizando';
+    V.checkout = new Date().toISOString();
+    Vist.salvar(true);
+    App.finalLocal = { escolaId: V.escolaId, checkin: V.checkin, checkout: V.checkout, resumo: { ambientes: c.ambientes, fotos: c.fotos, pendencias: pend.length } };
+    LS.set('finalLocal', App.finalLocal);
+    App.final = null; LS.del('final');
+    await Sync.add('finalizar', {
+      vistoriaId: V.id, checkout: V.checkout, lat: pos ? pos.lat : '', lng: pos ? pos.lng : '',
+      pendencias: pend, resumo: App.finalLocal.resumo
+    });
+    Router.reset('finalizada');
+  },
+  async cancelarConfirmar(el) {
+    const f = App.form;
+    if (!f.motivo) { toast('Escolha o motivo.', 'warn'); return; }
+    if (f.motivo === 'Outro motivo' && !f.outro) { toast('Descreva o motivo.', 'warn'); return; }
+    if (f.recusa && !f.quem) { toast('Informe quem recusou.', 'warn'); return; }
+    if (!(await confirmar({ titulo: 'Confirmar cancelamento?', texto: 'Esta ação não pode ser desfeita.', sim: 'Cancelar vistoria', nao: 'Voltar', perigo: true }))) return;
+    const V = App.V;
+    const foto = Vist.fotosDe('cancelamento.registro')[0];
+    await Sync.add('cancelar', {
+      vistoriaId: V.id, motivo: f.motivo === 'Outro motivo' ? f.outro : f.motivo, houveRecusa: !!f.recusa,
+      quemRecusou: f.quem || '', descricao: f.desc || '', fotoId: foto ? foto.id : ''
+    });
+    // Reflete na tela já, sem esperar o servidor.
+    const rot = (App.data.roteiro || []).find(r => r.escolaId === V.escolaId && r.status !== 'concluida');
+    if (rot) { rot.status = 'retorno'; rot.nota = 'Cancelada: ' + f.motivo; }
+    App.data.equipe.status = 'disponivel';
+    LS.set('boot', App.data);
+    V.status = 'cancelada';
+    App.V = null; Vist.salvar(true);
+    App.form = null;
+    toast('Vistoria cancelada. A escola voltou ao roteiro.', 'ok', 3000);
+    Router.reset('home');
+  }
+});
+
+const Hooks = {
+  nBlocos(n) {
+    const e = App.V.d.estrutura, el = App.V.d.eletrica;
+    e.blocos = e.blocos || []; el.blocos = el.blocos || [];
+    while (e.blocos.length < n) e.blocos.push({ pav: 1, fachadas: {} });
+    e.blocos.length = n;
+    while (el.blocos.length < n) el.blocos.push({ quadros: 1, cons: {} });
+    el.blocos.length = n;
+    if (App.V.ui.bloco >= n) App.V.ui.bloco = 0;
+    Vist.tocar('eletrica');
+  }
+};
+
+/* ───── Campos ───── */
+const F = {
+  lbl: l => l ? '<span class="lbl">' + l + '</span>' : '',
+  chips(k, label, opts, o) {
+    o = o || {};
+    const v = Form.get(k);
+    const on = val => o.multi ? (v || []).indexOf(val) >= 0 : v === val;
+    let h = F.lbl(label) + '<div class="' + (o.seg ? 'seg' : 'chips') + ' ' + (o.cls || '') + '">' +
+      opts.map(op => {
+        const val = Array.isArray(op) ? op[0] : op, lab = Array.isArray(op) ? op[1] : op;
+        return '<button class="chip' + (on(val) ? ' on' : '') + '" data-act="pick" data-k="' + k + '" data-v="' + esc(val) + '"' + (o.multi ? ' data-m="1"' : '') + '>' + esc(lab) + '</button>';
+      }).join('') + '</div>';
+    if (o.outro !== false && on('Outro')) h += '<div class="fld">' + F.input(k + 'Outro', { ph: 'Qual?' }) + '</div>';
+    return h;
+  },
+  seg(k, label, opts, o) { return F.chips(k, label, opts, Object.assign({ seg: true }, o || {})); },
+  input(k, o) {
+    o = o || {};
+    const v = Form.get(k);
+    return '<div class="inp-wrap">' + (o.pre ? '<span class="pre">' + o.pre + '</span>' : '') +
+      '<input class="inp" data-k="' + k + '" value="' + esc(v === undefined || v === null ? '' : v) + '" placeholder="' + esc(o.ph || '') + '"' +
+      (o.im ? ' inputmode="' + o.im + '"' : '') + ' type="' + (o.type || 'text') + '"' + (o.rr ? ' data-rr="1"' : '') + (o.dis ? ' disabled' : '') +
+      (o.ac ? ' autocomplete="' + o.ac + '"' : '') + (o.style ? ' style="' + o.style + '"' : '') + '>' + (o.suf ? '<span class="suf">' + o.suf + '</span>' : '') + '</div>';
+  },
+  text(k, label, o) { return '<div class="fld">' + F.lbl(label) + F.input(k, o) + '</div>'; },
+  numero(k, label, o) { return F.text(k, label, Object.assign({ im: 'decimal' }, o || {})); },
+  area(k, label, ph) {
+    const v = Form.get(k);
+    return '<div class="fld">' + F.lbl(label) + '<textarea class="inp" data-k="' + k + '" placeholder="' + esc(ph || '') + '">' + esc(v || '') + '</textarea></div>';
+  },
+  row() { return '<div class="grid2">' + Array.from(arguments).join('') + '</div>'; },
+  stepper(k, label, o) {
+    o = o || {};
+    const v = Number(Form.get(k)) || 0;
+    return (label ? F.lbl(label) : '') + '<div class="stepper' + (o.sm ? ' sm' : '') + '">' +
+      '<button data-act="stp" data-k="' + k + '" data-d="-1" data-min="' + (o.min || 0) + '"' + (o.fn ? ' data-fn="' + o.fn + '"' : '') + ' aria-label="Menos">' + I('minus', o.sm ? 18 : 20) + '</button><b>' + v + '</b>' +
+      '<button data-act="stp" data-k="' + k + '" data-d="1" data-max="' + (o.max || 99) + '"' + (o.fn ? ' data-fn="' + o.fn + '"' : '') + ' aria-label="Mais">' + I('plus', o.sm ? 18 : 20) + '</button></div>';
+  },
+  check(k, t, s) {
+    const on = !!Form.get(k);
+    return '<button class="check' + (on ? ' on' : '') + '" data-act="chk" data-k="' + k + '" style="text-align:left;width:100%"><span class="box">' + (on ? I('check', 16, 3) : '') + '</span><span><span class="t">' + t + '</span>' + (s ? '<br><span class="s">' + s + '</span>' : '') + '</span></button>';
+  },
+  cons(k, itens) {
+    const c = Form.get(k) || {};
+    return itens.map(it => '<div class="cons-row"><span class="n">' + it[1] + '</span>' +
+      ['Boa', 'Regular', 'Ruim'].map(v => '<button class="chip ' + v + (c[it[0]] === v ? ' on' : '') + '" data-act="pick" data-k="' + k + '.' + it[0] + '" data-v="' + v + '">' + v + '</button>').join('') + '</div>').join('');
+  },
+  meas(base, cols, ph) {
+    return '<div class="meas">' + cols.map(c => '<div><label>' + c[1] + '</label><input class="inp" data-k="' + base + '.' + c[0] + '" value="' + esc(Form.get(base + '.' + c[0]) || '') + '" inputmode="decimal" placeholder="' + ph + '"></div>').join('') + '</div>';
+  },
+  card(titulo, corpo, o) {
+    o = o || {};
+    return '<section class="card ' + (o.cls || '') + '"' + (o.id ? ' id="' + o.id + '"' : '') + '>' + (titulo ? '<div class="card-h"><h3>' + titulo + '</h3>' + (o.badge || '') + '</div>' : '') + corpo + '</section>';
+  },
+  req(paths) {
+    const falta = paths.some(p => { const v = Form.get(p); return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length); });
+    return falta ? '<span class="badge b-amber">Pendente</span>' : '<span class="badge b-green">' + I('check', 14, 3) + ' OK</span>';
+  },
+  /** Grade de fotos: slots = [[slot, rótulo, obrigatório?]]. */
+  fotos(etapa, slots, o) {
+    o = o || {};
+    const V = App.V;
+    const tiles = slots.map(s => {
+      const fs = Vist.fotosDe(s[0]);
+      const last = fs[fs.length - 1];
+      if (s[3] === 'wide') {
+        return '<button class="ph-wide' + (last ? ' has' : '') + '" data-act="foto" data-slot="' + s[0] + '" data-etapa="' + etapa + '" data-rot="' + esc(s[1]) + '">' +
+          (last ? '<img data-th="' + last.id + '"' + (last.fileId ? ' data-fid="' + last.fileId + '"' : '') + ' alt="">' : I('camera', 28)) +
+          '<span><b>' + s[1] + '</b><small>' + (last ? plural(fs.length, 'foto') + ' · toque para ver' : (s[4] || '1 foto')) + '</small></span></button>';
+      }
+      if (last) {
+        return '<button class="ph has" data-act="foto" data-slot="' + s[0] + '" data-etapa="' + etapa + '" data-rot="' + esc(s[1]) + '">' +
+          '<img data-th="' + last.id + '"' + (last.fileId ? ' data-fid="' + last.fileId + '"' : '') + ' alt=""><i class="st' + (last.st === 'ok' ? ' ok' : '') + '" data-st="' + last.id + '"></i>' +
+          (fs.length > 1 ? '<span class="cnt">' + fs.length + '</span>' : '') + '<span class="cap">' + s[1] + '</span></button>';
+      }
+      return '<button class="ph" data-act="foto" data-slot="' + s[0] + '" data-etapa="' + etapa + '" data-rot="' + esc(s[1]) + '">' + I('camera', 26) + '<span>' + s[1] + '</span></button>';
+    });
+    const wide = tiles.filter((t, i) => slots[i][3] === 'wide').join('');
+    const grid = tiles.filter((t, i) => slots[i][3] !== 'wide');
+    let extras = '';
+    if (o.extra) {
+      const fs = Vist.fotosDe(o.extra);
+      extras = fs.map(f => '<button class="ph has" data-act="verFoto" data-id="' + f.id + '" data-lista="' + fs.map(x => x.id).join(',') + '"><img data-th="' + f.id + '"' + (f.fileId ? ' data-fid="' + f.fileId + '"' : '') + ' alt=""><i class="st' + (f.st === 'ok' ? ' ok' : '') + '" data-st="' + f.id + '"></i><span class="cap">Extra</span></button>').join('') +
+        '<button class="ph add" data-act="foto" data-add="1" data-slot="' + o.extra + '" data-etapa="' + etapa + '" data-rot="Foto extra">' + I('plus', 26) + '<span>Adicionar<br>foto</span></button>';
+    }
+    return wide + '<div class="ph-grid">' + grid.join('') + extras + '</div>' + (o.hint ? '<div class="ph-hint">' + o.hint + '</div>' : '');
+  },
+  fotoBadge(slots) {
+    const tem = slots.filter(s => Vist.fotosDe(s[0]).length).length;
+    const cls = tem === slots.length ? 'b-green' : tem ? 'b-teal' : 'b-amber';
+    return '<span class="badge ' + cls + '">' + tem + '/' + slots.length + '</span>';
+  },
+  sig(k, rotulo) {
+    const v = Form.get(k);
+    return '<div class="sig" data-sig="' + k + '">' + (v ? '<img src="' + v + '" style="width:100%;height:100%;object-fit:contain">' : '<canvas></canvas><div class="ph-t">Assinar aqui</div>') +
+      (v ? '<button class="clr" data-act="sigLimpar" data-k="' + k + '">Limpar</button>' : '') + '</div>';
+  }
+};
+
+/* ───── Assinatura (canvas com pointer events) ───── */
+function iniciarAssinaturas() {
+  $$('.sig canvas').forEach(cv => {
+    const box = cv.parentElement;
+    const k = box.dataset.sig;
+    const dpr = window.devicePixelRatio || 1;
+    const r = box.getBoundingClientRect();
+    cv.width = r.width * dpr; cv.height = r.height * dpr;
+    const g = cv.getContext('2d');
+    g.scale(dpr, dpr); g.lineWidth = 2.4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#1B2F8A';
+    let des = false, tracos = 0, last = null;
+    const pt = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+    cv.addEventListener('pointerdown', e => { des = true; last = pt(e); cv.setPointerCapture(e.pointerId); const ph = $('.ph-t', box); if (ph) ph.remove(); });
+    cv.addEventListener('pointermove', e => {
+      if (!des) return;
+      const p = pt(e);
+      g.beginPath(); g.moveTo(last.x, last.y);
+      g.quadraticCurveTo(last.x, last.y, (last.x + p.x) / 2, (last.y + p.y) / 2);
+      g.lineTo(p.x, p.y); g.stroke();
+      last = p; tracos++;
+    });
+    const fim = () => {
+      if (!des) return;
+      des = false;
+      if (tracos < 4) return;
+      // Recorta e salva com fundo transparente (vai para o PDF).
+      const out = document.createElement('canvas');
+      out.width = cv.width / dpr; out.height = cv.height / dpr;
+      out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
+      Form.set(k, out.toDataURL('image/png'));
+      Vist.tocar('revisao', true);
+      clearTimeout(cv._t);
+      cv._t = setTimeout(() => App.rerender(), 900);
+    };
+    cv.addEventListener('pointerup', fim);
+    cv.addEventListener('pointercancel', fim);
+  });
+}
+
+/* ───── Cálculos ao vivo ───── */
+const Calc = {
+  fns: {
+    secao(path) {
+      const d = num(Form.get(path));
+      return '≈ ' + (d ? fmt(Math.PI * (d / 2) ** 2, 1) : '__') + ' mm²<small>seção estimada</small>';
+    },
+    areaUn() { const a = App.form || {}; return fmt(num(a.c) * num(a.l), 2) + ' m²'; },
+    areaTot() { const a = App.form || {}; return fmt(num(a.c) * num(a.l) * (Number(a.qtd) || 1), 2) + ' m²'; },
+    ilum() { const a = App.form || {}; return String((a.lum || []).reduce((s, l) => s + (Number(l.qtd) || 0), 0)); },
+    pot(id) {
+      const it = ((App.V && App.V.d.equipamentos.itens) || []).find(x => x.id === id) || {};
+      const w = it.un === 'CV' ? num(it.pot) * 735.5 : num(it.pot);
+      return w && !it.desc ? '≈ ' + fmt(w * (Number(it.qtd) || 1) / 1000, 2) + ' kW no total' : '';
+    }
+  },
+  refresh() {
+    $$('[data-calc]').forEach(el => {
+      const f = this.fns[el.dataset.calc];
+      if (f) el.innerHTML = f(el.dataset.arg);
+    });
+  }
+};
+
+/* ───── Ambientes ───── */
+const Amb = {
+  novo(tipo, ext, bloco, pav) {
+    return {
+      id: uid(), bloco: ext ? 0 : bloco, pav: ext ? 0 : pav, externo: ext, nome: '', tipo: tipo, qtd: 1, c: '', l: '', pd: '',
+      fachadas: [], jan: {}, ventCruz: false, tug: '',
+      lum: [{ id: uid(), nome: ext ? 'Refletor LED 100 W' : 'LED tubular 18 W', lamp: ext ? 1 : 2, qtd: '' }],
+      tue: ext ? [] : (TUE_PADRAO[tipo] || []).map(n => ({ id: uid(), nome: n, qtd: '' }))
+    };
+  },
+  area: a => num(a.c) * num(a.l),
+  nome: a => a.tipo === 'Outro' ? (a.tipoOutro || 'Outro') : a.tipo,
+  semFoto: a => !Vist.fotosDe('ambientes.' + a.id + '.vista').length,
+  lista(bloco, pav) { return (App.V.d.ambientes.itens || []).filter(a => !a.externo && Number(a.bloco) === bloco && Number(a.pav) === pav); },
+  externos() { return (App.V.d.ambientes.itens || []).filter(a => a.externo); },
+  linha(a) {
+    const area = this.area(a), q = Number(a.qtd) || 1;
+    const falta = [!area ? 'sem medidas' : '', this.semFoto(a) ? 'sem foto' : ''].filter(Boolean).join(' · ');
+    return '<button class="amb" data-act="ambEditar" data-id="' + a.id + '"><span><b>' + esc(a.nome || this.nome(a)) + '</b>' +
+      '<small>' + (a.nome ? esc(this.nome(a)) + ' · ' : '') + fmt(area, area % 1 ? 1 : 0) + ' m²' + (q > 1 ? ' cada · total ' + fmt(area * q, area * q % 1 ? 1 : 0) + ' m²' : ' · total ' + fmt(area, area % 1 ? 1 : 0) + ' m²') + '</small>' +
+      (falta ? '<br><span class="warn">' + falta + '</span>' : '') + '</span><span class="q">' + q + ' <small>un.</small></span></button>';
+  }
+};
+
+/* ───── Pendências (regras por etapa) ───── */
+const Pend = {
+  vazio(v) { return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length); },
+  campos(lista) { return lista.filter(x => this.vazio(Form.get(x[0]))).map(x => x[1]); },
+  fotos(lista) { return lista.filter(x => !Vist.fotosDe(x[0]).length).map(x => 'foto: ' + x[1]); },
+  etapa(k) {
+    const V = App.V;
+    if (!V) return [];
+    const d = V.d;
+    const nb = Number(d.estrutura.nBlocos) || 1;
+    switch (k) {
+      case 'dados':
+        return this.campos([['dados.nome', 'nome da escola'], ['dados.logradouro', 'endereço']])
+          .concat(this.fotos([['dados.placa', 'placa da escola'], ['dados.frontal', 'fachada frontal']]));
+      case 'entrada': {
+        const e = d.entrada;
+        if (!e.padrao) return ['padrão de entrada (BT/MT)'];
+        const conservacao = (obj, itens) => itens.filter(i => !(obj || {})[i]).length ? ['estado de conservação'] : [];
+        if (e.padrao === 'BT') {
+          return this.campos([['entrada.tipoEntrada', 'tipo de entrada'], ['entrada.tensao', 'tensão nominal'], ['entrada.cx1.tipo', 'tipo da caixa de medição'],
+            ['entrada.cx2.disjuntor', 'disjuntor geral'], ['entrada.aterr', 'aterramento'], ['entrada.cabos.fase', 'cabo fase'], ['entrada.med.rs', 'medição de tensão']])
+            .concat(this.fotos([['entrada.medidor', 'medidor'], ['entrada.quadro', 'quadro geral'], ['entrada.aterramento', 'aterramento']]))
+            .concat(conservacao(e.cons, ['tampa', 'lacre', 'visor', 'limpeza', 'fundo']));
+        }
+        return this.campos([['entrada.cabine', 'tipo da cabine'], ['entrada.tensaoMT', 'tensão nominal'], ['entrada.trafo.kva', 'potência do transformador'],
+          ['entrada.aterr', 'aterramento']])
+          .concat(this.fotos([['entrada.cabine', 'cabine ou poste'], ['entrada.medidor', 'medidor'], ['entrada.trafo', 'placa do transformador']]))
+          .concat(conservacao(e.consMT, ['porta', 'lacre', 'isoladores', 'limpeza', 'base']));
+      }
+      case 'estrutura': {
+        let out = [];
+        for (let b = 0; b < nb; b++) {
+          const pre = nb > 1 ? 'Bloco ' + BLOCO(b) + ': ' : '';
+          out = out.concat(this.campos([['estrutura.blocos.' + b + '.cobTipo', 'tipo de cobertura'], ['estrutura.blocos.' + b + '.cobEstado', 'estado da cobertura'],
+            ['estrutura.blocos.' + b + '.paredes', 'tipo de parede']]).map(x => pre + x));
+          const fa = ((d.estrutura.blocos || [])[b] || {}).fachadas || {};
+          if (['N', 'S', 'L', 'O'].some(x => !fa[x])) out.push(pre + 'orientação das fachadas');
+          out = out.concat(this.fotos([['estrutura.b' + b + '.cobertura', 'cobertura']]).map(x => pre + x));
+        }
+        return out.concat(this.campos([['estrutura.vrfLocal', 'local das condensadoras']]))
+          .concat(this.fotos([['estrutura.solo', 'solo ou pátio'], ['estrutura.base', 'base da condensadora']]));
+      }
+      case 'eletrica': {
+        let out = [];
+        for (let b = 0; b < nb; b++) {
+          const pre = nb > 1 ? 'Bloco ' + BLOCO(b) + ': ' : '';
+          const p = 'eletrica.blocos.' + b + '.';
+          out = out.concat(this.campos([[p + 'tipo', 'tipo de quadro'], [p + 'tensao', 'tensão do quadro'], [p + 'estado', 'estado do quadro'],
+            [p + 'circuito', 'circuito dedicado'], [p + 'pontoForca', 'ponto de força'], [p + 'aterr', 'aterramento do quadro']]).map(x => pre + x));
+          out = out.concat(this.fotos([['eletrica.b' + b + '.quadro', 'quadro'], ['eletrica.b' + b + '.disjuntores', 'disjuntores'], ['eletrica.b' + b + '.aterr', 'aterramento do quadro']]).map(x => pre + x));
+        }
+        return out;
+      }
+      case 'ambientes': {
+        const out = [];
+        for (let b = 0; b < nb; b++) {
+          const pavs = Number(((d.estrutura.blocos || [])[b] || {}).pav) || 1;
+          for (let p = 0; p < pavs; p++) if (!Amb.lista(b, p).length) out.push('Bloco ' + BLOCO(b) + ' · ' + PAV(p) + (p ? ' pavimento' : '') + ' sem ambientes');
+        }
+        const it = d.ambientes.itens || [];
+        const semMed = it.filter(a => !Amb.area(a)).length;
+        const semFoto = it.filter(a => Amb.semFoto(a)).length;
+        if (semMed) out.push(plural(semMed, 'ambiente') + ' sem medidas');
+        if (semFoto) out.push(plural(semFoto, 'ambiente') + ' sem fotos');
+        return out;
+      }
+      case 'equipamentos':
+        return (d.equipamentos.itens || []).filter(x => x.desc || !num(x.pot)).map(x => 'potência ' + (x.desc ? 'inacessível' : 'não informada') + ': ' + (x.nome || 'equipamento'));
+      case 'revisao':
+        return this.campos([['revisao.respNome', 'nome do responsável'], ['revisao.assResp', 'assinatura do responsável'], ['revisao.assEmpresa', 'assinatura da empresa']]);
+      default: return [];
+    }
+  },
+  todas() {
+    return ETAPAS.filter(e => e.k !== 'revisao').reduce((a, e) => a.concat(this.etapa(e.k).map(x => ({ etapa: e.k, descricao: x }))), []);
+  }
+};
+
+/* ═══════════════════════════ Etapas ═══════════════════════════ */
+const Etapas = {
+  blocoSel(lbl) {
+    const V = App.V;
+    const nb = Number(V.d.estrutura.nBlocos) || 1;
+    if (nb < 2) return '';
+    return F.card('', '<span class="lbl" style="text-transform:uppercase;letter-spacing:.6px;font-size:11.5px;font-weight:700">' + (lbl || 'Dados do bloco') + '</span><div class="chips">' +
+      Array.from({ length: nb }, (x, b) => '<button class="chip' + (V.ui.bloco === b ? ' on' : '') + '" data-act="bloco" data-b="' + b + '">Bloco ' + BLOCO(b) + ' · ' + (Number(V.d.estrutura.blocos[b].pav) || 1) + ' pav.</button>').join('') + '</div>');
+  },
+
+  dados() {
+    const V = App.V, ed = V.ui.ed_dados;
+    const ro = (k, l) => '<div class="ro"><div class="k">' + l + '</div>' + (ed ? F.input('dados.' + k) : '<div class="v' + (Form.get('dados.' + k) ? '' : ' ph') + '">' + esc(Form.get('dados.' + k) || 'Não informado') + '</div>') + '</div>';
+    const ro2 = (a, b) => '<div class="grid2">' + a + b + '</div>';
+    const slots = [['dados.placa', 'Placa da escola', 1, 'wide', '1 foto · texto legível'], ['dados.frontal', 'Fachada frontal', 1], ['dados.lateral', 'Fachada lateral'], ['dados.entrada', 'Fachada entrada']];
+    return '<div class="row" style="margin:0 4px 14px"><p class="intro" style="margin:0;flex:1">Dados vindos do cadastro. Confira e corrija se precisar.</p>' +
+      '<button class="btn btn-out btn-sm" data-act="editar" data-k="dados" style="border-radius:99px">' + (ed ? I('check', 18) + ' Pronto' : 'Editar') + '</button></div>' +
+      F.card('Identificação', ro('nome', 'Nome da escola') + ro2(ro('cie', 'Código CIE'), ro('dre', 'DRE')) + ro('etapaEnsino', 'Etapa de ensino')) +
+      F.card('Endereço', ro('logradouro', 'Logradouro') + ro2(ro('numero', 'Número'), ro('cep', 'CEP')) + ro('bairro', 'Bairro') +
+        '<div class="ro"><div class="k">Complemento</div>' + F.input('dados.complemento', { ph: 'Ex.: portão lateral, bloco B' }) + '</div>') +
+      F.card('Imóvel', F.chips('dados.imovel', 'Situação', ['Próprio', 'Locado', 'Estadual', 'Outros']) + F.numero('dados.idadeAnos', 'Tempo aproximado de construção', { suf: 'anos', ph: 'Ex.: 30' })) +
+      F.card('Fotos da unidade', F.fotos('dados', slots, { extra: 'dados.extra', hint: 'Fachada: fotos padrão, enquadrando o prédio inteiro. Adicione quantas fotos precisar.' }), { badge: F.fotoBadge(slots) }) +
+      F.card('Responsável da unidade', F.text('dados.diretor', 'Diretor(a)', { ph: 'Não informado' }) +
+        F.row(F.text('dados.telefone', 'Telefone', { ph: '(00) 0000-0000', type: 'tel', im: 'tel' }), F.text('dados.email', 'E-mail', { ph: 'email@escola', type: 'email', im: 'email' })),
+        { badge: '<span class="badge b-amber">Pode preencher depois</span>' }) +
+      F.card('Informações preliminares', F.text('dados.acesso', 'Acesso ao local', { ph: 'Portaria, horário, autorização' }) +
+        F.area('dados.obs', 'Observações iniciais', 'Ex.: obra em andamento, ponto de energia, restrição de horário'));
+  },
+
+  entrada() {
+    const e = App.V.d.entrada;
+    const intro = '<p class="intro">Levante a entrada de energia ' + (e.padrao === 'MT' ? 'em média tensão ' : 'da unidade ') + 'antes de seguir para a estrutura.</p>';
+    const padrao = F.seg('entrada.padrao', 'Padrão de entrada', [['MT', 'MT · Média tensão'], ['BT', 'BT · Baixa tensão']]);
+    const aterr = F.card('Aterramento' + (e.padrao === 'MT' ? '' : ' e neutro'),
+      F.seg('entrada.aterr', 'Aterramento', ['Haste', 'Malha', 'Ausente']) + F.numero('entrada.resist', 'Resistência de terra (Ω)', { ph: 'Valor medido' }) +
+      (e.padrao === 'MT' ? '' : F.seg('entrada.neutro', 'Neutro', ['Aterrado', 'Isolado', 'Não identificado']) + F.numero('entrada.tensaoNT', 'Tensão neutro-terra (V)', { ph: 'Valor medido' })));
+    const cabos = F.card(e.padrao === 'MT' ? 'Cabos do secundário' : 'Cabos da entrada',
+      F.seg('entrada.caboModo', '', [['bitola', 'Informar bitola'], ['diametro', 'Informar diâmetro']]) + '<div class="mt"></div>' +
+      [['fase', 'Fase'], ['neutro', 'Neutro'], ['terra', 'Terra']].map(c => e.caboModo === 'bitola'
+        ? '<div class="cabo"><span class="n">' + c[1] + '</span>' + F.input('entrada.cabos.' + c[0], { im: 'decimal', ph: 'Ex.: 35', suf: 'mm²' }) + '<span></span></div>'
+        : '<div class="cabo"><span class="n">' + c[1] + '</span>' + F.input('entrada.cabos.' + c[0], { im: 'decimal', pre: 'Ø', ph: '__', suf: 'mm' }) +
+          '<span class="res" data-calc="secao" data-arg="entrada.cabos.' + c[0] + '"></span></div>').join('') +
+      '<div class="ph-hint">' + (e.padrao === 'MT' ? 'Medição nos cabos do secundário, que são acessíveis. Os cabos do primário não são medidos. ' : '') +
+      'Seção estimada pela área do condutor: π × (Ø ÷ 2)². Confira na bitola comercial mais próxima.</div>' +
+      (e.padrao === 'MT' ? '' : F.seg('entrada.material', 'Material', ['Cobre', 'Alumínio'])));
+
+    if (e.padrao === 'MT') {
+      const slots = [['entrada.cabine', 'Cabine ou poste'], ['entrada.medidor', 'Medidor'], ['entrada.tc', 'Placa do TC/TP'], ['entrada.trafo', 'Placa do transformador'], ['entrada.aterramento', 'Aterramento']];
+      return intro +
+        F.card('Padrão e instalação', padrao + F.seg('entrada.tipoEntrada', 'Tipo de entrada', ['Aérea', 'Subterrânea']) +
+          F.chips('entrada.cabine', 'Tipo da cabine', ['Cubículo blindado externo', 'Cubículo blindado interno', 'Alvenaria', 'Outro']) +
+          F.chips('entrada.tensaoMT', 'Tensão nominal', ['15 kV', '36,2 kV', 'Outro']) + F.text('entrada.medidor', 'Nº do medidor', { ph: 'Número gravado no medidor', im: 'numeric' }),
+          { badge: F.req(['entrada.cabine', 'entrada.tensaoMT', 'entrada.tipoEntrada']) }) +
+        F.card('Transformador', F.row(F.numero('entrada.trafo.n', 'Nº de transformadores', { ph: 'Ex.: 1', im: 'numeric' }), F.numero('entrada.trafo.kva', 'Potência (kVA)', { ph: 'Ex.: 500' })) +
+          F.seg('entrada.trafo.tipo', 'Tipo de transformador', ['Seco', 'A óleo']) + F.seg('entrada.trafo.neutro', 'Neutro do secundário', ['Aterrado', 'Isolado'])) +
+        F.card('Medição e proteção', F.seg('entrada.medicao', 'Tipo de medição', ['Direta', ['Indireta', 'Indireta (TC/TP)']]) +
+          (e.medicao === 'Indireta' ? F.row(F.text('entrada.tc', 'Relação do TC', { ph: 'Ex.: 50/5' }), F.text('entrada.tp', 'Relação do TP', { ph: 'Ex.: 15000/115 V' })) : '') +
+          F.chips('entrada.protecaoMT', 'Dispositivo de proteção', ['Disjuntor', 'Chave seccionadora', 'Chave fusível', 'Outro']) +
+          F.numero('entrada.correnteNom', 'Corrente nominal (A)', { ph: 'Ex.: 100' })) +
+        aterr + cabos +
+        F.card('Medições elétricas', F.lbl('Tensão entre as fases (kV)') + F.meas('entrada.med', [['rs', 'R–S'], ['st', 'S–T'], ['tr', 'T–R']], '0 kV') +
+          F.lbl('Corrente por fase (A)') + F.meas('entrada.med', [['ir', 'R'], ['is', 'S'], ['it', 'T']], '0 A')) +
+        F.card('Fotos da instalação', F.fotos('entrada', slots, { extra: 'entrada.extra' }), { badge: F.fotoBadge(slots) }) +
+        F.card('Estado de conservação', F.cons('entrada.consMT', [['porta', 'Porta'], ['lacre', 'Lacre'], ['isoladores', 'Isoladores'], ['limpeza', 'Limpeza'], ['base', 'Base']]) +
+          F.area('entrada.obs', 'Observações', 'Ex.: isolador trincado, porta sem lacre, aterramento ausente'), { badge: '<span class="badge b-teal">Por item</span>' });
+    }
+
+    const tiposCx = ['Tipo M', 'Tipo T', 'Tipo Z', 'Tipo W', 'Outro'];
+    const slots = [['entrada.medidor', 'Medidor'], ['entrada.quadro', 'Quadro geral'], ['entrada.aterramento', 'Aterramento']];
+    return intro +
+      F.card('Padrão e caixa', padrao +
+        (e.padrao === 'BT' ? '<div class="ph-hint" style="margin-top:8px">Em BT, as caixas são duas, lado a lado. Cada uma tem suas medidas.</div>' +
+          F.seg('entrada.tipoEntrada', 'Tipo de entrada', ['Aérea', 'Subterrânea']) +
+          (e.tipoEntrada !== 'Subterrânea' ? F.chips('entrada.poste', 'Tipo de poste', ['Metálico', 'Circular de concreto', 'Duplo T de concreto']) : '') +
+          F.chips('entrada.tensao', 'Tensão nominal · BT', ['127 V', '220 V', '380 V', 'Outro']) +
+          F.lbl('Padrão BT · duas caixas lado a lado') +
+          '<div class="box-n"><div class="h"><i>1</i><span><b>Caixa de entrada e medição</b><small>Escolha o tipo ou Outro</small></span></div>' +
+          F.chips('entrada.cx1.tipo', '', tiposCx) + F.text('entrada.cx1.medidor', 'Nº do medidor', { ph: 'Número gravado no medidor', im: 'numeric' }) + '</div>' +
+          '<div class="box-n"><div class="h"><i>2</i><span><b>Caixa de proteção e seccionamento</b><small>Escolha o tipo ou Outro</small></span></div>' +
+          F.chips('entrada.cx2.tipo', '', tiposCx) + F.chips('entrada.cx2.protecao', 'Dispositivo de proteção', ['Chave seccionadora', 'Disjuntor caixa moldada', 'Chave seca', 'Outro']) +
+          F.numero('entrada.cx2.disjuntor', 'Disjuntor geral (A)', { ph: 'Ex.: 100', im: 'numeric' }) + '</div>' : ''),
+        { badge: F.req(['entrada.padrao', 'entrada.tipoEntrada', 'entrada.tensao', 'entrada.cx1.tipo', 'entrada.cx2.disjuntor']) }) +
+      (e.padrao === 'BT' ?
+        F.card('Medidas de referência', '<table class="tbl"><tr><th>TIPO</th><th>A</th><th>L</th><th>P</th></tr>' +
+          [['Tipo M', 900, 1200, 270], ['Tipo T', 900, 600, 270], ['Tipo Z', 1400, 2000, 250], ['Tipo W', 2000, 2600, 300]]
+            .map(r => '<tr' + (r[0] === (e.cx1 || {}).tipo || r[0] === (e.cx2 || {}).tipo ? ' style="background:var(--teal-l)"' : '') + '><td>' + r[0] + '</td><td>' + fmt(r[1]) + '</td><td>' + fmt(r[2]) + '</td><td>' + r[3] + '</td></tr>').join('') +
+          '</table><div class="ph-hint">Valores da tabela de referência; confirme com a norma da concessionária.</div>', { badge: '<span class="badge b-green">A × L × P (mm)</span>' }) +
+        aterr + cabos +
+        F.card('Medições elétricas', F.lbl('Tensão entre as fases (V)') + F.meas('entrada.med', [['rs', 'R–S'], ['st', 'S–T'], ['tr', 'T–R']], '0 V') +
+          F.lbl('Tensão fase–neutro (V)') + F.meas('entrada.med', [['rn', 'R–N'], ['sn', 'S–N'], ['tn', 'T–N']], '0 V') +
+          F.lbl('Corrente por fase (A)') + F.meas('entrada.med', [['ir', 'R'], ['is', 'S'], ['it', 'T']], '0 A')) +
+        F.card('Fotos da entrada', F.fotos('entrada', slots, { extra: 'entrada.extra' }), { badge: F.fotoBadge(slots) }) +
+        F.card('Estado de conservação', F.cons('entrada.cons', [['tampa', 'Tampa'], ['lacre', 'Lacre'], ['visor', 'Visor'], ['limpeza', 'Limpeza'], ['fundo', 'Fundo']]) +
+          F.area('entrada.obs', 'Observações', 'Ex.: cabo exposto, aterramento ausente, medidor fora do padrão'), { badge: '<span class="badge b-teal">Por item</span>' })
+        : '<div class="empty">' + I('pin', 36) + '<div>Escolha o padrão de entrada para continuar.</div></div>');
+  },
+
+  estrutura() {
+    const V = App.V, b = V.ui.bloco, es = V.d.estrutura;
+    const nb = Number(es.nBlocos) || 1;
+    const P = 'estrutura.blocos.' + b + '.';
+    const norte = Number(es.norte) || 0;
+    const slots = [['estrutura.b' + b + '.cobertura', 'Cobertura'], ['estrutura.solo', 'Solo ou pátio'], ['estrutura.base', 'Base da condensadora']];
+    const fach = [['N', 'Norte'], ['S', 'Sul'], ['L', 'Leste'], ['O', 'Oeste']];
+    return Etapas.blocoSel() +
+      F.card('Edificações', F.lbl('Número de prédios ou blocos') + F.stepper('estrutura.nBlocos', '', { min: 1, max: 12, fn: 'nBlocos' }) +
+        F.lbl('Pavimentos de cada bloco (inclui térreo)') +
+        Array.from({ length: nb }, (x, i) => '<div class="box-n" style="display:flex;align-items:center;gap:12px;margin-top:8px"><span class="avatar" style="background:var(--navy);width:34px;height:34px;border-radius:9px">' + BLOCO(i) + '</span><span style="flex:1"><b>Bloco ' + BLOCO(i) + '</b><br><small class="muted">Pavimentos, inclui térreo</small></span>' +
+          F.stepper('estrutura.blocos.' + i + '.pav', '', { min: 1, max: 20, sm: true }) + '</div>').join(''),
+        { badge: F.req(['estrutura.nBlocos']) }) +
+      F.card('Setores externos', F.chips('estrutura.setores', '', ['Entrada', 'Estacionamento', 'Pátio', 'Quadra coberta', 'Anexo', 'Edícula', 'Playground', 'Outro'], { multi: true }) +
+        '<div class="ph-hint">Marque os setores que existem na escola. Eles aparecem como atalhos em Ambientes.</div>') +
+      F.card('Cobertura' + (nb > 1 ? ' <small>· Bloco ' + BLOCO(b) + '</small>' : ''), F.chips(P + 'cobTipo', 'Tipo de cobertura', ['Laje', 'Telha cerâmica', 'Telha metálica', 'Telha termoacústica', 'Fibrocimento', 'Outro']) +
+        F.chips(P + 'cobAcesso', 'Acesso à cobertura', ['Escada interna', 'Escada externa', 'Sem acesso']) +
+        F.seg(P + 'cobEstado', 'Estado da cobertura', ['Boa', 'Regular', 'Ruim']), { badge: nb > 1 ? '<span class="badge b-amber">Por bloco</span>' : F.req([P + 'cobTipo', P + 'cobEstado']) }) +
+      F.card('Brises e beirais', F.chips(P + 'brises', 'Brises', ['Não há', 'Horizontais', 'Verticais', 'Mistos']) +
+        F.chips(P + 'beirais', 'Beirais', ['Não há', 'Estreito', 'Largo']) +
+        (Form.get(P + 'beirais') && Form.get(P + 'beirais') !== 'Não há' ? F.numero(P + 'beiralLarg', 'Largura do beiral (cm)', { ph: 'Ex.: 80', im: 'numeric' }) : '')) +
+      F.card('Orientação e salas de aula',
+        '<div class="compass"><div class="nbadge">' + I('north', 18) + '</div><span class="card-l" style="left:16px;top:50%">Oeste</span><span class="card-l" style="right:16px;top:50%">Leste</span>' +
+        '<div class="plan" style="transform:rotate(' + norte + 'deg)"><span class="nt">Norte · referência</span><div class="b"></div><div class="door"></div><span class="ent">Entrada principal</span></div></div>' +
+        '<div class="box-n row"><span style="flex:1"><b>Norte verdadeiro</b><br><small class="muted">Ajuste da planta: ' + norte + '°</small></span><button class="btn btn-navy btn-sm" data-act="girar" style="border-radius:99px">' + I('rotate', 16) + ' Girar</button></div>' +
+        '<div class="ph-hint">Norte de referência: fachada oposta à entrada principal. Gire a planta até o norte verdadeiro, se necessário.</div>' +
+        F.lbl('Fachadas do bloco selecionado') +
+        fach.map(f => '<div class="fach-row"><b>' + f[1] + '</b>' + ['Cega', 'Sem sala', 'Com sala'].map(o =>
+          '<button class="chip' + (Form.get(P + 'fachadas.' + f[0]) === o ? ' on' : '') + '" data-act="pick" data-k="' + P + 'fachadas.' + f[0] + '" data-v="' + o + '">' + o + '</button>').join('') + '</div>').join('')) +
+      F.card('Paredes', F.chips(P + 'paredes', 'Tipo de parede', ['Alvenaria', 'Concreto', 'Drywall', 'Outro']) + F.numero(P + 'peDireito', 'Pé-direito (m)', { ph: 'Ex.: 3,20' })) +
+      F.card('Condensadoras VRF', F.chips('estrutura.vrfLocal', 'Local de instalação das condensadoras', ['Cobertura', 'Laje técnica', ['Solo', 'Solo (área térrea)'], 'Pátio', 'Outro'], { multi: true }) +
+        F.chips('estrutura.vrfBase', 'Base ou suporte', ['Concreto', 'Suporte metálico', 'Já existente']), { badge: F.req(['estrutura.vrfLocal']) }) +
+      F.card('Tubulação', F.chips('estrutura.tubulacao', 'Passagem para evaporadoras', ['Parede', 'Laje', 'Forro', 'Shaft'], { multi: true })) +
+      F.card('Estado de conservação', F.cons('estrutura.cons', [['cobertura', 'Cobertura'], ['paredes', 'Paredes'], ['forro', 'Forro'], ['imperm', 'Impermeab.'], ['fixacoes', 'Fixações']]),
+        { badge: '<span class="badge b-teal">Por item</span>' }) +
+      F.card('Fotos da estrutura', F.fotos('estrutura', slots, { extra: 'estrutura.extra' }), { badge: F.fotoBadge(slots) }) +
+      F.card('Observações', F.area('estrutura.obs', '', 'Ex.: infiltração no forro, parede sem prumo, cobertura sem acesso'));
+  },
+
+  eletrica() {
+    const V = App.V, b = V.ui.bloco;
+    const P = 'eletrica.blocos.' + b + '.';
+    const slots = [['eletrica.b' + b + '.quadro', 'Quadro'], ['eletrica.b' + b + '.disjuntores', 'Disjuntores'], ['eletrica.b' + b + '.pontoForca', 'Ponto de força'], ['eletrica.b' + b + '.eletroduto', 'Eletroduto'], ['eletrica.b' + b + '.aterr', 'Aterramento do quadro']];
+    return Etapas.blocoSel() +
+      F.card('Quadros elétricos', F.stepper(P + 'quadros', 'Quadros no bloco', { min: 0, max: 30 }) +
+        F.chips(P + 'tipo', 'Tipo de quadro', ['QGBT', 'QDC', 'QD', 'Outro']) + F.chips(P + 'tensao', 'Tensão do quadro', ['127 V', '220 V', '380 V', 'Outro']) +
+        F.numero(P + 'vagas', 'Vagas livres para novos disjuntores', { ph: 'Ex.: 4', im: 'numeric' }) + '<div class="hr"></div>' +
+        F.seg(P + 'estado', 'Estado do quadro', ['Boa', 'Regular', 'Ruim']) + F.chips(P + 'dr', 'DR instalado', ['Sim', 'Não']),
+        { badge: F.req([P + 'tipo', P + 'tensao', P + 'estado']) }) +
+      F.card('Alimentação do ar-condicionado', F.chips(P + 'circuito', 'Circuito dedicado existente', ['Sim', 'Não']) +
+        F.chips(P + 'pontoForca', 'Ponto de força próximo às unidades', ['Existe', 'Precisa criar', 'Não se aplica']) +
+        F.chips(P + 'eletroduto', 'Caminho para eletroduto', ['Existente', 'Novo', 'Não existe'])) +
+      F.card('Aterramento do quadro', F.chips(P + 'aterr', 'Aterramento', ['Presente', 'Ausente'])) +
+      F.card('Estado de conservação', F.cons(P + 'cons', [['quadro', 'Quadro'], ['disjuntores', 'Disjuntores'], ['fiacao', 'Fiação'], ['tomadas', 'Tomadas'], ['eletrodutos', 'Eletrodutos']]) +
+        F.area(P + 'obs', 'Observações', 'Ex.: quadro sem identificação, fiação aparente, quadro sem espaço'), { badge: '<span class="badge b-teal">Por item</span>' }) +
+      F.card('Fotos da elétrica', F.fotos('eletrica', slots, { extra: 'eletrica.b' + b + '.extra' }), { badge: F.fotoBadge(slots) });
+  },
+
+  ambientes() {
+    const V = App.V, d = V.d;
+    const nb = Number(d.estrutura.nBlocos) || 1;
+    if (V.ui.bloco >= nb) V.ui.bloco = 0;
+    const b = V.ui.bloco;
+    const pavs = Number(((d.estrutura.blocos || [])[b] || {}).pav) || 1;
+    if (V.ui.pav >= pavs) V.ui.pav = 0;
+    const p = V.ui.pav;
+    const lista = Amb.lista(b, p);
+    const totalUn = lista.reduce((s, a) => s + (Number(a.qtd) || 1), 0);
+    const areaPav = lista.reduce((s, a) => s + Amb.area(a) * (Number(a.qtd) || 1), 0);
+    const ok = d.ambientes.pavOk || {};
+    const ext = Amb.externos();
+    const setores = (d.estrutura.setores || []).map(s => SETOR_PARA_EXT[s]).filter(Boolean).filter(t => !ext.some(a => a.tipo === t));
+    return F.card('', F.lbl('Bloco') + '<div class="chips">' + Array.from({ length: nb }, (x, i) => '<button class="chip' + (b === i ? ' on' : '') + '" data-act="bloco" data-b="' + i + '">Bloco ' + BLOCO(i) + '</button>').join('') + '</div>' +
+        F.lbl('Pavimento') + '<div class="pav-tabs">' + Array.from({ length: pavs }, (x, i) => {
+          const st = ok[b + '-' + i] ? 'ok' : Amb.lista(b, i).length ? 'and' : 'pend';
+          return '<button class="' + st + (p === i ? ' on' : '') + '" data-act="pav" data-p="' + i + '">' + PAV(i) + (st === 'ok' ? ' ✓' : p === i ? '<br><small>em andamento</small>' : st === 'pend' ? ' · pendente' : '') + '</button>';
+        }).join('') + '</div>') +
+      '<section class="card"><div class="pav-head"><span><b>Bloco ' + BLOCO(b) + ' · ' + (p === 0 ? 'Térreo' : PAV(p) + ' pavimento') + '</b><small>Ambientes deste pavimento</small></span><span class="badge">' + totalUn + ' un.</span></div>' +
+        (lista.length ? lista.map(a => Amb.linha(a)).join('') + '<div class="tot"><span>Área do pavimento</span><b>' + fmt(areaPav, areaPav % 1 ? 1 : 0) + ' m²</b></div>'
+          : '<div class="empty" style="padding:24px 10px">Nenhum ambiente neste pavimento ainda.</div>') +
+        '<button class="btn btn-dash" data-act="ambNovo">' + I('plus', 20) + ' Adicionar tipo neste pavimento</button>' +
+        (lista.length ? '<button class="btn ' + (ok[b + '-' + p] ? 'btn-out' : 'btn-out-teal') + ' mt" data-act="pavConcluir">' + (ok[b + '-' + p] ? 'Reabrir pavimento' : I('check', 20) + ' Concluir pavimento') + '</button>' : '') +
+      '</section>' +
+      F.card('Áreas externas', '<p class="muted small" style="margin:-6px 0 6px">Não são por pavimento. Informe por setor da escola.</p>' +
+        ext.map(a => Amb.linha(a)).join('') +
+        (setores.length ? '<div class="chips sm mt">' + setores.map(t => '<button class="chip" data-act="ambNovo" data-ext="1" data-tipo="' + esc(t) + '">+ ' + esc(t) + '</button>').join('') + '</div>' : '') +
+        '<button class="btn btn-dash mt" data-act="ambNovo" data-ext="1">' + I('plus', 20) + ' Adicionar área externa</button>');
+  },
+
+  equipamentos() {
+    const itens = App.V.d.equipamentos.itens || [];
+    return F.card('Equipamentos com carga', itens.map((x, i) => {
+      const P = 'equipamentos.itens.' + i + '.';
+      const fs = Vist.fotosDe('equipamentos.' + x.id + '.chapa');
+      const last = fs[fs.length - 1];
+      return '<div class="equip"><div class="equip-h"><input data-k="' + P + 'nome" value="' + esc(x.nome) + '" placeholder="Nome do equipamento">' +
+        F.stepper(P + 'qtd', '', { min: 1, max: 50, sm: true }) +
+        '<button class="icon-btn" style="color:var(--muted);width:34px;height:34px;margin:0" data-act="eqRm" data-id="' + x.id + '" aria-label="Remover">' + I('x', 18) + '</button></div>' +
+        '<div class="cols"><div><span class="lbl" style="margin-top:0">Potência nominal</span>' +
+        (x.desc ? '<div class="pot" style="color:var(--muted-2)">—</div>' :
+          '<input class="pot" data-k="' + P + 'pot" value="' + esc(x.pot) + '" inputmode="decimal" placeholder="Ex.: 3">' +
+          '<div class="seg mt" style="gap:6px">' + ['W', 'CV'].map(u => '<button class="chip' + (x.un === u ? ' on' : '') + '" data-act="pick" data-fix="1" data-k="' + P + 'un" data-v="' + u + '">' + u + '</button>').join('') + '</div>' +
+          '<div class="small c-teal mt" data-calc="pot" data-arg="' + x.id + '"></div>') + '</div>' +
+        '<div><span class="lbl" style="margin-top:0">Chapa de identificação</span><button class="chapa" data-act="foto" data-slot="equipamentos.' + x.id + '.chapa" data-etapa="equipamentos" data-rot="Chapa · ' + esc(x.nome) + '">' +
+        (last ? '<img data-th="' + last.id + '"' + (last.fileId ? ' data-fid="' + last.fileId + '"' : '') + ' alt="">' : '<span class="row" style="gap:6px">' + I('camera', 22) + ' Foto</span>') + '</button></div></div>' +
+        '<div class="mt">' + F.check(P + 'desc', '<span style="font-weight:600;color:var(--muted)">Desconhecido / inacessível</span>') + '</div></div>';
+    }).join('') + '<button class="btn btn-out-teal" data-act="eqAdd">' + I('plus', 20) + ' Adicionar equipamento</button>');
+  },
+
+  revisao() {
+    const V = App.V;
+    const c = Vist.contagem();
+    const ext = Amb.externos().reduce((s, a) => s + (Number(a.qtd) || 1), 0);
+    const st = k => {
+      const p = Pend.etapa(k);
+      if (k === 'equipamentos' && (V.d.equipamentos.itens || []).some(x => x.desc)) return '<span class="badge b-red" style="background:none">Atenção</span>';
+      if (k === 'ambientes') { const sf = (V.d.ambientes.itens || []).filter(a => Amb.semFoto(a)).length; if (sf) return '<span class="badge b-amber">' + sf + ' sem fotos</span>'; }
+      return p.length ? '<span class="badge b-amber">' + plural(p.length, 'pendência') + '</span>' : '<span class="badge b-green" style="background:none">Completo</span>';
+    };
+    const e = V.d.entrada, es = V.d.estrutura;
+    const sub = {
+      dados: 'Identificação e endereço',
+      entrada: e.padrao === 'MT' ? 'Padrão MT' + (e.trafo && e.trafo.kva ? ' · ' + e.trafo.kva + ' kVA' : '') : e.padrao === 'BT' ? 'Padrão BT, caixas 1 e 2' : 'Não iniciada',
+      estrutura: plural(Number(es.nBlocos) || 1, 'bloco') + ((es.setores || []).length ? ' · setores externos' : ''),
+      eletrica: (V.d.eletrica.blocos || []).reduce((s, b) => s + (Number(b.quadros) || 0), 0) + ' quadros',
+      ambientes: (c.ambientes - ext) + ' internos · ' + ext + ' externos',
+      equipamentos: plural((V.d.equipamentos.itens || []).length, 'item', 'itens') + ((V.d.equipamentos.itens || []).filter(x => x.desc).length ? ' · ' + (V.d.equipamentos.itens || []).filter(x => x.desc).length + ' inacessível' : '')
+    };
+    const pend = Pend.todas();
+    const r = V.d.revisao;
+    const ass = (k) => r[k] ? '<span class="badge b-green">Assinado</span>' : '<span class="badge b-amber">Não assinado</span>';
+    return F.card('Resumo da vistoria', ETAPAS.filter(x => x.k !== 'revisao').map(x =>
+        '<button class="sum-row" data-act="etapaIr" data-to="' + x.k + '"><span><b>' + x.t + '</b><small>' + esc(sub[x.k]) + '</small></span>' + st(x.k) + '</button>').join('') +
+      (pend.length ? '<div class="warn-box"><b>Antes de finalizar:</b> ' + esc(pend.slice(0, 4).map(p => p.descricao).join('; ')) + (pend.length > 4 ? ' e mais ' + (pend.length - 4) : '') +
+        '. Você pode finalizar assim, mas essas pendências ficarão registradas.</div>' : '')) +
+      F.card('Responsável pelo acompanhamento', F.text('revisao.respNome', 'Nome', { ph: 'Nome completo' }) + F.text('revisao.respCargo', 'Cargo', { ph: 'Ex.: Diretora' }) +
+        F.row(F.text('revisao.respRF', 'RF', { ph: 'Ex.: 1234567', im: 'numeric' }), F.text('revisao.respTel', 'Telefone', { ph: '(11) 00000-0000', type: 'tel', im: 'tel' })) +
+        F.text('revisao.respEmail', 'E-mail', { ph: 'email@escola.sp.gov.br', type: 'email', im: 'email' }) +
+        '<div class="row mt" style="justify-content:space-between"><span class="lbl" style="margin:0">Assinatura</span>' + ass('assResp') + '</div><div class="mt">' + F.sig('revisao.assResp') + '</div>') +
+      F.card('Responsável pela empresa', '<div class="row" style="justify-content:space-between"><span class="lbl" style="margin:0">Assinatura</span>' + ass('assEmpresa') + '</div><div class="mt">' + F.sig('revisao.assEmpresa') + '</div>') +
+      F.card('Prioridades da unidade', '<p class="muted small" style="margin:-6px 0 0">Uma por linha, na ordem pedida pela unidade. Se ficar em branco, o relatório sugere a partir dos ambientes.</p>' +
+        F.area('revisao.prioridades', '', 'Ex.: Adequação do ar-condicionado nas salas de aula 1 e 2')) +
+      F.card('Observações gerais', F.area('revisao.obsGerais', '', 'Ex.: escola em funcionamento, acesso só pela portaria, retorno para medir o quadro')) +
+      F.card('Relatórios', '<button class="btn btn-out-teal" data-act="go" data-to="relatorio" data-p=\'{"tipo":"completo"}\'>' + I('file', 20) + ' Visualizar relatório completo</button>' +
+        '<button class="btn btn-out mt" data-act="go" data-to="relatorio" data-p=\'{"tipo":"vistoria"}\'>Visualizar relatório de vistoria</button>' +
+        '<div class="ph-hint">Os relatórios ficam disponíveis para visualização. A assinatura libera a versão final.</div>',
+        { badge: r.assResp && r.assEmpresa ? '<span class="badge b-green">Assinado</span>' : '<span class="badge b-amber">Não assinado</span>' });
+  }
+};
+</script>

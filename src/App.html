@@ -1,0 +1,555 @@
+<script>
+'use strict';
+/* ═══════════════════════════ VistAR · núcleo do app ═══════════════════════════ */
+
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const uid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/-/g, '').slice(0, 20);
+const num = v => { const n = parseFloat(String(v === null || v === undefined ? '' : v).replace(/\s/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const fmt = (n, c) => (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: c || 0, maximumFractionDigits: c || 0 });
+const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms || 8); } catch (e) { /* sem vibração */ } };
+const hora = iso => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+const dataBR = (iso, ano) => {
+  if (!iso) return '';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(iso + 'T12:00:00') : new Date(iso);
+  return d.toLocaleDateString('pt-BR', ano ? { day: '2-digit', month: '2-digit', year: 'numeric' } : { day: '2-digit', month: '2-digit' });
+};
+const hojeISO = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const duracao = (a, b) => {
+  const min = Math.max(0, Math.round(((b ? new Date(b) : new Date()) - new Date(a)) / 60000));
+  return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0');
+};
+const plural = (n, s, p) => n + ' ' + (n === 1 ? s : (p || s + 's'));
+const semPrefixo = nome => String(nome || '').replace(/^(EMEF|EMEI|CEI|CEU|EMEFM|EMEBS)\s+/i, '');
+const curto = nome => semPrefixo(nome).replace(/^(Brigadeiro|Marechal|Padre|Professor|Profª?|Dr\.?|Dom)\s+/i, '').split(' ').slice(-2).join(' ');
+
+/* ───── Ícones (traço 2px, estilo Lucide) ───── */
+const ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  school: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h6M9 11h6M9 15h6"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  checksq: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m8 12 3 3 5-6"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  right: '<path d="m9 6 6 6-6 6"/>', left: '<path d="m15 6-6 6 6 6"/>', down: '<path d="m6 9 6 6 6-6"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  menu: '<circle cx="12" cy="12" r="9.5"/><path d="M8 9.5h8M8 12.5h8M10 15.5h4"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  alert: '<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/>', pin: '<path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  file: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', rotate: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', cloud: '<path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
+  gallery: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  north: '<path d="M12 3 7 19l5-3 5 3z" fill="currentColor"/>', doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>',
+  ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'
+};
+const I = (n, s, w) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
+const LOGO = '<svg width="46" height="46" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#3CC1B5"/><stop offset="1" stop-color="#2A7FD4"/></linearGradient></defs><path d="M38 12A17 17 0 1 0 38 36" fill="none" stroke="url(#lg)" stroke-width="6" stroke-linecap="round"/><path d="M22 17v14M16 20l12 8M28 20l-12 8" stroke="#3CC1B5" stroke-width="2.4" stroke-linecap="round"/></svg>';
+
+/* ───── Armazenamento local ───── */
+const LS = (() => {
+  const mem = {};
+  return {
+    get(k, d) { try { const v = localStorage.getItem('vistar.' + k); return v === null ? (k in mem ? mem[k] : (d === undefined ? null : d)) : JSON.parse(v); } catch (e) { return k in mem ? mem[k] : (d === undefined ? null : d); } },
+    set(k, v) { mem[k] = v; try { localStorage.setItem('vistar.' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+    del(k) { delete mem[k]; try { localStorage.removeItem('vistar.' + k); } catch (e) { /* ignora */ } }
+  };
+})();
+
+/** IndexedDB com fallback em memória (fila offline e miniaturas). */
+const IDB = (() => {
+  let dbp = null;
+  const mem = { outbox: new Map(), thumbs: new Map() };
+  function open() {
+    if (dbp) return dbp;
+    dbp = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('sem IndexedDB'));
+      const r = indexedDB.open('vistar', 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('outbox', { keyPath: 'id' }); r.result.createObjectStore('thumbs', { keyPath: 'id' }); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }).catch(() => null);
+    return dbp;
+  }
+  async function tx(store, mode, fn, memFn) {
+    const db = await open();
+    if (!db) return memFn(mem[store]);
+    return new Promise((res) => {
+      let out;
+      try {
+        const t = db.transaction(store, mode);
+        const req = fn(t.objectStore(store));
+        if (req) req.onsuccess = () => { out = req.result; };
+        t.oncomplete = () => res(out);
+        t.onerror = t.onabort = () => res(memFn(mem[store]));
+      } catch (e) { res(memFn(mem[store])); }
+    });
+  }
+  return {
+    put: (s, v) => tx(s, 'readwrite', o => o.put(v), m => m.set(v.id, v)),
+    get: (s, k) => tx(s, 'readonly', o => o.get(k), m => m.get(k)),
+    del: (s, k) => tx(s, 'readwrite', o => o.delete(k), m => m.delete(k)),
+    all: s => tx(s, 'readonly', o => o.getAll(), m => Array.from(m.values())),
+    clear: s => tx(s, 'readwrite', o => o.clear(), m => m.clear())
+  };
+})();
+
+/* ───── Chamada ao servidor (google.script.run) ───── */
+const Api = {
+  run(acao, payload) {
+    return new Promise((res, rej) => {
+      const ok = r => {
+        if (r && r.ok) return res(r.data);
+        const e = new Error((r && r.error) || 'Erro no servidor');
+        e.code = r && r.code; e.biz = true; rej(e);
+      };
+      const fail = err => { const e = new Error((err && err.message) || 'Sem conexão com o servidor'); e.net = true; rej(e); };
+      if (window.google && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(ok).withFailureHandler(fail).api(acao, App.token, payload || {});
+      } else if (window.MockApi) {
+        window.MockApi(acao, App.token, payload || {}).then(ok, fail);
+      } else fail(new Error('Servidor indisponível'));
+    });
+  }
+};
+
+/* ───── Fila offline: tudo que altera dados passa por aqui ───── */
+const Sync = {
+  q: [], busy: false, fails: 0, handlers: {}, waiters: [],
+  async init() {
+    this.q = ((await IDB.all('outbox')) || []).sort((a, b) => a.seq - b.seq);
+    this.q.forEach(i => { i.running = false; });
+    window.addEventListener('online', () => { this.fails = 0; this.kick(); App.renderNet(); });
+    window.addEventListener('offline', () => { this.render(); App.renderNet(); });
+    setInterval(() => this.kick(), 20000);
+  },
+  on(acao, fn) { this.handlers[acao] = fn; },
+  async add(acao, payload, key) {
+    if (key) {
+      const ex = this.q.find(i => i.key === key && !i.running);
+      if (ex) { ex.payload = payload; await IDB.put('outbox', ex); this.kickSoon(); return ex; }
+    }
+    const it = { id: uid(), seq: Date.now() + Math.random(), acao: acao, payload: payload, key: key || '', tries: 0 };
+    this.q.push(it);
+    await IDB.put('outbox', it);
+    this.render();
+    this.kickSoon();
+    return it;
+  },
+  has(pred) { return this.q.some(pred); },
+  kickSoon(ms) { clearTimeout(this._t); this._t = setTimeout(() => this.kick(), ms === undefined ? 800 : ms); },
+  async kick() {
+    if (this.busy || !this.q.length || !App.token) { this.done(); return; }
+    if (navigator.onLine === false) { this.render(); return; }
+    this.busy = true; this.render();
+    while (this.q.length) {
+      const it = this.q[0];
+      it.running = true;
+      try {
+        const r = await Api.run(it.acao, it.payload);
+        this.q.shift(); await IDB.del('outbox', it.id); this.fails = 0;
+        const h = this.handlers[it.acao];
+        if (h) { try { h(r, it.payload); } catch (e) { console.error(e); } }
+      } catch (e) {
+        it.running = false;
+        if (e.code === 'AUTH') { this.busy = false; this.render(); App.authLost(); return; }
+        if (e.biz) {
+          it.tries++;
+          if (it.tries >= 3) {
+            this.q.shift(); await IDB.del('outbox', it.id);
+            toast('Não sincronizado: ' + e.message, 'err', 6000);
+            const h = this.handlers[it.acao + ':erro'];
+            if (h) { try { h(e, it.payload); } catch (x) { console.error(x); } }
+          } else { await IDB.put('outbox', it); await new Promise(r => setTimeout(r, 1500)); }
+        } else { this.fails++; break; }
+      }
+      this.render();
+    }
+    this.busy = false; this.render(); this.done();
+    if (this.q.length && this.fails) this.kickSoon(Math.min(60000, 2000 * Math.pow(2, this.fails)));
+  },
+  done() { if (!this.q.length) { const w = this.waiters; this.waiters = []; w.forEach(f => f()); } },
+  /** Espera a fila esvaziar (para ações que precisam do servidor em dia). */
+  flush(ms) {
+    return new Promise((res, rej) => {
+      if (!this.q.length) return res();
+      const t = setTimeout(() => rej(new Error(navigator.onLine === false ? 'Sem conexão. Os dados continuam salvos no aparelho.' : 'A sincronização está demorando. Tente de novo em instantes.')), ms || 90000);
+      this.waiters.push(() => { clearTimeout(t); res(); });
+      this.fails = 0; this.kick();
+    });
+  },
+  render() {
+    const n = this.q.length;
+    const off = navigator.onLine === false;
+    $$('[data-sync]').forEach(el => {
+      el.classList.toggle('hidden', !n && !off);
+      el.className = 'sync' + (off ? ' off' : '') + (this.busy ? ' run' : '') + (this.fails > 2 ? ' err' : '') + (!n && !off ? ' hidden' : '');
+      el.innerHTML = '<i></i>' + (off ? 'Offline' + (n ? ' · ' + n : '') : this.busy ? 'Enviando ' + n : n + ' na fila');
+    });
+  }
+};
+
+/* ───── Toast, folhas inferiores e confirmação ───── */
+function toast(msg, tipo, ms) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (tipo || '');
+  el.innerHTML = (tipo === 'ok' ? I('check', 18) : tipo === 'err' ? I('alert', 18) : '') + '<span>' + esc(msg) + '</span>';
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, ms || 2600);
+}
+
+const Sheet = {
+  open(html, opts) {
+    this.close(true);
+    this.opts = opts || {};
+    $('#layer').innerHTML = '<div class="scrim" data-act="sheetClose"></div><div class="sheet" role="dialog"><div class="grab"></div>' + html + '</div>';
+    const f = $('#layer .sheet input, #layer .sheet textarea');
+    if (f && this.opts.focus) setTimeout(() => f.focus(), 250);
+  },
+  close(silent) {
+    const had = $('#layer').innerHTML;
+    $('#layer').innerHTML = '';
+    const cb = this.opts && this.opts.onClose;
+    this.opts = null;
+    if (had && !silent && cb) cb();
+  }
+};
+
+function confirmar(o) {
+  return new Promise(res => {
+    Sheet.open(
+      '<h3>' + esc(o.titulo) + '</h3>' + (o.texto ? '<p class="muted" style="margin:6px 0 16px">' + o.texto + '</p>' : '<div style="height:14px"></div>') +
+      '<div class="grid2"><button class="btn btn-out" data-act="sheetClose">' + esc(o.nao || 'Voltar') + '</button>' +
+      '<button class="btn ' + (o.perigo ? 'btn-red' : 'btn-navy') + '" id="cfOk">' + esc(o.sim || 'Confirmar') + '</button></div>',
+      { onClose: () => res(false) });
+    $('#cfOk').onclick = () => { Sheet.close(true); res(true); };
+  });
+}
+
+function carregando(btn, on, txt) {
+  if (!btn) return;
+  if (on) { btn._html = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + (txt ? esc(txt) : ''); }
+  else { btn.disabled = false; if (btn._html) btn.innerHTML = btn._html; }
+}
+
+/* ───── Geolocalização ───── */
+const Geo = {
+  last: null,
+  get(ms) {
+    return new Promise(res => {
+      if (!navigator.geolocation) return res(this.last);
+      if (this.last && Date.now() - this.last.t < 90000) return res(this.last);
+      let fim = false;
+      const t = setTimeout(() => { if (!fim) { fim = true; res(this.last); } }, ms || 8000);
+      try {
+        navigator.geolocation.getCurrentPosition(p => {
+          if (fim) return; fim = true; clearTimeout(t);
+          this.last = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, t: Date.now() };
+          res(this.last);
+        }, () => { if (!fim) { fim = true; clearTimeout(t); res(this.last); } }, { enableHighAccuracy: true, maximumAge: 60000, timeout: ms || 8000 });
+      } catch (e) { fim = true; clearTimeout(t); res(this.last); }
+    });
+  },
+  dist(a, b, c, d) {
+    const R = 6371000, r = x => x * Math.PI / 180;
+    const h = Math.sin(r(c - a) / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(r(d - b) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+};
+
+/* ───── Miniaturas em memória + IndexedDB + servidor ───── */
+const Thumbs = {
+  mem: new Map(),
+  async load() { ((await IDB.all('thumbs')) || []).forEach(t => this.mem.set(t.id, t.src)); },
+  put(id, src) { this.mem.set(id, src); IDB.put('thumbs', { id: id, src: src }); },
+  async drop(id) { this.mem.delete(id); await IDB.del('thumbs', id); },
+  hydrate() {
+    const falta = new Map();
+    $$('img[data-th]').forEach(img => {
+      const id = img.dataset.th, fid = img.dataset.fid;
+      const src = this.mem.get(id) || (fid && this.mem.get('f:' + fid));
+      if (src) { if (img.src !== src) img.src = src; img.classList.remove('hidden'); }
+      else if (fid) falta.set(fid, id);
+    });
+    if (!falta.size || this._busy || navigator.onLine === false) return;
+    this._busy = true;
+    const ids = Array.from(falta.keys()).slice(0, 30);
+    Api.run('thumbs', { ids: ids, tamanho: 360 }).then(r => {
+      Object.keys(r || {}).forEach(fid => {
+        this.put('f:' + fid, r[fid]);
+        const fotoId = falta.get(fid);
+        if (fotoId) this.mem.set(fotoId, r[fid]);
+      });
+      this._busy = false;
+      this.hydrate();
+    }).catch(() => { this._busy = false; });
+  }
+};
+
+/* ───── Câmera: compressão, carimbo de data/escola e envio em fila ───── */
+const Camera = {
+  alvo: null,
+  abrir(alvo, galeria) {
+    this.alvo = alvo;
+    const inp = galeria ? $('#gal') : $('#cam');
+    inp.value = '';
+    inp.click();
+  },
+  async arquivos(files) {
+    const alvo = this.alvo; this.alvo = null;
+    if (!alvo || !files || !files.length) return;
+    for (const f of Array.from(files)) {
+      try {
+        const img = await this.processar(f, alvo.carimbo);
+        if (alvo.onFoto) await alvo.onFoto(img); else await Fotos.adicionar(alvo, img);
+      } catch (e) { console.error(e); toast('Não foi possível ler a foto.', 'err'); }
+    }
+  },
+  carregar(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = url;
+    });
+  },
+  async processar(file, carimbo) {
+    let src = null;
+    try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { src = await this.carregar(file); }
+    const W = src.width, H = src.height;
+    const desenhar = (max, q, stamp) => {
+      const s = Math.min(1, max / Math.max(W, H));
+      const c = document.createElement('canvas');
+      c.width = Math.round(W * s); c.height = Math.round(H * s);
+      const g = c.getContext('2d');
+      g.drawImage(src, 0, 0, c.width, c.height);
+      if (stamp) {
+        const fs = Math.max(14, Math.round(c.width / 48));
+        g.font = '600 ' + fs + 'px Inter, Arial, sans-serif';
+        const txt = stamp;
+        const w = g.measureText(txt).width + fs;
+        g.fillStyle = 'rgba(15,33,64,.72)';
+        g.fillRect(0, c.height - fs * 1.9, Math.min(c.width, w), fs * 1.9);
+        g.fillStyle = '#fff';
+        g.fillText(txt, fs / 2, c.height - fs * 0.62);
+      }
+      return c.toDataURL('image/jpeg', q);
+    };
+    const stamp = carimbo === false ? '' : [new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }), carimbo || ''].filter(Boolean).join(' · ');
+    return { full: desenhar(1600, 0.78, stamp), thumb: desenhar(360, 0.62, '') };
+  }
+};
+
+/* ───── Utilidades de navegação externa ───── */
+function abrirExterno(url) {
+  const w = window.open(url, '_blank');
+  if (!w) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+}
+function linkMaps(e, origem) {
+  const dest = e.lat && e.lng ? e.lat + ',' + e.lng : encodeURIComponent([e.logradouro, e.numero, e.bairro, 'São Paulo - SP'].filter(Boolean).join(', '));
+  return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + dest + (origem ? '&origin=' + origem.lat + ',' + origem.lng : '');
+}
+function linkWaze(e) {
+  return e.lat && e.lng ? 'https://waze.com/ul?ll=' + e.lat + ',' + e.lng + '&navigate=yes'
+    : 'https://waze.com/ul?q=' + encodeURIComponent([e.logradouro, e.numero, 'São Paulo'].join(' ')) + '&navigate=yes';
+}
+function baixarBase64(b64, nome, mime) {
+  try {
+    const bin = atob(b64); const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([u8], { type: mime || 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ───── Ações de UI (delegação de eventos: data-act) ───── */
+const Act = {
+  sheetClose() { Sheet.close(); },
+  go(el) { vib(); Router.go(el.dataset.to, el.dataset.p ? JSON.parse(el.dataset.p) : {}); },
+  tab(el) { vib(); Router.reset(el.dataset.to); },
+  back() { vib(); Router.back(); },
+  tel(el) { abrirExterno('tel:' + String(el.dataset.tel).replace(/[^\d+]/g, '')); },
+  maps(el) { const e = App.escola(el.dataset.id); if (e) abrirExterno(linkMaps(e, Geo.last)); },
+  waze(el) { const e = App.escola(el.dataset.id); if (e) abrirExterno(linkWaze(e)); },
+  retry() { App.refresh(); }
+};
+
+/* ───── Roteador (integra o histórico do navegador via google.script.history) ───── */
+const Router = {
+  stack: [],
+  hist() { return window.google && google.script && google.script.history; },
+  go(name, params, opts) {
+    const o = opts || {};
+    const r = { name: name, params: params || {} };
+    if (o.replace && this.stack.length) this.stack[this.stack.length - 1] = r; else this.stack.push(r);
+    App.route = r;
+    App.render({ anim: 'in', top: true });
+    const h = this.hist();
+    if (h) { try { h[o.replace ? 'replace' : 'push']({ n: this.stack.length }, {}, name); } catch (e) { /* ignora */ } }
+  },
+  back() {
+    if (Sheet.opts !== null && $('#layer').innerHTML) { Sheet.close(); return; }
+    const cur = this.stack[this.stack.length - 1];
+    const view = cur && Views[cur.name];
+    if (view && view.onBack && view.onBack(cur.params) === false) return;
+    if (this.stack.length > 1) {
+      this.stack.pop();
+      App.route = this.stack[this.stack.length - 1];
+      App.render({ anim: 'back', top: true });
+    } else if (cur && cur.name !== 'home') this.reset('home');
+  },
+  reset(name, params) {
+    this.stack = [{ name: name, params: params || {} }];
+    App.route = this.stack[0];
+    App.render({ anim: 'in', top: true });
+    const h = this.hist();
+    if (h) { try { h.replace({ n: 1 }, {}, name); } catch (e) { /* ignora */ } }
+  }
+};
+
+/* ───── App ───── */
+const App = {
+  boot: window.__BOOT__ || { cfg: {} },
+  token: null, data: null, V: null, route: null, form: null, final: null,
+
+  async start() {
+    this.token = LS.get('token');
+    if (!this.token && this.boot.sso && !LS.get('saiu')) { this.token = this.boot.sso.token; LS.set('token', this.token); }
+    this.bind();
+    await Promise.all([Sync.init(), Thumbs.load()]);
+    this.data = LS.get('boot');
+    this.V = LS.get('v');
+    this.final = LS.get('final');
+    if (!this.token) { Router.reset('login'); return; }
+    Router.reset(!this.data ? 'loading' : this.V && this.V.status === 'finalizando' ? 'finalizada' : 'home');
+    this.refresh();
+    Sync.kickSoon(1500);
+    setInterval(() => this.tick(), 30000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && Date.now() - (this._lastRefresh || 0) > 60000) this.refresh();
+    });
+  },
+
+  bind() {
+    document.addEventListener('click', e => {
+      const el = e.target.closest('[data-act]');
+      if (!el || el.disabled) return;
+      const fn = Act[el.dataset.act];
+      if (fn) { e.preventDefault(); fn(el, e); }
+    });
+    document.addEventListener('input', e => { if (e.target.dataset && e.target.dataset.k !== undefined) Form.input(e.target); });
+    document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.k !== undefined) Form.change(e.target); });
+    $('#cam').addEventListener('change', e => Camera.arquivos(e.target.files));
+    $('#gal').addEventListener('change', e => Camera.arquivos(e.target.files));
+    const h = Router.hist();
+    if (h) {
+      try {
+        h.setChangeHandler(ev => {
+          const n = (ev && ev.state && ev.state.n) || 1;
+          if (n < Router.stack.length) Router.back();
+        });
+      } catch (e) { /* ignora */ }
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#layer').innerHTML) Sheet.close(); });
+  },
+
+  async refresh() {
+    this._lastRefresh = Date.now();
+    try {
+      const d = await Api.run('bootstrap');
+      this.aplicarBoot(d);
+    } catch (e) {
+      if (e.code === 'AUTH') return this.authLost();
+      if (!this.data) { this.erroCarga = e.message; if (this.route && this.route.name === 'loading') this.rerender(); }
+    }
+  },
+
+  aplicarBoot(d) {
+    this.data = d;
+    LS.set('boot', d);
+    Vist.mesclar(d.vistoriaAtiva);
+    const r = this.route && this.route.name;
+    if (r === 'loading') Router.reset('home');
+    else if (['home', 'escolas', 'pendencias', 'credencial', 'fotos'].indexOf(r) >= 0 && !this.editando()) this.rerender();
+  },
+
+  editando() { const a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName); },
+
+  escola(id) { return ((this.data && this.data.escolas) || []).find(e => e.id === id) || null; },
+  dre(id) { return ((this.data && this.data.dres) || []).find(d => d.id === id) || null; },
+
+  authLost() {
+    this.token = null; LS.del('token');
+    toast('Sua sessão expirou. Entre novamente — nada do que foi coletado se perdeu.', 'warn', 5000);
+    Router.reset('login');
+  },
+
+  sair() {
+    const temFila = Sync.q.length;
+    return confirmar({
+      titulo: 'Sair da conta?',
+      texto: temFila ? '<b style="color:var(--red)">Ainda há ' + plural(temFila, 'item', 'itens') + ' não sincronizados.</b> Eles ficam guardados neste aparelho e serão enviados quando alguém entrar novamente.' : 'Você precisará entrar novamente neste aparelho.',
+      sim: 'Sair', perigo: true
+    }).then(ok => {
+      if (!ok) return;
+      this.token = null; LS.del('token'); LS.del('boot'); LS.set('saiu', true);
+      this.data = null;
+      Router.reset('login');
+    });
+  },
+
+  render(opts) {
+    const o = opts || {};
+    const r = this.route || { name: 'home', params: {} };
+    const view = Views[r.name] || Views.home;
+    let out;
+    try { out = view(r.params) || {}; } catch (e) {
+      console.error(e);
+      out = { header: Views.hdrSimples('Ops'), body: '<div class="card"><b>Algo deu errado nesta tela.</b><p class="muted">' + esc(e.message) + '</p><button class="btn btn-navy" data-act="tab" data-to="home">Voltar ao início</button></div>' };
+    }
+    $('#hdr').innerHTML = out.header || '';
+    const main = $('#main');
+    main.className = 'main' + (out.foot ? ' has-foot' : '') + (out.flush ? ' flush' : '');
+    if (out.flush) main.style.padding = '0'; else main.style.padding = '';
+    main.innerHTML = '<div class="view' + (o.anim === 'back' ? ' back-anim' : o.anim ? '' : '" style="animation:none') + '">' + (out.body || '') + '</div>';
+    $('#foot').innerHTML = (out.foot ? '<div class="foot"><div class="foot-in' + (out.footOne ? ' one' : '') + '">' + out.foot + '</div></div>' : '') +
+      (out.nav ? Views.nav(out.nav) : '') + (out.fab || '');
+    if (o.top) window.scrollTo(0, 0);
+    if (out.after) { try { out.after(); } catch (e) { console.error(e); } }
+    Thumbs.hydrate();
+    Calc.refresh();
+    Sync.render();
+    this.renderNet();
+  },
+
+  rerender() {
+    const y = window.scrollY;
+    this.render({});
+    window.scrollTo(0, y);
+  },
+
+  renderNet() {
+    let bar = $('#offbar');
+    const off = navigator.onLine === false;
+    if (off && !bar && this.route && this.route.name !== 'login') {
+      bar = document.createElement('div'); bar.id = 'offbar'; bar.className = 'offline-bar';
+      bar.textContent = 'Sem internet · tudo é salvo no aparelho e enviado depois';
+      $('#hdr').appendChild(bar);
+    } else if (!off && bar) bar.remove();
+  },
+
+  tick() {
+    $$('[data-since]').forEach(el => { el.textContent = duracao(el.dataset.since); });
+    $$('[data-clock]').forEach(el => { el.textContent = hora(new Date().toISOString()); });
+  }
+};
+</script>

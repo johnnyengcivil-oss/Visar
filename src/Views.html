@@ -1,0 +1,715 @@
+<script>
+'use strict';
+/* ═══════════════════════════ VistAR · telas ═══════════════════════════ */
+
+const STATUS_ROT = {
+  em_andamento: ['b-teal', 'Em andamento'], concluida: ['b-green', 'Concluída'], retorno: ['b-red', 'Retorno pendente'],
+  cancelada: ['b-red', 'Cancelada'], agendada: ['b-amber', 'Agendada']
+};
+
+const Views = {
+  /* ───── Peças comuns ───── */
+  hdrApp() {
+    const D = App.data || {}, u = D.usuario || {}, eq = D.equipe || {};
+    return '<header class="hdr"><div class="hdr-top"><div class="logo">Vist<b>AR</b></div>' +
+      '<div class="cons">' + LOGO + '<span>Consórcio<b>' + esc(String((D.cfg || App.boot.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div></div>' +
+      '<div class="hdr-user"><span class="avatar">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" class="hidden" alt="">' : '') + esc(u.iniciais || '') + '</span>' +
+      '<span><div class="nm">' + esc(u.nome || '') + '</div><div class="sub"><b>' + esc(eq.nome || '') + '</b>' + (eq.parceiro ? ' · com ' + esc(eq.parceiro) : '') + '</div></span>' +
+      '<span class="sync hidden" data-sync style="margin-left:auto"></span>' +
+      '<button class="icon-btn" style="margin-left:6px" data-act="go" data-to="credencial" aria-label="Credencial e menu">' + I('menu', 28, 1.8) + '</button></div></header>';
+  },
+  hdrSimples(t, sub, extra) {
+    return '<header class="lhdr"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><span style="flex:1;min-width:0"><h1>' + esc(t) + '</h1>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</span>' + (extra || '') + '</header>';
+  },
+  hdrNavy(kicker, titulo, extra, back) {
+    return '<header class="whdr"><div class="whdr-row"><button class="back" data-act="' + (back || 'back') + '" aria-label="Voltar">' + I('left') + '</button>' +
+      '<span style="min-width:0;flex:1"><div class="kicker">' + esc(kicker) + '</div><div class="ttl">' + esc(titulo) + '</div></span>' + (extra || '') + '</div></header>';
+  },
+  nav(sel) {
+    const pend = Views.listaPendencias().length;
+    const it = [['home', 'home', 'Início'], ['escolas', 'school', 'Escolas'], ['fotos', 'image', 'Fotos'], ['pendencias', 'checksq', 'Pendências']];
+    return '<nav class="nav"><div class="nav-in">' + it.map(x => '<button class="' + (sel === x[0] ? 'on' : '') + '" data-act="tab" data-to="' + x[0] + '">' + I(x[1], 26, 1.8) + x[2] +
+      (x[0] === 'pendencias' && pend ? '<span class="dot">' + pend + '</span>' : '') + '</button>').join('') + '</div></nav>';
+  },
+  mapaIlustrativo() {
+    return '<svg viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice"><rect width="600" height="300" fill="#E8EEEA"/>' +
+      '<path d="M0 230 C 150 200 260 260 600 190 L600 300 L0 300Z" fill="#D2E4EE"/>' +
+      '<g stroke="#fff" stroke-width="10"><path d="M0 95H600M0 175H600M110 0V300M300 0V300M480 0V300"/></g>' +
+      '<rect x="190" y="200" width="80" height="34" rx="4" fill="#D5E8D4"/><rect x="350" y="25" width="90" height="34" rx="4" fill="#D5E8D4"/>' +
+      '<path d="M112 250 L118 180 L302 172 L306 92 L478 98" fill="none" stroke="#1F8F86" stroke-width="7" stroke-dasharray="2 9" stroke-linecap="round"/>' +
+      '<path d="M112 250 L118 180 L302 172 L306 92 L478 98" fill="none" stroke="#1F8F86" stroke-width="7" stroke-opacity=".35"/>' +
+      '<circle cx="112" cy="250" r="13" fill="#fff" stroke="#0F2140" stroke-width="5"/><circle cx="112" cy="250" r="4" fill="#0F2140"/>' +
+      '<path d="M478 98c-14-18-20-28-20-38a20 20 0 0 1 40 0c0 10-6 20-20 38z" fill="#D93C3C"/><circle cx="478" cy="60" r="7" fill="#fff"/>' +
+      '<text x="136" y="282" font-family="Inter,Arial" font-size="17" font-weight="700" fill="#0F2140">Você está aqui</text>' +
+      '<text x="360" y="48" font-family="Inter,Arial" font-size="15" font-weight="700" fill="#D93C3C">Destino</text></svg>';
+  },
+  escolaIlustracao() {
+    return '<svg viewBox="0 0 400 190" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%"><rect width="400" height="190" fill="#DCEEEC"/>' +
+      '<rect y="150" width="400" height="40" fill="#B5DAD5"/><path d="M50 62 200 14 350 62Z" fill="#1F8F86"/><rect x="60" y="62" width="280" height="96" fill="#fff"/>' +
+      '<rect x="186" y="34" width="28" height="10" fill="#B5DAD5"/><rect x="88" y="80" width="26" height="22" fill="#9ED3CE"/><rect x="128" y="80" width="26" height="22" fill="#9ED3CE"/>' +
+      '<rect x="246" y="80" width="26" height="22" fill="#9ED3CE"/><rect x="286" y="80" width="26" height="22" fill="#9ED3CE"/><rect x="176" y="106" width="48" height="52" fill="#17325C"/></svg>';
+  },
+  tagRoteiro(r, i) {
+    const hoje = hojeISO();
+    if (r.status === 'retorno') return '<span class="tag b-red">Retorno pendente</span>';
+    if (r.status === 'em_andamento') return '<span class="tag b-teal">Em andamento</span>';
+    if (r.status === 'concluida') return '<span class="tag b-green">Concluída</span>';
+    if (r.data === hoje) return '<span class="tag b-teal">' + (i ? 'Próxima' : 'Agendada') + (r.hora ? ' · ' + r.hora : '') + '</span>';
+    return '<span class="tag b-amber">Agendada ' + dataBR(r.data) + '</span>';
+  },
+  roteiro() {
+    const D = App.data || {};
+    const hoje = hojeISO();
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    const ativoId = V ? V.escolaId : null;
+    const ord = r => r.status === 'em_andamento' ? 0 : r.data === hoje && r.status === 'agendada' ? 1 : r.status === 'retorno' ? 2 : r.data > hoje ? 3 : 9;
+    return (D.roteiro || []).filter(r => ord(r) < 9 && r.escolaId !== ativoId)
+      .sort((a, b) => ord(a) - ord(b) || String(a.data).localeCompare(b.data) || String(a.hora).localeCompare(b.hora));
+  },
+  cartaoEscola(r, proxima) {
+    const e = App.escola(r.escolaId) || { nome: r.escolaId };
+    const amb = Number(e.ambientesPrevistos);
+    return '<button class="sch" data-act="escolaAbrir" data-id="' + e.id + '"><span style="min-width:0;flex:1"><h4>' + esc(e.nome) + '</h4>' +
+      '<div class="ad">' + esc([e.logradouro && (e.logradouro.replace(/^Rua\s/, 'R. ') + (e.numero ? ', ' + e.numero : '')), 'DRE ' + e.dre].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="tags">' + Views.tagRoteiro(r, proxima) + (r.status === 'retorno' && r.nota ? '<span class="tag b-gray">' + esc(r.nota) + '</span>' : '<span class="tag b-gray">' + (amb || 0) + ' ambientes</span>') + '</div></span>' +
+      '<span class="chev">' + I('right') + '</span></button>';
+  },
+  stats() {
+    const s = (App.data || {}).stats || {};
+    return '<div class="stats"><button data-act="tab" data-to="escolas"><b class="c-green">' + (s.concluidas || 0) + '</b><span>Concluídas</span></button>' +
+      '<button data-act="tab" data-to="escolas"><b class="c-amber">' + (s.aguardando || 0) + '</b><span>Aguardando</span></button>' +
+      '<button data-act="tab" data-to="pendencias"><b class="c-red">' + (s.pendentes || 0) + '</b><span>Pendentes</span></button></div>';
+  },
+  listaPendencias() {
+    const D = App.data || {};
+    const out = [];
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    if (V) Pend.todas().forEach(p => out.push({ local: true, etapa: p.etapa, descricao: p.descricao, escolaId: V.escolaId }));
+    (D.pendencias || []).forEach(p => { if (!V || p.vistoriaId !== V.id) out.push(p); });
+    return out;
+  },
+
+  /* ───── Login ───── */
+  login() {
+    const cfg = (App.boot && App.boot.cfg) || {};
+    return {
+      body: '<div class="login"><div class="logo">Vist<b>AR</b></div><div class="cons" style="margin-top:12px">' + LOGO + '<span>Consórcio<b>' + esc(String(cfg.consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+        '<form class="card" id="fLogin" autocomplete="on"><h3 style="margin:0 0 4px">Entrar</h3><p class="muted small" style="margin:0 0 14px">Use o e-mail cadastrado pela coordenação.</p>' +
+        '<span class="lbl">E-mail</span><input class="inp" name="email" type="email" inputmode="email" autocomplete="username" required value="' + esc(LS.get('ultimoEmail') || '') + '">' +
+        '<span class="lbl">Senha</span><input class="inp" name="senha" type="password" autocomplete="current-password" required>' +
+        '<button class="btn btn-navy btn-lg mt" type="submit">' + I('arrow') + ' Entrar</button>' +
+        '<p class="muted small" style="margin:14px 0 0;text-align:center">Esqueceu a senha? Fale com seu supervisor.</p></form>' +
+        '<p style="margin-top:auto;text-align:center;color:#7F93AE;font-size:12px">VistAR ' + esc(cfg.versao || '') + ' · funciona offline depois do primeiro acesso</p></div>',
+      flush: true,
+      after() {
+        const f = $('#fLogin');
+        f.onsubmit = async ev => {
+          ev.preventDefault();
+          const btn = $('button[type=submit]', f);
+          carregando(btn, true, 'Entrando');
+          try {
+            const r = await Api.run('login', { email: f.email.value, senha: f.senha.value });
+            App.token = r.token; LS.set('token', r.token); LS.set('ultimoEmail', f.email.value); LS.del('saiu');
+            App.aplicarBoot(r.boot);
+            Router.reset('home');
+            Sync.kick();
+          } catch (e) { carregando(btn, false); toast(e.net ? 'Sem conexão. O primeiro acesso precisa de internet.' : e.message, 'err', 4000); }
+        };
+      }
+    };
+  },
+
+  loading() {
+    return {
+      header: Views.hdrApp(),
+      body: App.erroCarga
+        ? '<div class="card"><b>Não foi possível carregar.</b><p class="muted">' + esc(App.erroCarga) + '</p><button class="btn btn-navy" data-act="retry">' + I('refresh') + ' Tentar de novo</button></div>'
+        : '<div class="skel" style="height:220px;margin-bottom:14px"></div><div class="grid3"><div class="skel" style="height:86px"></div><div class="skel" style="height:86px"></div><div class="skel" style="height:86px"></div></div><div class="skel mt" style="height:110px"></div><div class="skel mt" style="height:110px"></div>'
+    };
+  },
+
+  /* ───── Início ───── */
+  home() {
+    const D = App.data;
+    if (!D) return Views.loading();
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    const eq = D.equipe || {};
+    let topo = '', fab = '';
+    if (V) {
+      const e = App.escola(V.escolaId) || {};
+      const c = Vist.contagem();
+      const pend = Pend.todas();
+      const frontal = Vist.fotosDe('dados.frontal')[0];
+      topo = '<section class="card hero accent"><div class="hero-img">' +
+        (frontal ? '<img class="foto" data-th="' + frontal.id + '"' + (frontal.fileId ? ' data-fid="' + frontal.fileId + '"' : '') + ' alt="">' : Views.escolaIlustracao()) +
+        '<span class="tag-f">' + (frontal ? 'Fachada frontal' : 'Foto da escola') + '</span></div><div class="hero-b">' +
+        '<div class="kick">Vistoria em andamento' + (V.codigo ? ' · ' + esc(V.codigo) : '') + '</div><h2>' + esc(V.d.dados.nome || e.nome) + '</h2>' +
+        '<div class="meta">DRE <b>' + esc(e.dre || V.d.dados.dre) + '</b> &nbsp; Check-in <b>' + hora(V.checkin) + '</b> · <span data-since="' + V.checkin + '">' + duracao(V.checkin) + '</span> em campo</div>' +
+        '<div class="counts"><div><b>' + c.fotos + '</b><span>fotos adicionadas</span></div><div><b>' + c.ambientes + '</b><span>ambientes adicionados</span></div><div><b>' + c.docs + '</b><span>documentos adicionados</span></div></div>' +
+        (pend.length ? '<div class="alert-t">' + plural(pend.length, 'pendência aberta', 'pendências abertas') + ' · ' + esc(pend[0].descricao) + '</div>' : '<div class="alert-t" style="color:var(--green)">Nenhuma pendência aberta</div>') +
+        '<button class="btn btn-navy btn-lg" data-act="continuar">' + I('arrow') + ' Continuar vistoria</button></div></section>';
+      fab = '<button class="fab" data-act="quickFoto">' + I('camera', 24) + ' Foto · ' + esc(curto(V.d.dados.nome || e.nome)) + '</button>';
+    } else if (eq.status === 'em_transito' && eq.destinoEscolaId && App.escola(eq.destinoEscolaId)) {
+      topo = Views.cartaoTransito(App.escola(eq.destinoEscolaId), eq);
+    } else {
+      const rot = Views.roteiro().filter(r => r.status !== 'concluida');
+      const sel = App._escolaSel || (rot[0] && rot[0].escolaId) || '';
+      const escolas = (D.escolas || []).slice().sort((a, b) => {
+        const ia = rot.findIndex(r => r.escolaId === a.id), ib = rot.findIndex(r => r.escolaId === b.id);
+        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.nome.localeCompare(b.nome);
+      });
+      topo = '<section class="card accent-gray"><h2 style="margin:0;font-size:24px">Iniciar vistoria</h2><p class="muted" style="margin:4px 0 14px">Escolha a escola e faça o check-in para começar.</p>' +
+        '<span class="lbl">Escola</span><select class="inp" id="selEscola">' + escolas.map(e => '<option value="' + e.id + '"' + (e.id === sel ? ' selected' : '') + '>' + esc(e.nome) + '</option>').join('') + '</select>' +
+        '<button class="btn btn-teal btn-lg mt" data-act="checkin">' + I('check') + ' Fazer check-in</button></section>';
+    }
+    const rot = Views.roteiro();
+    let primeiroHoje = true;
+    return {
+      header: Views.hdrApp(),
+      body: topo + Views.stats() +
+        '<div class="sec-t"><h2>Roteiro de hoje · ' + dataBR(hojeISO()) + '</h2><button class="link" data-act="tab" data-to="escolas">Ver todas</button></div>' +
+        (rot.length ? rot.map(r => {
+          const prox = r.data === hojeISO() && r.status === 'agendada' && primeiroHoje && (V || (D.equipe || {}).status === 'em_transito');
+          if (r.data === hojeISO() && r.status === 'agendada') primeiroHoje = false;
+          return Views.cartaoEscola(r, prox);
+        }).join('') : '<div class="empty">' + I('school', 36) + '<div>Nenhuma escola no roteiro.</div></div>'),
+      nav: 'home', fab: fab,
+      after() {
+        const s = $('#selEscola');
+        if (s) s.onchange = () => { App._escolaSel = s.value; };
+        if ($('#rotaTransito')) Views.carregarRota(eq.destinoEscolaId, '#rotaTransito');
+      }
+    };
+  },
+
+  cartaoTransito(e, eq) {
+    return '<section class="card accent-amber"><div class="row" style="align-items:flex-start"><span class="avatar" style="width:24px;height:24px;background:var(--amber-l);margin-top:6px"><i style="width:12px;height:12px;border-radius:50%;background:var(--amber);display:block"></i></span>' +
+      '<span style="flex:1"><b style="font-size:19px">Equipe em trânsito</b><div class="muted small">' + esc(eq.nome) + (eq.statusDesde ? ' · saiu às ' + hora(eq.statusDesde) : '') + '</div></span><span class="badge b-amber">Em trânsito</span></div>' +
+      '<div id="rotaTransito" class="mt"><div class="map">' + Views.mapaIlustrativo() + '<span class="lbl-m">Calculando rota…</span></div></div>' +
+      '<div class="eta" style="grid-template-columns:1.4fr 1fr;text-align:left"><div><small>DESTINO</small><b>' + esc(semPrefixo(e.nome)) + '</b></div><div style="padding-left:14px"><small>CHEGADA PREVISTA</small><b data-eta>--:--</b></div></div>' +
+      '<div class="navapps"><button class="btn btn-out-teal" data-act="maps" data-id="' + e.id + '"><span class="gdot"></span>Google Maps</button><button class="btn btn-out-teal" data-act="waze" data-id="' + e.id + '"><span class="wdot"></span>Waze</button></div>' +
+      '<button class="btn btn-teal mt" data-act="checkinEscola" data-id="' + e.id + '">' + I('check') + ' Cheguei · fazer check-in</button>' +
+      '<p class="muted small" style="text-align:center;margin:10px 0 0">O check-in confirma sua localização ao chegar na unidade.</p></section>';
+  },
+
+  /** Rota com o serviço Maps do Apps Script; cai no mapa ilustrativo se faltar GPS/rede. */
+  async carregarRota(escolaId, sel) {
+    const alvo = $(sel);
+    if (!alvo) return;
+    const pos = await Geo.get(6000);
+    const k = 'rota:' + escolaId;
+    let r = App._rotas && App._rotas[k];
+    if (!r || Date.now() - r._t > 180000) {
+      try {
+        r = await Api.run('rota', { escolaId: escolaId, lat: pos && pos.lat, lng: pos && pos.lng, salvarEta: true });
+        r._t = Date.now();
+        (App._rotas = App._rotas || {})[k] = r;
+      } catch (e) { r = null; }
+    }
+    const box = $(sel);
+    if (!box) return;
+    box.innerHTML = '<div class="map">' + (r && r.mapa ? '<img src="' + r.mapa + '" alt="Mapa da rota">' : Views.mapaIlustrativo()) +
+      '<span class="lbl-m">' + (r && r.mapa ? 'Google Maps' : 'Mapa ilustrativo') + '</span></div>' +
+      (box.dataset.full && r && r.min ? '<div class="eta"><div><small>Tempo previsto</small><b>' + r.min + ' min</b></div><div><small>Distância</small><b>' + fmt(r.km, 1) + ' km</b></div><div><small>Chegada prevista</small><b>' + hora(r.chegada) + '</b></div></div>' : '');
+    $$('[data-eta]').forEach(el => { el.textContent = r && r.chegada ? hora(r.chegada) : '--:--'; });
+  },
+
+  /* ───── Escolas ───── */
+  escolas() {
+    const D = App.data || {};
+    const f = App._filtroEsc || 'todas';
+    const q = (App._buscaEsc || '').toLowerCase();
+    const rotPor = {};
+    (D.roteiro || []).forEach(r => { if (!rotPor[r.escolaId] || r.data >= rotPor[r.escolaId].data) rotPor[r.escolaId] = r; });
+    const lista = (D.escolas || []).filter(e => {
+      const st = (rotPor[e.id] || {}).status || e.status;
+      if (f === 'hoje' && !(rotPor[e.id] && rotPor[e.id].data === hojeISO())) return false;
+      if (f === 'pendentes' && st !== 'retorno') return false;
+      if (f === 'concluidas' && st !== 'concluida') return false;
+      if (f === 'aguardando' && st !== 'agendada') return false;
+      return !q || (e.nome + ' ' + e.dre + ' ' + e.bairro + ' ' + e.cie).toLowerCase().indexOf(q) >= 0;
+    }).sort((a, b) => a.nome.localeCompare(b.nome));
+    const fil = [['todas', 'Todas'], ['hoje', 'Hoje'], ['aguardando', 'Aguardando'], ['pendentes', 'Pendentes'], ['concluidas', 'Concluídas']];
+    return {
+      header: Views.hdrApp(),
+      body: '<div class="search">' + I('search', 20) + '<input class="inp" id="busca" placeholder="Buscar escola, DRE, bairro ou CIE" value="' + esc(App._buscaEsc || '') + '"></div>' +
+        '<div class="chips sm" style="margin-bottom:14px">' + fil.map(x => '<button class="chip' + (f === x[0] ? ' on' : '') + '" data-act="filtroEsc" data-f="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+        '<div id="listaEsc">' + (lista.length ? lista.map(e => Views.cartaoEscola(rotPor[e.id] || { escolaId: e.id, status: e.status, data: '' }, false)).join('') : '<div class="empty">Nenhuma escola encontrada.</div>') + '</div>',
+      nav: 'escolas',
+      after() {
+        const b = $('#busca');
+        b.oninput = () => {
+          App._buscaEsc = b.value;
+          clearTimeout(b._t);
+          b._t = setTimeout(() => { const pos = b.selectionStart; App.rerender(); const nb = $('#busca'); nb.focus(); nb.setSelectionRange(pos, pos); }, 200);
+        };
+      }
+    };
+  },
+
+  async escolaSheet(id) {
+    const e = App.escola(id);
+    if (!e) return;
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    const dre = App.dre(e.dre) || {};
+    const end = [e.logradouro, e.numero].filter(Boolean).join(', ') + (e.bairro ? ' · ' + e.bairro : '');
+    Sheet.open('<h3>' + esc(e.nome) + '</h3><p class="muted" style="margin:2px 0 12px">' + esc(end) + ' · DRE ' + esc(e.dre) + (e.cie ? ' · CIE ' + esc(e.cie) : '') + '</p>' +
+      (V && V.escolaId === id ? '<button class="btn btn-navy" data-act="continuar">' + I('arrow') + ' Continuar vistoria</button>' :
+        V ? '<div class="warn-box" style="margin:0">Há uma vistoria em andamento em ' + esc(curto(V.d.dados.nome)) + '. Finalize ou cancele antes de iniciar outra.</div>' :
+          '<button class="btn btn-teal" data-act="checkinEscola" data-id="' + id + '">' + I('check') + ' Fazer check-in</button>') +
+      '<div class="navapps mt"><button class="btn btn-out-teal" data-act="maps" data-id="' + id + '"><span class="gdot"></span>Google Maps</button><button class="btn btn-out-teal" data-act="waze" data-id="' + id + '"><span class="wdot"></span>Waze</button></div>' +
+      (e.telefone ? '<button class="btn btn-out mt" data-act="tel" data-tel="' + esc(e.telefone) + '">' + I('phone', 20) + ' Ligar para a escola</button>' : '') +
+      (dre.engenheiroTel ? '<button class="btn btn-out mt" data-act="tel" data-tel="' + esc(dre.engenheiroTel) + '">' + I('phone', 20) + ' Engenheiro DRE · ' + esc(dre.engenheiroNome) + '</button>' : '') +
+      '<div id="histEsc" class="mt"><div class="skel" style="height:60px"></div></div>');
+    try {
+      const r = await Api.run('escola', { escolaId: id });
+      const box = $('#histEsc');
+      if (!box) return;
+      box.innerHTML = (r.pendencias.length ? '<span class="lbl">Pendências abertas</span>' + r.pendencias.map(p => '<div class="doc-row"><span>' + I('alert', 18) + '</span><span><b>' + esc(p.descricao) + '</b><small>' + esc(ROTULO_ETAPA[p.etapa] || p.etapa) + '</small></span></div>').join('') : '') +
+        '<span class="lbl">Histórico de vistorias</span>' + (r.historico.length ? r.historico.map(h => {
+          const s = STATUS_ROT[h.status] || ['b-gray', h.status];
+          return '<div class="doc-row"><span><b>' + esc(h.codigo) + ' · ' + dataBR(h.checkin, true) + '</b><small>' + (h.motivo ? esc(h.motivo) : hora(h.checkin) + (h.checkout ? '–' + hora(h.checkout) : '')) + '</small>' +
+            (h.urlVistoria ? '<br><a href="' + h.urlVistoria + '" target="_blank" class="small">Relatório de vistoria</a>' : '') + (h.urlCompleto ? ' · <a href="' + h.urlCompleto + '" target="_blank" class="small">Completo</a>' : '') +
+            '</span><span class="badge ' + s[0] + '">' + s[1] + '</span></div>';
+        }).join('') : '<p class="muted small">Nenhuma vistoria registrada.</p>');
+    } catch (err) { const box = $('#histEsc'); if (box) box.innerHTML = '<p class="muted small">Histórico indisponível offline.</p>'; }
+  },
+
+  /* ───── Fotos ───── */
+  fotos() {
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    if (!V) {
+      return { header: Views.hdrApp(), nav: 'fotos', body: '<div class="empty">' + I('image', 40) + '<div><b>Nenhuma vistoria em andamento</b></div><div class="small">As fotos aparecem aqui durante a vistoria, organizadas por etapa.</div></div>' };
+    }
+    const fotos = Object.values(V.fotos).filter(f => !f.del).sort((a, b) => a.criadoEm < b.criadoEm ? 1 : -1);
+    const grupos = {};
+    fotos.forEach(f => { (grupos[f.etapa] = grupos[f.etapa] || []).push(f); });
+    const pend = fotos.filter(f => f.st !== 'ok').length;
+    const ordem = ['geral', 'doc', 'dados', 'entrada', 'estrutura', 'eletrica', 'ambientes', 'equipamentos', 'cancelamento'];
+    return {
+      header: Views.hdrApp(),
+      body: '<div class="sec-t" style="margin-top:4px"><h2>' + plural(fotos.length, 'foto') + '</h2><span class="badge ' + (pend ? 'b-amber' : 'b-green') + '">' + (pend ? pend + ' na fila' : 'Todas enviadas') + '</span></div>' +
+        (fotos.length ? ordem.filter(k => grupos[k]).map(k => {
+          const ids = grupos[k].map(f => f.id).join(',');
+          return '<span class="lbl" style="font-weight:700;color:var(--ink)">' + (ROTULO_ETAPA[k] || k) + ' · ' + grupos[k].length + '</span><div class="gal">' +
+            grupos[k].map(f => '<button data-act="verFoto" data-id="' + f.id + '" data-lista="' + ids + '"><img data-th="' + f.id + '"' + (f.fileId ? ' data-fid="' + f.fileId + '"' : '') + ' alt=""><i class="st' + (f.st === 'ok' ? ' ok' : '') + '" data-st="' + f.id + '"></i></button>').join('') + '</div>';
+        }).join('') : '<div class="empty">' + I('camera', 40) + '<div>Nenhuma foto ainda. Use o botão abaixo.</div></div>'),
+      nav: 'fotos',
+      fab: '<button class="fab" data-act="quickFoto">' + I('camera', 24) + ' Nova foto</button>'
+    };
+  },
+
+  /* ───── Pendências ───── */
+  pendencias() {
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    const D = App.data || {};
+    const locais = V ? Pend.todas() : [];
+    const porEscola = {};
+    (D.pendencias || []).filter(p => !V || p.vistoriaId !== V.id).forEach(p => { (porEscola[p.escolaId] = porEscola[p.escolaId] || []).push(p); });
+    return {
+      header: Views.hdrApp(),
+      body: (V ? '<div class="sec-t" style="margin-top:4px"><h2>Vistoria atual</h2><span class="badge ' + (locais.length ? 'b-amber' : 'b-green') + '">' + (locais.length || 'Nenhuma') + '</span></div>' +
+          '<section class="card">' + (locais.length ? ETAPAS.filter(e => e.k !== 'revisao').map(e => {
+            const l = locais.filter(p => p.etapa === e.k);
+            return l.length ? '<button class="sum-row" data-act="irEtapa" data-to="' + e.k + '"><span><b>' + e.t + '</b><small>' + esc(l.map(p => p.descricao).join(' · ')) + '</small></span><span class="badge b-amber">' + l.length + '</span></button>' : '';
+          }).join('') : '<p class="muted" style="margin:0">Tudo preenchido até aqui.</p>') + '</section>' : '') +
+        '<div class="sec-t"><h2>Retornos</h2><span class="badge b-red">' + Object.keys(porEscola).length + ' escolas</span></div>' +
+        (Object.keys(porEscola).length ? Object.keys(porEscola).map(id => {
+          const e = App.escola(id) || { nome: id };
+          return '<section class="card"><div class="card-h"><h3>' + esc(e.nome) + '</h3><button class="link small" data-act="escolaAbrir" data-id="' + id + '">Abrir</button></div>' +
+            porEscola[id].map(p => '<div class="doc-row"><span><b>' + esc(p.descricao) + '</b><small>' + esc(ROTULO_ETAPA[p.etapa] || p.etapa) + ' · ' + dataBR(p.criadoEm) + '</small></span>' +
+              '<button class="btn btn-out btn-sm" style="margin-left:auto" data-act="resolver" data-id="' + p.id + '">' + I('check', 16) + ' Resolvida</button></div>').join('') + '</section>';
+        }).join('') : '<div class="empty">' + I('checksq', 40) + '<div>Nenhuma pendência de retorno.</div></div>'),
+      nav: 'pendencias'
+    };
+  },
+
+  /* ───── Credencial ───── */
+  credencial() {
+    const D = App.data || {}, u = D.usuario || {}, eq = D.equipe || {};
+    const dres = (D.dres || []);
+    const V = App.V && App.V.status === 'em_andamento' ? App.V : null;
+    const dreAtual = V ? (App.escola(V.escolaId) || {}).dre : (u.dres || [])[0];
+    return {
+      header: '<header class="lhdr"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><h1>Credencial</h1><span class="sync hidden" data-sync style="margin-left:auto;background:var(--navy)"></span></header>',
+      body: '<div class="badge-card"><div class="slot"></div><div class="top">' + LOGO + '<span><small>CONSÓRCIO</small><b>' + esc(String((D.cfg || {}).consorcio || '').replace(/^Consórcio\s+/i, '')) + '</b></span></div>' +
+        '<button class="ph-id" data-act="fotoPerfil" aria-label="Trocar foto">' + (u.fotoId ? '<img data-th="perfil" data-fid="' + u.fotoId + '" alt="">' :
+          '<svg viewBox="0 0 160 190" style="width:100%;height:100%"><circle cx="80" cy="74" r="34" fill="#9AAFC0"/><path d="M22 190c0-40 26-66 58-66s58 26 58 66z" fill="#9AAFC0"/></svg>') +
+        '<span class="cam">' + I('camera', 18) + '</span></button>' +
+        '<h2>' + esc(u.nome) + '</h2><div class="muted">' + esc(u.cargo || '') + ' · ' + esc(eq.nome || '') + '</div>' +
+        (u.rg ? '<div class="tag b-gray mt" style="font-size:16px"><small class="muted" style="margin-right:6px">RG</small> ' + esc(u.rg) + '</div>' : '') +
+        '<div class="emp"><small>EMPRESA</small>' + esc(D.empresa || u.empresa || '') + '</div>' +
+        '<div class="ctr"><span><small class="muted" style="font-weight:700;letter-spacing:.5px;font-size:11px">CONTRATO</small><br><b>' + esc((D.cfg || {}).contrato || '') + '</b></span>' + (dreAtual ? '<span class="tag b-teal">DRE ' + esc(dreAtual) + '</span>' : '') + '</div></div>' +
+        '<div style="padding:0 2px">' +
+        (eq.supervisorNome ? '<div class="contact"><span><small class="k">Supervisor da empresa</small><b>' + esc(eq.supervisorNome) + '</b><span class="tel">' + esc(eq.supervisorTel || '') + '</span></span>' +
+          (eq.supervisorTel ? '<button class="call" data-act="tel" data-tel="' + esc(eq.supervisorTel) + '" aria-label="Ligar">' + I('phone', 24) + '</button>' : '') + '</div>' : '') +
+        '<div class="lbl" style="font-weight:700;letter-spacing:.6px;margin:20px 4px 10px">DRES AUTORIZADAS</div>' +
+        dres.map(d => '<div class="contact"><span><span class="tag b-teal" style="padding:3px 10px;font-size:13px">DRE ' + esc(d.id) + '</span>' + (d.id === dreAtual && V ? '<span class="muted small"> · desta vistoria</span>' : '') +
+          '<small class="k" style="margin-top:8px">' + esc(d.engenheiroCargo || 'Engenheiro DRE') + '</small><b>' + esc(d.engenheiroNome || '') + '</b><span class="tel">' + esc(d.engenheiroTel || '') + '</span></span>' +
+          (d.engenheiroTel ? '<button class="call" data-act="tel" data-tel="' + esc(d.engenheiroTel) + '" aria-label="Ligar">' + I('phone', 24) + '</button>' : '') + '</div>').join('') +
+        '<div class="grid2 mt"><button class="btn btn-out" data-act="senha">' + I('lock', 20) + ' Alterar senha</button><button class="btn btn-out-red" data-act="sair">' + I('logout', 20) + ' Sair da conta</button></div>' +
+        '<p class="muted small" style="text-align:center;margin-top:16px">VistAR ' + esc((D.cfg || {}).versao || '') + (Sync.q.length ? ' · ' + plural(Sync.q.length, 'item', 'itens') + ' na fila' : ' · tudo sincronizado') + '</p></div>'
+    };
+  },
+
+  /* ───── Etapas da vistoria ───── */
+  etapa(p) {
+    const V = App.V;
+    if (!V || V.status !== 'em_andamento') { setTimeout(() => Router.reset('home'), 0); return { body: '' }; }
+    const k = p.k || V.etapa || 'dados';
+    const i = ETAPAS.findIndex(e => e.k === k);
+    const et = ETAPAS[i];
+    const total = ETAPAS.length - 1;
+    V.etapa = k;
+    const prev = ETAPAS[i - 1], next = ETAPAS[i + 1];
+    const progresso = '<div class="prog">' + ETAPAS.map((e, j) => '<button class="' + (j < i ? 'done' : j === i ? 'cur' : '') + '" data-act="etapaIr" data-to="' + e.k + '" aria-label="' + e.t + '"></button>').join('') + '</div>' +
+      '<div class="prog-lbl"><span>' + (prev ? prev.n : '') + '</span><b>' + et.n + '</b><span>' + (next ? next.n : 'Check-out') + '</span></div>';
+    const header = '<header class="whdr"><div class="whdr-row"><button class="back" data-act="back" aria-label="Voltar ao início">' + I('left') + '</button>' +
+      '<span style="min-width:0;flex:1"><div class="kicker">' + (k === 'revisao' ? 'Vistoria · revisão final' : 'Vistoria · etapa ' + (i + 1) + ' de ' + total) + '</div><div class="ttl">' + esc(V.d.dados.nome) + '</div></span>' +
+      '<span class="sync hidden" data-sync></span></div>' + progresso + '</header>';
+    const body = Etapas[k]() + '<button class="btn btn-out-red mt" data-act="go" data-to="cancelar">Cancelar vistoria</button>';
+    const foot = '<button class="btn btn-out" data-act="etapaAnt">Voltar</button>' +
+      (k === 'revisao' ? '<button class="btn btn-navy" data-act="finalizar">Finalizar vistoria</button>' :
+        '<button class="btn btn-navy" data-act="etapaProx">' + (next && next.k === 'revisao' ? 'Revisar e finalizar' : 'Salvar e continuar') + '</button>');
+    return { header: header, body: body, foot: foot, after: k === 'revisao' ? iniciarAssinaturas : null };
+  },
+
+  /* ───── Formulário de ambiente ───── */
+  ambiente() {
+    const a = App.form;
+    if (!a || !App.V) { setTimeout(() => Router.back(), 0); return { body: '' }; }
+    const ext = a.externo;
+    const sub = ext ? 'Área externa · ' + Amb.nome(a).toLowerCase() : 'Bloco ' + BLOCO(a.bloco) + ' · ' + (Number(a.pav) === 0 ? 'Térreo' : PAV(a.pav) + ' pavimento');
+    const tipos = ext ? TIPOS_EXT : TIPOS_AMB;
+    const ilum = (a.lum || []).reduce((s, l) => s + (Number(l.qtd) || 0), 0);
+    const slots = ext ? [['ambientes.' + a.id + '.vista', 'Vista geral'], ['ambientes.' + a.id + '.ilum', 'Iluminação']]
+      : [['ambientes.' + a.id + '.vista', 'Vista geral'], ['ambientes.' + a.id + '.entrada', 'Entrada'], ['ambientes.' + a.id + '.teto', 'Teto ou forro']];
+    const qi = (k, v, un, ro) => '<div class="qi inp-wrap">' + (ro ? '<div class="inp" style="text-align:right;padding-right:54px;font-weight:800;font-size:17px;min-height:42px;padding-top:9px" data-calc="ilum">' + v + '</div>' :
+      '<input class="inp" data-k="' + k + '" value="' + esc(v) + '" inputmode="numeric" placeholder="0">') + '<em>' + un + '</em></div>';
+    return {
+      header: '<header class="lhdr" style="background:#fff;border-bottom:1px solid var(--line)"><button class="back" data-act="back" aria-label="Voltar">' + I('left') + '</button><span style="flex:1;min-width:0"><h1>' + (a._novo ? 'Adicionar ' : 'Editar ') + (ext ? 'área externa' : 'ambiente') + '</h1><div class="sub">' + esc(sub) + '</div></span>' +
+        (a._novo ? '' : '<button class="icon-btn" style="color:var(--red)" data-act="ambExcluir" aria-label="Excluir">' + I('trash') + '</button>') + '</header>',
+      body: F.card('Identificação ' + (ext ? 'da área' : 'da sala'), F.input('@nome', { ph: ext ? 'Ex.: Quadra coberta principal' : 'Ex.: Sala 12 e Sala 13' }), { badge: '<span class="badge b-amber">Opcional</span>' }) +
+        F.card('Tipo', '<select class="inp" data-k="@tipo" data-rr="1" id="selTipo">' + tipos.map(t => '<option' + (a.tipo === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
+          (a.tipo === 'Outro' ? '<div class="fld">' + F.input('@tipoOutro', { ph: 'Qual tipo?' }) + '</div>' : '')) +
+        F.card('Quantidade', '<div class="row">' + F.stepper('@qtd', '', { min: 1, max: 60 }) + '<span class="muted">' + (Number(a.qtd) === 1 ? 'unidade' : 'unidades') + ' deste tipo</span></div>') +
+        F.card((ext ? 'Medidas' : 'Dimensões') + ' de uma unidade', '<div class="dim' + (ext ? ' two' : '') + '">' +
+          [['c', 'COMPRIMENTO'], ['l', 'LARGURA']].concat(ext ? [] : [['pd', 'PÉ-DIREITO']]).map(x => '<label><small>' + x[1] + '</small><input data-k="@' + x[0] + '" value="' + esc(a[x[0]]) + '" inputmode="decimal" placeholder="0,00"><em>m</em></label>').join('') + '</div>' +
+          '<div class="area-box"><div class="a1"><small>Área por unidade</small><b data-calc="areaUn"></b></div><div class="a2"><small>Área total do tipo</small><b data-calc="areaTot"></b></div></div>') +
+        (ext ? '' : F.card('Fachadas voltadas', F.chips('@fachadas', '', ['Norte', 'Leste', 'Sul', 'Oeste', 'Nenhuma'], { multi: true }) + '<div class="ph-hint">Norte é a fachada oposta à entrada principal.</div>',
+          { badge: '<span class="badge b-teal">Pode marcar mais de uma</span>' }) +
+          F.card('Janelas', '<div class="box-n" style="margin-top:0"><b>Janelas externas</b><div class="muted small">Quantidade e medidas</div>' +
+            F.chips('@jan.tipo', 'Tipo de janela', ['Basculante', 'Correr', 'Outro']) + F.chips('@jan.vidro', 'Tipo de vidro', ['Comum', 'Temperado', 'Insulado', 'Fumê', 'Outro']) +
+            F.row(F.numero('@jan.alt', 'Altura da janela (m)', { ph: 'Ex.: 1,20' }), F.numero('@jan.peit', 'Altura do peitoril (m)', { ph: 'Ex.: 1,00' })) +
+            F.row(F.numero('@jan.qtd', 'Quantidade de janelas', { ph: 'Ex.: 3', im: 'numeric' }), F.numero('@jan.abert', '% de abertura', { ph: 'Ex.: 50', suf: '%' })) + '</div>' +
+            '<div class="box-n"><b>Ventilação cruzada superior</b><div class="muted small" style="margin-bottom:6px">Marque se existir</div>' + F.check('@ventCruz', 'Existe ventilação cruzada superior', 'Vergas, bandeiras ou aberturas no alto da parede') + '</div>')) +
+        F.card('Pontos elétricos', '<div class="pt-sec">Pontos padrão</div>' +
+          '<div class="pt"><span><b>TUG</b><small>Tomada de uso geral</small></span>' + qi('@tug', a.tug || '', 'un.') + '</div>' +
+          '<div class="pt"><span><b>Iluminação</b><small>Detalhe o tipo de luminária</small></span>' + qi('', ilum, 'pontos', true) + '</div>' +
+          (a.lum || []).map((l, i) => '<div class="pt sub"><span><input class="nm" data-k="@lum.' + i + '.nome" value="' + esc(l.nome) + '" placeholder="Ex.: LED painel 36 W">' +
+            '<small><input class="nm" style="width:28px;font-weight:600;font-size:13px" data-k="@lum.' + i + '.lamp" value="' + esc(l.lamp) + '" inputmode="numeric"> lâmpada(s) por luminária · <a href="#" data-act="rmLinha" data-l="lum" data-id="' + l.id + '" style="color:var(--red)">remover</a></small></span>' +
+            qi('@lum.' + i + '.qtd', l.qtd, 'pontos') + '</div>').join('') +
+          '<button class="add-link" data-act="addLum">+ Adicionar tipo de luminária</button>' +
+          (ext ? '' : '<div class="pt-sec">Equipamentos (TUE)</div>' + (a.tue || []).map((t, i) => '<div class="pt"><span><input class="nm" data-k="@tue.' + i + '.nome" value="' + esc(t.nome) + '" placeholder="Nome do equipamento">' +
+            '<small>Equipamento de uso específico · <a href="#" data-act="rmLinha" data-l="tue" data-id="' + t.id + '" style="color:var(--red)">remover</a></small></span>' + qi('@tue.' + i + '.qtd', t.qtd, 'un.') + '</div>').join('')) +
+          '<button class="btn btn-dash mt" data-act="' + (ext ? 'addLum' : 'addTue') + '">+ Adicionar tipo de ponto</button>') +
+        F.card('Fotos', F.fotos('ambientes', slots.map(s => s.concat([])), {}).replace(/data-etapa="ambientes"/g, 'data-etapa="ambientes" data-ref="' + a.id + '"'), { badge: F.fotoBadge(slots) }),
+      foot: '<button class="btn btn-out" data-act="back">Cancelar</button><button class="btn btn-navy" data-act="ambSalvar">Salvar ' + (ext ? 'área' : 'ambiente') + '</button>',
+      after() { const s = $('#selTipo'); if (s) s.onchange = () => Act.ambTipo(s); }
+    };
+  },
+
+  /* ───── Cancelar vistoria ───── */
+  cancelar() {
+    const V = App.V;
+    if (!V) { setTimeout(() => Router.reset('home'), 0); return { body: '' }; }
+    if (!App.form || !App.form._cancel) App.form = { _cancel: true, motivo: 'Recusa da direção', recusa: true, quem: '', desc: '' };
+    const f = App.form;
+    const motivos = [['Recusa da direção', 'Escola não autorizou o levantamento'], ['Escola fechada ou sem acesso', 'Portaria, chave ou responsável ausente'],
+      ['Área interditada ou em obra', 'Impede medir os ambientes com segurança'], ['Problema da equipe', 'Falta de material, veículo ou integrante'], ['Outro motivo', '']];
+    const foto = Vist.fotosDe('cancelamento.registro')[0];
+    return {
+      header: Views.hdrNavy('Cancelar vistoria', V.d.dados.nome),
+      body: '<div class="danger-box"><span style="color:var(--red)">' + I('alert', 28) + '</span><span><b>Esta ação não pode ser desfeita</b><span>A vistoria será encerrada e a escola volta para o roteiro como pendente de nova visita.</span></span></div>' +
+        F.card('Motivo do cancelamento', motivos.map(m => '<button class="radio' + (f.motivo === m[0] ? ' on' : '') + '" data-act="pick" data-fix="1" data-k="@motivo" data-v="' + m[0] + '"><span class="dot"></span><span><div class="t">' + m[0] + '</div>' + (m[1] ? '<div class="s">' + m[1] + '</div>' : '') + '</span></button>').join('') +
+          (f.motivo === 'Outro motivo' ? F.text('@outro', '', { ph: 'Descreva o motivo' }) : '')) +
+        F.card('Recusa <small>(se a direção recusou)</small>', '<div class="seg"><button class="chip' + (f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="1">Houve recusa</button><button class="chip' + (!f.recusa ? ' on' : '') + '" data-act="cxRecusa" data-v="">Não houve</button></div>' +
+          (f.recusa ? F.text('@quem', 'Quem recusou', { ph: 'Nome e cargo' }) + F.area('@desc', 'Descreva o que foi dito', 'Resumo da recusa, com as palavras da pessoa') +
+            '<div class="mt"></div>' + '<button class="ph-wide' + (foto ? ' has' : '') + '" data-act="foto" data-slot="cancelamento.registro" data-etapa="cancelamento" data-rot="Registro">' +
+            (foto ? '<img data-th="' + foto.id + '" alt="">' : I('camera', 28)) + '<span><b>Foto do registro</b><small>' + (foto ? 'Foto anexada · toque para ver' : 'Opcional · ex.: documento ou ofício de recusa') + '</small></span></button>' : '')) +
+        F.card('Ao cancelar', '<ul class="list-dot"><li>Os dados e fotos já coletados ficam guardados no histórico.</li><li>A escola volta ao roteiro como pendente de nova visita.</li><li>O motivo e o nome de quem recusou ficam registrados.</li></ul>'),
+      foot: '<button class="btn btn-out" data-act="back">Voltar</button><button class="btn btn-red" data-act="cancelarConfirmar">Confirmar cancelamento</button>'
+    };
+  },
+
+  /* ───── Visualizador de relatório ───── */
+  relatorio(p) {
+    const V = App.V;
+    const vid = p.vistoriaId || (V && V.id);
+    const completo = p.tipo === 'completo';
+    const cache = App._rel && App._rel[vid + p.tipo];
+    return {
+      header: Views.hdrNavy(completo ? 'Relatório completo' : 'Relatório de vistoria', (V && V.d.dados.nome) || (App.escola(p.escolaId) || {}).nome || '',
+        '<span id="relSt">' + (cache ? (cache.assinado ? '<span class="badge b-green" style="font-size:14px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:14px;padding:6px 12px">Preliminar</span>') : '') + '</span>'),
+      flush: true,
+      body: '<div class="rel-meta" id="relMeta">' + (cache ? Views.relMeta(cache, completo) : '<span>Gerando prévia…</span>') + '</div>' +
+        '<div class="rel-stage" id="relStage"><div class="skel" style="position:absolute;inset:24px;border-radius:4px"></div></div>',
+      footOne: true,
+      foot: '<div id="relActs">' + (completo ? '<button class="btn btn-teal btn-lg" data-act="pdf" data-tipo="completo">' + I('download') + ' Baixar arquivo PDF</button>' :
+        '<button class="btn btn-out btn-lg" data-act="pdf" data-tipo="vistoria">' + I('download') + ' Baixar PDF</button>' +
+        '<button class="btn btn-teal btn-lg mt" data-act="enviarCopia">' + I('mail') + ' Enviar cópia para a unidade</button>') +
+        '<div class="small muted mt" id="relInfo" style="text-align:center"></div></div>',
+      async after() {
+        if (!vid) return;
+        const set = r => {
+          const st = $('#relStage');
+          if (!st) return;
+          $('#relMeta').innerHTML = Views.relMeta(r, completo);
+          $('#relSt').innerHTML = r.assinado ? '<span class="badge b-green" style="font-size:14px;padding:6px 12px">' + I('check', 16, 3) + ' Assinado</span>' : '<span class="badge b-amber" style="font-size:14px;padding:6px 12px">Preliminar</span>';
+          st.innerHTML = '<iframe id="relFrame" title="Relatório"></iframe>' +
+            '<div class="zoom"><button data-act="zoom" data-d="-1" aria-label="Diminuir">–</button><span id="zv">100%</span><button data-act="zoom" data-d="1" aria-label="Aumentar">+</button></div>' +
+            (completo ? '<div class="pgpill" id="pgpill">Página 1 / ' + r.paginas + ' · deslize →</div>' : '');
+          const fr = $('#relFrame');
+          fr.srcdoc = r.html;
+          fr.onload = () => {
+            App._zoom = 1;
+            Views.relZoom(0);
+            const doc = fr.contentDocument;
+            if (completo && doc) {
+              doc.body.addEventListener('scroll', () => {
+                const pg = doc.querySelector('.pg');
+                const w = pg ? pg.getBoundingClientRect().width + 14 * App._zoom : 1;
+                const n = Math.min(r.paginas, Math.round(doc.body.scrollLeft / w) + 1);
+                const pill = $('#pgpill'); if (pill) pill.textContent = 'Página ' + n + ' / ' + r.paginas + (n < r.paginas ? ' · deslize →' : '');
+              }, { passive: true });
+            }
+          };
+        };
+        if (cache) set(cache);
+        try {
+          await Sync.flush(45000);
+          const r = await Api.run('relatorio', { vistoriaId: vid, tipo: p.tipo });
+          (App._rel = App._rel || {})[vid + p.tipo] = r;
+          if (App.route && App.route.name === 'relatorio') set(r);
+        } catch (e) {
+          const st = $('#relStage');
+          if (st && !cache) st.innerHTML = '<div class="empty" style="color:#43536B">' + I('cloud', 40) + '<div><b>Prévia indisponível</b></div><div class="small">' + esc(e.message) + '</div><button class="btn btn-navy btn-sm mt" data-act="relRetry">Tentar de novo</button></div>';
+        }
+      }
+    };
+  },
+  relMeta(r, completo) {
+    return '<span>Gerado em <b>' + esc(r.geradoEm) + '</b></span><span>' + (completo ? '<b>' + r.paginas + ' páginas</b>' : 'Folha <b>01/01</b>') + ' · PDF</span>';
+  },
+  relZoom(d) {
+    const fr = $('#relFrame');
+    if (!fr || !fr.contentDocument) return;
+    const base = Math.min(1, (fr.clientWidth - 24) / 794);
+    App._zoom = Math.max(0.5, Math.min(2.5, (App._zoom || 1) + d * 0.25));
+    const z = base * App._zoom;
+    const doc = fr.contentDocument;
+    doc.documentElement.style.zoom = z;
+    doc.body.style.padding = '12px';
+    $('#zv').textContent = Math.round(App._zoom * 100) + '%';
+  },
+
+  /* ───── Vistoria finalizada ───── */
+  finalizada() {
+    const F0 = App.final || {};
+    const L = App.finalLocal || LS.get('finalLocal') || {};
+    const pronto = !!App.final;
+    const e = App.escola(F0.escolaId || L.escolaId) || {};
+    const eq = (App.data || {}).equipe || {};
+    const res = F0.resumo && F0.resumo.fotos !== undefined ? F0.resumo : (L.resumo || {});
+    const d = F0.docs || {};
+    const prox = F0.proxima ? App.escola(F0.proxima.escolaId) : null;
+    const espera = '<span class="badge b-amber">' + (navigator.onLine === false ? 'Na fila' : 'Gerando…') + '</span>';
+    const docRow = (t, s, badge) => '<div class="doc-row"><span><b>' + t + '</b><small>' + s + '</small></span>' + badge + '</div>';
+    return {
+      flush: true,
+      body: '<div class="done-h"><div class="ok">' + I('check', 46, 3) + '</div><h1>Vistoria finalizada</h1><p>' + esc(e.nome || '') + ' · DRE ' + esc(e.dre || '') + '</p>' +
+        '<small>Check-out registrado em ' + dataBR(F0.checkout || L.checkout, true) + '</small></div>' +
+        '<div style="padding:0 16px 40px"><section class="card times"><div><small>CHECK-IN</small><b>' + hora(F0.checkin || L.checkin) + '</b></div><div><small>CHECK-OUT</small><b>' + hora(F0.checkout || L.checkout) + '</b></div><div><small>DURAÇÃO</small><b>' + duracao(F0.checkin || L.checkin, F0.checkout || L.checkout) + '</b></div></section>' +
+        '<section class="card accent-amber row"><span style="flex:1"><b style="font-size:17px">Status da equipe atualizado</b><div class="muted small">' + esc(eq.nome || '') + ' · ' + esc((eq.membros || []).map(m => m.split(' ')[0]).join(' e ')) + '</div></span>' +
+          (pronto ? '<span class="badge ' + (F0.equipeStatus === 'em_transito' ? 'b-amber">Em trânsito' : 'b-green">Disponível') + '</span>' : espera) + '</section>' +
+        '<section class="card"><div class="counts" style="margin:0"><div><b>' + (res.ambientes || 0) + '</b><span>ambientes</span></div><div><b>' + (res.fotos || 0) + '</b><span>fotos</span></div><div><b class="c-amber">' + (res.pendencias || 0) + '</b><span>pendências</span></div></div></section>' +
+        '<section class="card"><div class="lbl" style="font-weight:700;letter-spacing:.6px;margin:0 0 4px">ENVIO E DOCUMENTOS</div>' +
+          docRow('Relatório de vistoria', pronto ? (F0.assinado ? 'Assinado por ' + esc(F0.assinantes.join(' e ')) : 'Versão preliminar · sem assinaturas') : 'Aguardando servidor',
+            pronto ? (d.vistoria && d.vistoria.erro ? '<span class="badge b-red">Erro</span>' : F0.assinado ? '<span class="badge b-green">Assinado</span>' : '<span class="badge b-amber">Gerado</span>') : espera) +
+          docRow('Relatório completo', pronto && d.completo && !d.completo.erro ? d.completo.paginas + ' páginas · PDF ' + d.completo.tamanho : 'PDF com fotos e pré-dimensionamento',
+            pronto ? (d.completo && d.completo.erro ? '<span class="badge b-red">Erro</span>' : '<span class="badge b-green">Gerado</span>') : espera) +
+          docRow('Cópia para a unidade', pronto ? (F0.copia.enviada ? 'Enviada às ' + hora(F0.copia.em) + ' para ' + esc(F0.copia.para) : F0.copia.erro ? esc(F0.copia.erro) : 'Não enviada · envie pela tela do relatório') : 'Envio automático após assinatura',
+            pronto ? (F0.copia.enviada ? '<span class="badge b-green">Enviado</span>' : '<span class="badge b-gray">Pendente</span>') : espera) +
+          docRow('Sincronização', Sync.q.length ? plural(Sync.q.length, 'item', 'itens') + ' na fila' : 'Dados e fotos no servidor', Sync.q.length ? '<span class="badge b-amber">' + (navigator.onLine === false ? 'Offline' : 'Enviando') + '</span>' : '<span class="badge b-green">OK</span>') +
+        '</section>' +
+        (prox ? '<section class="next-card"><div class="kick">Próxima escola do roteiro · hoje às ' + esc(F0.proxima.hora || '') + '</div><h3 style="margin:4px 0 2px;font-size:20px">' + esc(prox.nome) + '</h3>' +
+          '<div class="muted">' + esc([prox.logradouro, prox.numero].filter(Boolean).join(', ') + ' · DRE ' + prox.dre) + '</div>' +
+          '<div id="rotaFinal" data-full="1" class="mt"><div class="map">' + Views.mapaIlustrativo() + '<span class="lbl-m">Calculando rota…</span></div></div>' +
+          '<div class="small muted" style="text-align:center;font-weight:700;margin:6px 0 8px">Abrir rota no aplicativo</div>' +
+          '<div class="navapps"><button class="btn btn-out-teal" data-act="maps" data-id="' + prox.id + '"><span class="gdot"></span>Google Maps</button><button class="btn btn-out-teal" data-act="waze" data-id="' + prox.id + '"><span class="wdot"></span>Waze</button></div>' +
+          '<p class="muted small" style="text-align:center;margin:10px 0 0">O check-in é feito ao chegar na unidade.</p></section>' : '') +
+        (pronto ? '<button class="btn btn-out btn-lg" data-act="verRelatorios">Ver relatórios</button>' : '') +
+        '<button class="btn btn-out btn-lg mt" data-act="tab" data-to="home">' + I('left') + ' Voltar ao início</button></div>',
+      after() { if (prox) Views.carregarRota(prox.id, '#rotaFinal'); }
+    };
+  }
+};
+
+/* ───── Ações das telas ───── */
+Object.assign(Act, {
+  continuar() { Sheet.close(true); const V = App.V; if (V) Router.go('etapa', { k: V.etapa || 'dados' }); },
+  irEtapa(el) { Router.go('etapa', { k: el.dataset.to }); },
+  escolaAbrir(el) { Views.escolaSheet(el.dataset.id); },
+  filtroEsc(el) { App._filtroEsc = el.dataset.f; App.rerender(); },
+  relRetry() { App.rerender(); },
+  zoom(el) { Views.relZoom(Number(el.dataset.d)); },
+  checkin() { const s = $('#selEscola'); if (s) Act.checkinEscola({ dataset: { id: s.value } }); },
+  async checkinEscola(el) {
+    const id = el.dataset.id;
+    const e = App.escola(id);
+    if (!e) return;
+    if (App.V && App.V.status === 'em_andamento') { toast('Já existe uma vistoria em andamento.', 'warn'); return; }
+    Sheet.close(true);
+    const btn = el.tagName ? el : $('[data-act=checkin]');
+    carregando(btn, true, 'Localizando');
+    const pos = await Geo.get(7000);
+    carregando(btn, false);
+    const raio = ((App.data || {}).cfg || {}).raioCheckin || 400;
+    if (pos && e.lat && e.lng) {
+      const dist = Geo.dist(pos.lat, pos.lng, Number(e.lat), Number(e.lng));
+      if (dist > raio && !(await confirmar({ titulo: 'Você está longe da escola', texto: 'O GPS indica <b>' + (dist > 1000 ? fmt(dist / 1000, 1) + ' km' : Math.round(dist) + ' m') + '</b> de distância da ' + esc(e.nome) + '. Fazer o check-in mesmo assim?', sim: 'Fazer check-in' }))) return;
+    } else if (!pos && !(await confirmar({ titulo: 'Localização indisponível', texto: 'Não foi possível confirmar sua posição pelo GPS. Fazer o check-in mesmo assim?', sim: 'Fazer check-in' }))) return;
+    const V = Vist.novo(e, pos);
+    App.V = V;
+    Vist.salvar(true);
+    await Sync.add('checkin', { id: V.id, escolaId: e.id, checkin: V.checkin, lat: V.lat, lng: V.lng });
+    Vist.tocar('dados', true);
+    const D = App.data;
+    const rot = (D.roteiro || []).find(r => r.escolaId === e.id && r.status !== 'concluida');
+    if (rot) rot.status = 'em_andamento';
+    D.equipe.status = 'em_campo'; D.equipe.destinoEscolaId = '';
+    LS.set('boot', D);
+    vib(20);
+    toast('Check-in às ' + hora(V.checkin) + ' · ' + curto(e.nome), 'ok');
+    Router.go('etapa', { k: 'dados' });
+  },
+  async resolver(el) {
+    if (!(await confirmar({ titulo: 'Marcar como resolvida?', sim: 'Resolvida' }))) return;
+    const D = App.data;
+    D.pendencias = (D.pendencias || []).filter(p => p.id !== el.dataset.id);
+    LS.set('boot', D);
+    Sync.add('resolverPendencia', { id: el.dataset.id });
+    App.rerender();
+  },
+  sair() { App.sair(); },
+  senha() {
+    Sheet.open('<h3>Alterar senha</h3><form id="fSenha"><span class="lbl">Senha atual</span><input class="inp" type="password" name="atual" autocomplete="current-password" required>' +
+      '<span class="lbl">Nova senha</span><input class="inp" type="password" name="nova" autocomplete="new-password" minlength="6" required>' +
+      '<span class="lbl">Repita a nova senha</span><input class="inp" type="password" name="rep" autocomplete="new-password" minlength="6" required>' +
+      '<button class="btn btn-navy mt" type="submit">Salvar nova senha</button></form>', { focus: true });
+    $('#fSenha').onsubmit = async ev => {
+      ev.preventDefault();
+      const f = ev.target;
+      if (f.nova.value !== f.rep.value) { toast('As senhas não conferem.', 'warn'); return; }
+      const b = $('button', f);
+      carregando(b, true);
+      try {
+        const r = await Api.run('senha', { atual: f.atual.value, nova: f.nova.value });
+        App.token = r.token; LS.set('token', r.token);
+        Sheet.close(true); toast('Senha alterada', 'ok');
+      } catch (e) { carregando(b, false); toast(e.message, 'err'); }
+    };
+  },
+  fotoPerfil() {
+    Camera.abrir({
+      carimbo: false,
+      onFoto: async img => {
+        Thumbs.mem.set('perfil', img.thumb);
+        App.rerender();
+        try {
+          const r = await Api.run('fotoPerfil', { data: img.full });
+          App.data.usuario.fotoId = r.fotoId;
+          Thumbs.put('f:' + r.fotoId, img.thumb);
+          LS.set('boot', App.data);
+          toast('Foto da credencial atualizada', 'ok');
+          App.rerender();
+        } catch (e) { toast(e.net ? 'Sem conexão: tente novamente online.' : e.message, 'err'); }
+      }
+    });
+  },
+  async pdf(el) {
+    const p = App.route.params;
+    const vid = p.vistoriaId || (App.V && App.V.id);
+    carregando(el, true, 'Gerando PDF');
+    try {
+      await Sync.flush(45000);
+      const r = await Api.run('pdf', { vistoriaId: vid, tipo: el.dataset.tipo });
+      carregando(el, false);
+      const baixou = baixarBase64(r.base64, r.nome);
+      $('#relInfo').innerHTML = esc(r.nome) + ' · ' + esc(r.tamanho) + ' · Salvo no Drive · <a href="' + r.url + '" target="_blank">abrir</a>';
+      if (!baixou) abrirExterno(r.url);
+      toast('PDF gerado · ' + r.tamanho, 'ok');
+    } catch (e) { carregando(el, false); toast(e.message, 'err', 4000); }
+  },
+  enviarCopia() {
+    const V = App.V;
+    const p = App.route.params;
+    const para = (V && (V.d.revisao.respEmail || V.d.dados.email)) || p.email || '';
+    Sheet.open('<h3>Enviar cópia para a unidade</h3><p class="muted small">O PDF do relatório de vistoria vai anexado. O consórcio recebe uma cópia.</p>' +
+      '<span class="lbl">E-mail da unidade</span><input class="inp" id="cpPara" type="email" inputmode="email" value="' + esc(para) + '">' +
+      '<label class="check mt" style="cursor:pointer"><input type="checkbox" id="cpComp" style="width:22px;height:22px;-webkit-appearance:checkbox;appearance:auto"> <span class="t">Anexar também o relatório completo</span></label>' +
+      '<button class="btn btn-teal mt" id="cpOk">' + I('mail') + ' Enviar</button>', { focus: true });
+    $('#cpOk').onclick = async () => {
+      const b = $('#cpOk');
+      carregando(b, true, 'Enviando');
+      try {
+        await Sync.flush(45000);
+        const r = await Api.run('enviarCopia', { vistoriaId: p.vistoriaId || V.id, para: $('#cpPara').value, completo: $('#cpComp').checked, regerar: true });
+        Sheet.close(true);
+        toast('Cópia enviada para ' + r.para, 'ok', 3200);
+        const info = $('#relInfo');
+        if (info) info.innerHTML = '<span style="color:var(--green)">●</span> Para <b>' + esc(r.para) + '</b>' + (r.cc ? ' · cópia para o consórcio' : '');
+      } catch (e) { carregando(b, false); toast(e.message, 'err', 4000); }
+    };
+  },
+  verRelatorios() {
+    const F0 = App.final;
+    Sheet.open('<h3>Relatórios</h3>' +
+      '<button class="opt" data-act="abrirRel" data-tipo="vistoria"><span class="ic">' + I('file', 20) + '</span><span>Relatório de vistoria<small>1 folha · formato SME</small></span></button>' +
+      '<button class="opt" data-act="abrirRel" data-tipo="completo"><span class="ic">' + I('doc', 20) + '</span><span>Relatório completo<small>' + (F0.docs.completo && F0.docs.completo.paginas ? F0.docs.completo.paginas + ' páginas' : 'Técnico') + '</small></span></button>');
+  },
+  abrirRel(el) {
+    Sheet.close(true);
+    Router.go('relatorio', { tipo: el.dataset.tipo, vistoriaId: App.final.id, escolaId: App.final.escolaId });
+  },
+  cxRecusa(el) { App.form.recusa = !!el.dataset.v; App.rerender(); }
+});
+
+Views.etapa.onBack = () => { if (App.V) Vist.tocar(App.route.params.k || App.V.etapa, true); };
+Views.ambiente.onBack = () => {
+  const a = App.form;
+  if (a && a._novo) Object.values(App.V.fotos).filter(f => f.ref === a.id).forEach(f => Fotos.remover(f.id));
+  App.form = null;
+};
+Views.cancelar.onBack = () => { App.form = null; };
+
+/* Resultado da finalização (chega pela fila, mesmo se o envio ocorreu depois, offline). */
+Sync.on('finalizar', r => {
+  App.final = r; LS.set('final', r);
+  if (App.V && App.V.id === r.id) { App.V = null; Vist.salvar(true); }
+  LS.del('finalLocal');
+  const D = App.data;
+  if (D) {
+    const rot = (D.roteiro || []).find(x => x.escolaId === r.escolaId && x.status !== 'concluida');
+    if (rot) rot.status = 'concluida';
+    D.stats.concluidas++; D.stats.aguardando = Math.max(0, D.stats.aguardando - 1);
+    D.equipe.status = r.equipeStatus; D.equipe.destinoEscolaId = r.proxima ? r.proxima.escolaId : ''; D.equipe.statusDesde = new Date().toISOString();
+    LS.set('boot', D);
+  }
+  if (App.route && App.route.name === 'finalizada') App.rerender();
+  else toast('Vistoria sincronizada e relatórios gerados', 'ok');
+  App.refresh();
+});
+Sync.on('finalizar:erro', e => { if (App.V) { App.V.status = 'em_andamento'; Vist.salvar(true); } toast('Não foi possível finalizar: ' + e.message, 'err', 6000); Router.reset('home'); });
+Sync.on('cancelar', () => App.refresh());
+</script>
